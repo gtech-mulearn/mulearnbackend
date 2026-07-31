@@ -104,7 +104,7 @@ class JobUpdateSerializer(serializers.ModelSerializer):
             setattr(instance, attr, value)
         
         instance.updated_at = DateTimeUtils.get_current_utc_time()
-        instance.updated_by = self.context.get('user_id')
+        instance.updated_by_id = self.context.get('user_id')
         instance.save()
         
         if rules_data is not None:
@@ -203,8 +203,16 @@ class JobApplicationSerializer(serializers.ModelSerializer):
         fields = ['id', 'job', 'resume_link', 'cover_letter', 'status']
         read_only_fields = ['id', 'status']
         extra_kwargs = {
-            'resume_link': {'allow_blank': False},
+        'resume_link': {
+        'required': True,
+        'allow_blank': False,
+        'allow_null': False,
+        'error_messages': {
+            'required': 'A resume link is required to apply for this job.'
         }
+    },
+}
+
 
     def validate(self, data):
         user_id = self.context.get('user_id')

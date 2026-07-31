@@ -6,7 +6,7 @@ from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes, OpenApiResponse, inline_serializer
 from rest_framework import serializers as s
 
-from db.task import TaskList
+from db.task import TaskList,Channel
 from db.skill import Skill, TaskSkillLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
@@ -327,7 +327,6 @@ class CompanyTaskDetailAPI(APIView):
         skill_ids = data.pop("skill_ids", None)
 
         from db.task import InterestGroup, TaskType, Level
-        from db.channels import Channel
         
         # Resolve FKs if provided
         if "ig_id" in data:

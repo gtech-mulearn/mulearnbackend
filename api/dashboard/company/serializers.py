@@ -211,11 +211,23 @@ class CompanyUpdateSerializer(serializers.ModelSerializer):
         new_name = validated_data.get("name")
         rename = new_name and new_name != instance.name
 
+        # Regenerate a unique slug when the name changes
+        if rename:
+            base_slug = slugify(new_name)
+            slug = base_slug
+            counter = 1
+            while Company.objects.filter(slug=slug).exclude(pk=instance.pk).exists():
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+            validated_data['slug'] = slug  # inject so setattr picks it up
+
+        update_fields = list(validated_data.keys())
+
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
 
         with transaction.atomic():
-            instance.save()
+            instance.save(update_fields=update_fields)
 
             if rename and instance.org:
                 instance.org.title = new_name
