@@ -15,6 +15,7 @@ urlpatterns = [
     path("jobs/<str:job_id>/",        job_views.CompanyJobDetailAPI.as_view()),
     path("jobs/<str:job_id>/approve/", job_views.CompanyJobApproveAPI.as_view()),
     path("jobs/<str:job_id>/reject/",  job_views.CompanyJobRejectAPI.as_view()),
+    path("jobs/<str:job_id>/request-changes/", job_views.CompanyJobRequestChangesAPI.as_view()),
     path("jobs/<str:job_id>/view/",   job_views.TrackJobViewAPIView.as_view()),
     path("jobs/<str:job_id>/analytics/", job_views.CompanyJobEngagementAnalyticsAPIView.as_view()),
     path("jobs/<str:job_id>/apply/",  job_views.JobApplicationAPI.as_view()),
@@ -29,6 +30,7 @@ urlpatterns = [
     path("analytics/gigs/",           analytics_views.CompanyGigAnalyticsAPI.as_view()),
     path("analytics/tasks/",          analytics_views.CompanyTaskAnalyticsAPI.as_view()),
     path("talent-pool/analytics/",    analytics_views.CompanyTalentPoolAnalyticsAPIView.as_view()),
+    path("analytics/campus/trend/",   analytics_views.CompanyCampusTrendAPIView.as_view()),
     path("analytics/campus/",         analytics_views.CompanyCampusAnalyticsAPIView.as_view()),
     path("talent-pool/insights/",     analytics_views.CompanyTalentPoolInsightsAPIView.as_view()),
 

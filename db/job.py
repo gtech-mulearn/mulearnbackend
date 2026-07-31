@@ -6,6 +6,7 @@ class CompanyJob(models.Model):
     class Status(models.TextChoices):
         DRAFT = 'Draft', 'Draft'
         PENDING_APPROVAL = 'Pending Approval', 'Pending Approval'
+        NEEDS_REVISION = "Needs Revision"  
         ACTIVE = 'Active', 'Active'
         CLOSED = 'Closed', 'Closed'
         EXPIRED = 'Expired', 'Expired'
