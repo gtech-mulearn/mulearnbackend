@@ -50,6 +50,7 @@ class OfficeHoursReadSerializer(serializers.ModelSerializer):
             'designation',
             'description',
             'date',
+            'time',
             'link',
             'interest_groups',
             'poster_thumbnail',
@@ -111,6 +112,7 @@ class SaltMangoTreeReadSerializer(serializers.ModelSerializer):
             'campus',
             'zone',
             'date',
+            'time',
             'description',
             'link',
             'status',
@@ -138,6 +140,7 @@ class InspirationStationReadSerializer(serializers.ModelSerializer):
             'campus',
             'zone',
             'date',
+            'time',
             'description',
             'link',
             'status',
@@ -163,6 +166,10 @@ class OfficeHoursWriteSerializer(serializers.Serializer):
     title            = serializers.CharField(max_length=300)
     date             = serializers.CharField(
         help_text='Format: DD/MM/YYYY'
+    )
+    time             = serializers.TimeField(
+        input_formats=['%H:%M', '%H:%M:%S'],
+        help_text='Format: HH:MM (24h)'
     )
     performer        = serializers.CharField(max_length=200, required=False, allow_blank=True, allow_null=True)
     designation      = serializers.CharField(max_length=200, required=False, allow_blank=True, allow_null=True)
@@ -202,6 +209,10 @@ class _EpisodeWriteSerializer(serializers.Serializer):
         input_formats=['%Y-%m-%d'],
         help_text='Format: YYYY-MM-DD'
     )
+    time        = serializers.TimeField(
+        input_formats=['%H:%M', '%H:%M:%S'],
+        help_text='Format: HH:MM (24h)'
+    )
     description = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     link        = serializers.URLField(max_length=500, required=False, allow_blank=True, allow_null=True)
 
@@ -240,7 +251,6 @@ class GrabYourSuperpowersWriteSerializer(serializers.Serializer):
     )
     time        = serializers.TimeField(
         input_formats=['%H:%M', '%H:%M:%S'],
-        required=False, allow_null=True,
         help_text='Format: HH:MM (24h)'
     )
     description = serializers.CharField(required=False, allow_blank=True, allow_null=True)
