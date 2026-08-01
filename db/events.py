@@ -11,58 +11,58 @@ from .organization import Organization
 class Event(models.Model):
 
     class Status(models.TextChoices):
-        DRAFT = 'draft', 'Draft'
-        PENDING_CAMPUS_APPROVAL = 'pending_campus_approval', 'Pending Campus Approval'
-        PENDING_APPROVAL = 'pending_approval', 'Pending Approval'
-        PENDING_MENTOR_APPROVAL = 'pending_mentor_approval', 'Pending Mentor Approval'
-        PUBLISHED = 'published', 'Published'
-        ONGOING = 'ongoing', 'Ongoing'
-        COMPLETED = 'completed', 'Completed'
-        CANCELLED = 'cancelled', 'Cancelled'
-        REJECTED = 'rejected', 'Rejected'
+        DRAFT = 'DRAFT', 'Draft'
+        PENDING_CAMPUS_APPROVAL = 'PENDING_CAMPUS_APPROVAL', 'Pending_Campus_Approval'
+        PENDING_APPROVAL = 'PENDING_APPROVAL', 'Pending_Approval'
+        PENDING_MENTOR_APPROVAL = 'PENDING_MENTOR_APPROVAL', 'Pending_Mentor_Approval'
+        PUBLISHED = 'PUBLISHED', 'Published'
+        ONGOING = 'ONGOING', 'Ongoing'
+        COMPLETED = 'COMPLETED', 'Completed'
+        CANCELLED = 'CANCELLED', 'Cancelled'
+        REJECTED = 'REJECTED', 'Rejected'
 
     class VenueType(models.TextChoices):
-        PHYSICAL = 'physical', 'Physical'
-        ONLINE = 'online', 'Online'
-        HYBRID = 'hybrid', 'Hybrid'
+        PHYSICAL = 'PHYSICAL', 'Physical'
+        ONLINE = 'ONLINE', 'Online'
+        HYBRID = 'HYBRID', 'Hybrid'
 
     class Scope(models.TextChoices):
-        GLOBAL = 'global', 'Global'
-        CAMPUS = 'campus', 'Campus'
-        IG = 'ig', 'Interest Group'
-        CAMPUS_IG = 'campus_ig', 'Campus IG'
-        COMPANY = 'company', 'Company'
+        GLOBAL = 'GLOBAL', 'Global'
+        CAMPUS = 'CAMPUS', 'Campus'
+        IG = 'IG', 'Interest Group'
+        CAMPUS_IG = 'CAMPUS_IG', 'Campus_IG'
+        COMPANY = 'COMPANY', 'Company'
 
     class OrganiserType(models.TextChoices):
-        GLOBAL_IG = 'global_ig', 'Global IG'
-        CAMPUS_IG = 'campus_ig', 'Campus IG'
-        CAMPUS = 'campus', 'Campus'
-        COMPANY = 'company', 'Company'
-        ADMIN = 'admin', 'Admin'
+        GLOBAL_IG = 'GLOBAL_IG', 'Global_IG'
+        CAMPUS_IG = 'CAMPUS_IG', 'Campus_IG'
+        CAMPUS = 'CAMPUS', 'Campus'
+        COMPANY = 'COMPANY', 'Company'
+        ADMIN = 'ADMIN', 'Admin'
 
     class EventScope(models.TextChoices):
-        MAKER = 'maker', 'Maker'
-        CODER = 'coder', 'Coder'
-        MANAGER = 'manager', 'Manager'
-        CREATIVE = 'creative', 'Creative'
+        MAKER = 'MAKER', 'Maker'
+        CODER = 'CODER', 'Coder'
+        MANAGER = 'MANAGER', 'Manager'
+        CREATIVE = 'CREATIVE', 'Creative'
 
     class EventType(models.TextChoices):
-        HACKATHON       = 'hackathon',       'Hackathon'
-        WORKSHOP        = 'workshop',        'Workshop'
-        WEBINAR         = 'webinar',         'Webinar'
-        SEMINAR         = 'seminar',         'Seminar'
-        BOOTCAMP        = 'bootcamp',        'Bootcamp'
-        MEETUP          = 'meetup',          'Meetup'
-        CONFERENCE      = 'conference',      'Conference'
-        COMPETITION     = 'competition',     'Competition'
-        IDEATHON        = 'ideathon',        'Ideathon'
-        CULTURAL_EVENT  = 'cultural_event',  'Cultural Event'
-        SPORTS_EVENT    = 'sports_event',    'Sports Event'
-        COMMUNITY_EVENT = 'community_event', 'Community Event'
-        EXPO            = 'expo',            'Expo'
-        NETWORKING_EVENT= 'networking_event','Networking Event'
-        TECH_TALK       = 'tech_talk',       'Tech Talk'
-        OTHERS          = 'others',          'Others'
+        HACKATHON       = 'HACKATHON',       'Hackathon'
+        WORKSHOP        = 'WORKSHOP',        'Workshop'
+        WEBINAR         = 'WEBINAR',         'Webinar'
+        SEMINAR         = 'SEMINAR',         'Seminar'
+        BOOTCAMP        = 'BOOTCAMP',        'Bootcamp'
+        MEETUP          = 'MEETUP',          'Meetup'
+        CONFERENCE      = 'CONFERENCE',      'Conference'
+        COMPETITION     = 'COMPETITION',     'Competition'
+        IDEATHON        = 'IDEATHON',        'Ideathon'
+        CULTURAL_EVENT  = 'CULTURAL_EVENT',  'Cultural_Event'
+        SPORTS_EVENT    = 'SPORTS_EVENT',    'Sports_Event'
+        COMMUNITY_EVENT = 'COMMUNITY_EVENT', 'Community_Event'
+        EXPO            = 'EXPO',            'Expo'
+        NETWORKING_EVENT= 'NETWORKING_EVENT','Networking_Event'
+        TECH_TALK       = 'TECH_TALK',       'Tech_Talk'
+        OTHERS          = 'OTHERS',          'Others'
 
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     title = models.CharField(max_length=200)
@@ -168,12 +168,12 @@ class EventConnection(models.Model):
     """
 
     class EntityType(models.TextChoices):
-        USER_TICKET = 'user_ticket', 'User Ticket'
-        CO_OWNER = 'co_owner', 'Co-owner'
-        COLLAB_IG = 'collab_ig', 'Collaborating IG'
-        COLLAB_CAMPUS = 'collab_campus', 'Collaborating Campus'
-        COLLAB_CAMPUS_IG = 'collab_campus_ig', 'Collaborating Campus IG'
-        COLLAB_COMPANY = 'collab_company', 'Collaborating Company'
+        USER_TICKET = 'USER_TICKET', 'User_Ticket'
+        CO_OWNER = 'CO_OWNER', 'Co-owner'
+        COLLAB_IG = 'COLLAB_IG', 'Collaborating_IG'
+        COLLAB_CAMPUS = 'COLLAB_CAMPUS', 'Collaborating_Campus'
+        COLLAB_CAMPUS_IG = 'COLLAB_CAMPUS_IG', 'Collaborating_Campus_IG'
+        COLLAB_COMPANY = 'COLLAB_COMPANY', 'Collaborating_Company'
 
     COLLABORATOR_TYPES = [
         EntityType.COLLAB_IG,
@@ -183,16 +183,16 @@ class EventConnection(models.Model):
     ]
 
     class InviteStatus(models.TextChoices):
-        PENDING = 'pending', 'Pending'
-        ACCEPTED = 'accepted', 'Accepted'
-        REJECTED = 'rejected', 'Rejected'
+        PENDING = 'PENDING', 'Pending'
+        ACCEPTED = 'ACCEPTED', 'Accepted'
+        REJECTED = 'REJECTED', 'Rejected'
 
     class TicketStatus(models.TextChoices):
-        PENDING = 'pending', 'Pending'
-        ACTIVE = 'active', 'Active'
-        REMOVED = 'removed', 'Removed'
-        REJECTED = 'rejected', 'Rejected'
-        WITHDRAWN = 'withdrawn', 'Withdrawn'
+        PENDING = 'PENDING', 'Pending'
+        ACTIVE = 'ACTIVE', 'Active'
+        REMOVED = 'REMOVED', 'Removed'
+        REJECTED = 'REJECTED', 'Rejected'
+        WITHDRAWN = 'WITHDRAWN', 'Withdrawn'
 
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     event = models.ForeignKey(
@@ -260,20 +260,20 @@ class EventLog(models.Model):
         Action-type constants stored inside changed_fields['action'].
         Plain class (not TextChoices) — no DB column required.
         """
-        CREATED          = 'event_created'
-        UPDATED          = 'event_updated'
-        PUBLISHED        = 'event_published'
-        CANCELLED        = 'event_cancelled'
-        FEATURED         = 'event_featured'
-        UNFEATURED       = 'event_unfeatured'
-        APPROVED         = 'event_approved'
-        REJECTED         = 'event_rejected'
-        CO_OWNER_ADDED   = 'co_owner_added'
-        CO_OWNER_REMOVED = 'co_owner_removed'
-        COLLAB_INVITED   = 'collaborator_invited'
-        COLLAB_ACCEPTED  = 'collaborator_accepted'
-        COLLAB_REJECTED  = 'collaborator_rejected'
-        COLLAB_REMOVED   = 'collaborator_removed'
+        CREATED          = 'EVENT_CREATED'
+        UPDATED          = 'EVENT_UPDATED'
+        PUBLISHED        = 'EVENT_PUBLISHED'
+        CANCELLED        = 'EVENT_CANCELLED'
+        FEATURED         = 'EVENT_FEATURED'
+        UNFEATURED       = 'EVENT_UNFEATURED'
+        APPROVED         = 'EVENT_APPROVED'
+        REJECTED         = 'EVENT_REJECTED'
+        CO_OWNER_ADDED   = 'CO_OWNER_ADDED'
+        CO_OWNER_REMOVED = 'CO_OWNER_REMOVED'
+        COLLAB_INVITED   = 'COLLABORATOR_INVITED'
+        COLLAB_ACCEPTED  = 'COLLABORATOR_ACCEPTED'
+        COLLAB_REJECTED  = 'COLLABORATOR_REJECTED'
+        COLLAB_REMOVED   = 'COLLABORATOR_REMOVED'
 
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     event = models.ForeignKey(
@@ -331,14 +331,14 @@ class MediaContent(models.Model):
     """
 
     class ContentType(models.TextChoices):
-        OFFICE_HOURS        = 'office_hours',         'Office Hours'
-        SALT_MANGO_TREE     = 'salt_mango_tree',      'Salt Mango Tree'
-        INSPIRATION_STATION = 'inspiration_station',  'Inspiration Station Radio'
+        OFFICE_HOURS        = 'OFFICE_HOURS',         'Office Hours'
+        SALT_MANGO_TREE     = 'SALT_MANGO_TREE',      'Salt Mango Tree'
+        INSPIRATION_STATION = 'INSPIRATION_STATION',  'Inspiration Station Radio'
 
     class Zone(models.TextChoices):
-        NORTH   = 'north',   'North'
-        CENTRAL = 'central', 'Central'
-        SOUTH   = 'south',   'South'
+        NORTH   = 'NORTH',   'North'
+        CENTRAL = 'CENTRAL', 'Central'
+        SOUTH   = 'SOUTH',   'South'
 
     # ── Primary key ───────────────────────────────────────────────────────────
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)

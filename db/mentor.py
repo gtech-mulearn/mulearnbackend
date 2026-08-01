@@ -13,15 +13,15 @@ class MentorshipSession(models.Model):
     class Status(models.TextChoices):
         REQUESTED = 'REQUESTED', 'Requested'
         SCHEDULED = 'SCHEDULED', 'Scheduled'
-        PENDING_APPROVAL = 'PENDING_APPROVAL', 'Pending Approval'
+        PENDING_APPROVAL = 'PENDING_APPROVAL', 'Pending_Approval'
         COMPLETED = 'COMPLETED', 'Completed'
         CANCELLED = 'CANCELLED', 'Cancelled'
         REJECTED = 'REJECTED', 'Rejected'
 
     class SessionType(models.TextChoices):
-        IG_SESSION      = 'ig_session',      'IG Session'
-        CAMPUS_SESSION  = 'campus_session',  'Campus Session'
-        COMPANY_SESSION = 'company_session', 'Company Session'
+        IG_SESSION      = 'IG_SESSION',      'IG_Session'
+        CAMPUS_SESSION  = 'CAMPUS_SESSION',  'Campus_Session'
+        COMPANY_SESSION = 'COMPANY_SESSION', 'Company_Session'
 
     class RecurrenceType(models.TextChoices):
         DAILY   = 'DAILY',   'Daily'

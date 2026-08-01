@@ -61,7 +61,6 @@ class MentorRegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = MentorApplication
-        model = MentorApplication
         fields = [
             "id",
             "about",
@@ -266,7 +265,6 @@ class MentorUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = MentorApplication
-        model = MentorApplication
         fields = [
             "id",
             "reason",
@@ -384,7 +382,6 @@ class MentorApplicationListSerializer(serializers.ModelSerializer):
     muid = serializers.CharField(source='user.muid', read_only=True)
 
     class Meta:
-        model = MentorApplication
         model = MentorApplication
         fields = [
             "id",
@@ -729,6 +726,36 @@ class SessionCreateSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         user_id = self.context.get("user_id")
+        session_type = attrs.get('session_type')
+        entity_id = attrs.get('entity_id')
+
+        # Validate that the mentor has the required scope to create this session.
+        if not session_type or not entity_id:
+            raise serializers.ValidationError({"detail": "session_type and entity_id are required."})
+
+        from .dash_mentor_helper import has_scope
+        from db.user import MentorScopeGrant
+
+        scope_type_map = {
+            MentorshipSession.SessionType.IG_SESSION: MentorScopeGrant.ScopeType.IG_MENTOR,
+            MentorshipSession.SessionType.CAMPUS_SESSION: MentorScopeGrant.ScopeType.CAMPUS_MENTOR,
+            MentorshipSession.SessionType.COMPANY_SESSION: MentorScopeGrant.ScopeType.COMPANY_MENTOR,
+        }
+        required_scope = scope_type_map.get(session_type)
+
+        if not required_scope:
+            raise serializers.ValidationError({"session_type": "Invalid session type provided."})
+
+        # A global mentor can create any session. Otherwise, check for a specific grant.
+        is_global_mentor = has_scope(user_id, MentorScopeGrant.ScopeType.MENTOR)
+        has_specific_grant = has_scope(user_id, required_scope, entity_id)
+
+        if not is_global_mentor and not has_specific_grant:
+            entity_type_name = session_type.split('_')[0].lower()
+            raise serializers.ValidationError(
+                f"You do not have an active mentor grant for this {entity_type_name}."
+            )
+
         if MentorshipSession.objects.filter(
             title=attrs.get('title'),
             starts_at=attrs.get('starts_at'),
@@ -1221,16 +1248,21 @@ class ParticipantFeedbackSerializer(serializers.ModelSerializer):
         fields = ["feedback", "rating"]
 
     def validate(self, attrs):
-        if not attrs.get("feedback"):
-            raise serializers.ValidationError("Feedback cannot be empty.")
+        # Ensure at least one of feedback or rating is being submitted.
+        if 'feedback' not in attrs and 'rating' not in attrs:
+            raise serializers.ValidationError("At least one of 'feedback' or 'rating' must be provided.")
+
+        # If feedback is provided, it cannot be an empty string.
+        if 'feedback' in attrs and not attrs.get('feedback', '').strip():
+            raise serializers.ValidationError({"feedback": "Feedback cannot be empty."})
 
         rating = attrs.get("rating")
-        if rating is not None and not (1 <= rating <= 5):
+        if 'rating' in attrs and rating is not None and not (1 <= rating <= 5):
             raise serializers.ValidationError({"rating": "Rating must be between 1 and 5."})
 
         if self.instance.attendance_status != MentorshipSessionUserLink.AttendanceStatus.ATTENDED:
             raise serializers.ValidationError("You can only leave feedback for sessions you have attended.")
-            
+
         return attrs
 
 class MentorActivitySerializer(serializers.Serializer):
@@ -1377,7 +1409,7 @@ class AdminAssignMentorSerializer(serializers.Serializer):
                 # 2. Create an approved MentorApplication record
                 application, app_created = MentorApplication.objects.get_or_create(
                     user=user,
-                    tier=tier,
+                    mentor_tier=tier,
                     org=org,
                     defaults={
                         "status": MentorApplication.Status.APPROVED,
