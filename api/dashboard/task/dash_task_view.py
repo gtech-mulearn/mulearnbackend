@@ -69,6 +69,7 @@ class TaskPublicListAPI(APIView):
         from api.dashboard.events.serializers import get_live_events
         from db.events import Event
         from db.user import UserRoleLink
+        from db.task import KarmaActivityLog
 
         base_queryset = TaskList.objects.select_related(
             "channel", "type", "level", "ig", "org", "event_fk",
@@ -108,10 +109,18 @@ class TaskPublicListAPI(APIView):
                     is_active=True,
                 ).values_list("ig_id", flat=True)
             )
+
+            # Tasks the caller has already been awarded karma for.
+            completed_task_ids = set(
+                KarmaActivityLog.objects.filter(
+                    user_id=user_id, appraiser_approved=True
+                ).values_list("task_id", flat=True)
+            )
         else:
             # Unauthenticated: global + company tasks only
             org_filter = Q(org__isnull=True) | Q(org__org_type=OrganizationType.COMPANY.value)
             member_ig_ids = []
+            completed_task_ids = set()
 
         # ---------- start_journey: generic, level-ordered tasks ----------
         # No IG, no event, and not an "intern" task (same convention used by
@@ -151,7 +160,10 @@ class TaskPublicListAPI(APIView):
             .order_by("level__level_order", "title")
             .distinct()
         )
-        become_expert_data = TaskListPublicSerializer(become_expert_qs, many=True).data
+        serializer_context = {"completed_task_ids": completed_task_ids}
+        become_expert_data = TaskListPublicSerializer(
+            become_expert_qs, many=True, context=serializer_context
+        ).data
 
         # ---------- events: event-linked tasks visible to the caller ----------
         # _get_viewer_id/_build_scope_filter already degrade gracefully to
@@ -170,11 +182,15 @@ class TaskPublicListAPI(APIView):
             event_fk__isnull=False,
             event_fk_id__in=accessible_event_ids,
         ).order_by("event_fk__title", "title")
-        events_data = TaskListPublicSerializer(events_qs, many=True).data
+        events_data = TaskListPublicSerializer(
+            events_qs, many=True, context=serializer_context
+        ).data
 
         return CustomResponse(
             response={
-                "start_journey": TaskListPublicSerializer(start_journey_qs, many=True).data,
+                "start_journey": TaskListPublicSerializer(
+                    start_journey_qs, many=True, context=serializer_context
+                ).data,
                 "become_expert": become_expert_data,
                 "events": events_data,
             }
