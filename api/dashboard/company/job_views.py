@@ -120,8 +120,23 @@ class CompanyJobDetailAPI(APIView):
         if not job:
             return CustomResponse(general_message="Job not found or access denied.").get_failure_response(status_code=404)
 
+        # Rejected jobs are permanently locked — create a new posting instead.
+        if job.status == CompanyJob.Status.REJECTED:
+            return CustomResponse(
+                general_message="A rejected job cannot be edited. Create a new posting instead."
+            ).get_failure_response(status_code=403)
+
         data = request.data.copy()
         requested_status = data.get('status')
+
+        # A job in Needs Revision going back to Active/Pending Approval = resubmit.
+        # Force it through Pending Approval regardless of who is patching.
+        if (
+            job.status == CompanyJob.Status.NEEDS_REVISION
+            and requested_status in (CompanyJob.Status.ACTIVE, CompanyJob.Status.PENDING_APPROVAL)
+        ):
+            data['status'] = CompanyJob.Status.PENDING_APPROVAL
+
         if requested_status == CompanyJob.Status.ACTIVE and not _is_company_owner(user_id, company):
             # Job publish gate (§3.1): only the owner may flip a job straight
             # to Active. A non-owner mentor should submit for approval
@@ -213,6 +228,54 @@ class CompanyJobApproveAPI(APIView):
             pass
 
         return CustomResponse(general_message="Job approved and published successfully.").get_success_response()
+class CompanyJobRequestChangesAPI(APIView):
+    """Owner-only: send a job back to the mentor for revision."""
+    permission_classes = [CustomizePermission]
+
+    def post(self, request, job_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        job = CompanyJob.objects.filter(
+            id=job_id, is_deleted=False, 
+            status=CompanyJob.Status.PENDING_APPROVAL,
+            company__status="verified"
+        ).first()
+        if not job:
+            return CustomResponse(
+                general_message="Job not found or not pending approval."
+            ).get_failure_response(status_code=404)
+
+        if not _is_company_owner(user_id, job.company):
+            return CustomResponse(
+                general_message="Only the company owner can request changes."
+            ).get_failure_response(status_code=403)
+
+        note = (request.data.get("note") or "").strip()
+        if not note:
+            return CustomResponse(
+                general_message="A revision note is required."
+            ).get_failure_response()
+
+        job.status = CompanyJob.Status.NEEDS_REVISION
+        job.rejection_reason = note   # reuse this field for the owner's note
+        job.save(update_fields=["status", "rejection_reason", "updated_at","updated_by_id"])
+
+        # Notify the mentor
+        try:
+            from api.notification.notifications_utils import NotificationUtils
+            from db.user import User
+            actor = User.every.filter(id=user_id).first()
+            if job.created_by and actor:
+               NotificationUtils.insert_notification(
+               user=job.created_by,
+               title="Job Posting Needs Revision",
+               description=f'Your job "{job.title}" needs changes: {note}',
+            button=None, url=None, created_by=actor,
+            )
+        except Exception:
+            pass  
+        return CustomResponse(
+            general_message="Revision requested. Mentor notified."
+        ).get_success_response()
 
 
 class CompanyJobRejectAPI(APIView):

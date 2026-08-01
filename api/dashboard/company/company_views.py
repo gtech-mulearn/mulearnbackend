@@ -132,6 +132,23 @@ class CompanyAdminLinkAcceptAPI(APIView):
         return CustomResponse(
             general_message=f"Invitation {'accepted' if accept else 'declined'} successfully."
         ).get_success_response()
+    def post(self, request, link_id):
+        from utils.utils import DateTimeUtils
+        user_id = JWTUtils.fetch_user_id(request)
+        accept = bool(request.data.get('accept', True))
+
+        link = CompanyAdminLink.objects.filter(id=link_id, user_id=user_id, status=CompanyAdminLink.Status.PENDING).first()
+        if not link:
+            return CustomResponse(general_message="Pending invitation not found.").get_failure_response(status_code=404)
+
+        link.status = CompanyAdminLink.Status.ACCEPTED if accept else CompanyAdminLink.Status.DECLINED
+        link.responded_at = DateTimeUtils.get_current_utc_time()
+        link.updated_by_id = user_id
+        link.save(update_fields=["status", "responded_at", "updated_by_id"])
+
+        return CustomResponse(
+            general_message=f"Invitation {'accepted' if accept else 'declined'} successfully."
+        ).get_success_response()
 
 
 class CompanyAdminLinkRevokeAPI(APIView):
@@ -364,13 +381,13 @@ class CompanyProfileAPI(APIView):
 
     @extend_schema(
         tags=['Dashboard - Company'],
-        description="Update the profile of the authenticated company (creator or approved company mentor).",
+        description="Update the profile of the authenticated company (creator only).",
         request=serializers.CompanyUpdateSerializer,
         responses={200: serializers.CompanyUpdateSerializer},
     )
     def patch(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        company = _get_company_for_user(user_id)
+        company = Company.objects.filter(company_user_id=user_id, status="verified").first()
         
         if not company:
             return CustomResponse(

@@ -388,7 +388,7 @@ class CompanyTalentPoolInsightsAPIView(APIView):
         description="Top-skills and top-colleges insights across the (optionally filtered) talent pool. Pass format=csv for a CSV download.",
         parameters=[
             OpenApiParameter("district_id", OpenApiTypes.STR, OpenApiParameter.QUERY, required=False),
-            OpenApiParameter("format", OpenApiTypes.STR, OpenApiParameter.QUERY, required=False, description="json (default) or csv"),
+            OpenApiParameter("export", OpenApiTypes.STR, OpenApiParameter.QUERY, required=False, description="Pass export=csv for a downloadable CSV file (default: json)"),
         ],
     )
     def get(self, request):
@@ -438,7 +438,7 @@ class CompanyTalentPoolInsightsAPIView(APIView):
             .order_by("-learner_count")[:10]
         )
 
-        if request.query_params.get("format", "json").lower() == "csv":
+        if request.query_params.get("export", "").lower() == "csv":
             import csv
             from django.http import HttpResponse
 
@@ -462,3 +462,145 @@ class CompanyTalentPoolInsightsAPIView(APIView):
             "top_colleges": top_colleges,
         }).get_success_response()
 
+
+
+
+import datetime
+from django.utils import timezone
+from django.db.models.functions import TruncQuarter
+
+class CompanyCampusTrendAPIView(APIView):
+    """
+    PRD §12 — Quarter-over-quarter campus engagement trend analytics.
+    High-performance bulk aggregation using TruncQuarter (3 DB queries total).
+    """
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['Dashboard - Company Analytics'],
+        description="Quarter-over-quarter engagement metrics for a specific campus.",
+        parameters=[
+            OpenApiParameter("campus_id", OpenApiTypes.STR, OpenApiParameter.QUERY, required=True),
+            OpenApiParameter("quarters", OpenApiTypes.INT, OpenApiParameter.QUERY, required=False),
+        ],
+    )
+    def get(self, request):
+        from db.task import KarmaActivityLog
+        from db.organization import Organization, UserOrganizationLink
+        from db.events import Event
+
+        user_id = JWTUtils.fetch_user_id(request)
+        company = _get_company_for_user(user_id)
+        if not company:
+            return CustomResponse(
+                general_message="Company profile not found or access denied."
+            ).get_failure_response(status_code=404)
+
+        campus_id = request.query_params.get("campus_id")
+        if not campus_id:
+            return CustomResponse(
+                general_message="campus_id query parameter is required."
+            ).get_failure_response(status_code=400)
+
+        campus = Organization.objects.filter(
+            id=campus_id, org_type=OrganizationType.COLLEGE.value
+        ).first()
+        if not campus:
+            return CustomResponse(
+                general_message="Campus organization not found."
+            ).get_failure_response(status_code=404)
+
+        try:
+            num_quarters = int(request.query_params.get("quarters", 4))
+        except ValueError:
+            num_quarters = 4
+
+        # Calculate overall start date (e.g. 4 quarters back)
+        now = timezone.now()
+        start_date = now - datetime.timedelta(days=90 * num_quarters)
+
+        # Pre-fetch all user IDs from this campus once
+        campus_user_ids = list(
+            UserOrganizationLink.objects.filter(org_id=campus_id).values_list("user_id", flat=True)
+        )
+
+        # BULK QUERY 1: Karma & Active Learners grouped by Quarter
+        karma_by_quarter = (
+            KarmaActivityLog.objects.filter(
+                user_id__in=campus_user_ids,
+                created_at__gte=start_date,
+            )
+            .annotate(q_start=TruncQuarter("created_at"))
+            .values("q_start")
+            .annotate(
+                karma_earned=Sum("karma"),
+                active_learners=Count("user_id", distinct=True)
+            )
+        )
+        karma_map = {
+            item["q_start"].strftime("%Y-%m-%d"): item for item in karma_by_quarter if item["q_start"]
+        }
+
+        # BULK QUERY 2: Job Applications grouped by Quarter
+        company_jobs = CompanyJob.objects.filter(company=company, is_deleted=False)
+        apps_by_quarter = (
+            UserJobApplication.objects.filter(
+                job__in=company_jobs,
+                user_id__in=campus_user_ids,
+                applied_at__gte=start_date,
+            )
+            .annotate(q_start=TruncQuarter("applied_at"))
+            .values("q_start")
+            .annotate(job_applicants=Count("user_id", distinct=True))
+        )
+        apps_map = {
+            item["q_start"].strftime("%Y-%m-%d"): item["job_applicants"] for item in apps_by_quarter if item["q_start"]
+        }
+
+        # BULK QUERY 3: Company Events grouped by Quarter
+        sessions_map = {}
+        if company.org_id:
+            events_by_quarter = (
+                Event.objects.filter(
+                    organiser_type=Event.OrganiserType.COMPANY,
+                    organiser_org_id=company.org_id,
+                    created_at__gte=start_date,
+                )
+                .annotate(q_start=TruncQuarter("created_at"))
+                .values("q_start")
+                .annotate(sessions_count=Count("id"))
+            )
+            sessions_map = {
+                item["q_start"].strftime("%Y-%m-%d"): item["sessions_count"] for item in events_by_quarter if item["q_start"]
+            }
+
+        # Build response payload by merging dictionary results
+        # (Zero loops over database queries!)
+        trend_data = []
+        # Calculate quarter boundaries for formatting output
+        current_year = now.year
+        current_quarter = (now.month - 1) // 3 + 1
+
+        for i in range(num_quarters - 1, -1, -1):
+            q_index = current_quarter - 1 - i
+            year_offset = q_index // 4
+            target_q = (q_index % 4) + 1
+            target_year = current_year + year_offset
+
+            q_month = (target_q - 1) * 3 + 1
+            q_key = f"{target_year}-{q_month:02d}-01"
+
+            karma_info = karma_map.get(q_key, {})
+            trend_data.append({
+                "quarter": f"Q{target_q} {target_year}",
+                "active_learners": karma_info.get("active_learners", 0),
+                "job_applicants": apps_map.get(q_key, 0),
+                "karma_earned": karma_info.get("karma_earned", 0),
+                "sessions_held": sessions_map.get(q_key, 0),
+            })
+
+        return CustomResponse(response={
+            "campus_id": str(campus.id),
+            "campus_name": campus.title,
+            "trend": trend_data,
+        }).get_success_response()
