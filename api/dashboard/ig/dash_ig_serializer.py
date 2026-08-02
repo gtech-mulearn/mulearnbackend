@@ -1,5 +1,6 @@
 from rest_framework import serializers
 import json
+from datetime import date
 
 from db.task import InterestGroup
 from db.user import User, Socials
@@ -186,10 +187,13 @@ class InterestGroupSerializer(serializers.ModelSerializer):
         """
         Media content (e.g. Office Hours sessions) linked to this IG via
         ig_media_content_link, excluding soft-deleted media content.
+        Only upcoming and ongoing (today) content is included.
         """
+        today = date.today()
         links = obj.media_content_links.filter(
-            media_content__deleted_at__isnull=True
-        ).select_related("media_content").order_by("-media_content__date")
+            media_content__deleted_at__isnull=True,
+            media_content__date__gte=today,
+        ).select_related("media_content").order_by("media_content__date")
 
         return [
             {
@@ -198,6 +202,8 @@ class InterestGroupSerializer(serializers.ModelSerializer):
                 "content_type": link.media_content.content_type,
                 "title": link.media_content.title,
                 "date": link.media_content.date,
+                "link": link.media_content.link,
+                "status": "ongoing" if link.media_content.date == today else "upcoming",
             }
             for link in links
         ]
