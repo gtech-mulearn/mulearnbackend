@@ -146,7 +146,7 @@ class InterestGroupSerializer(serializers.ModelSerializer):
         choices=["maker", "coder", "creative", "manager", "others"]
     )
     status = serializers.ChoiceField(
-        choices=["active", "requested", "cancelled", "rejected"]
+        choices=["active", "inactive", "requested", "cancelled", "rejected"]
     )
 
     class Meta:
