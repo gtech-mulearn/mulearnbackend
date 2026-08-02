@@ -2,7 +2,8 @@ import uuid
 from io import BytesIO
 from tempfile import NamedTemporaryFile
 
-from django.db.models import F, Prefetch, Sum, Q
+from django.db.models import F, Prefetch, Sum, Q, OuterRef, Subquery, IntegerField
+from django.db.models.functions import Coalesce
 from django.http import FileResponse
 from openpyxl import load_workbook
 from rest_framework.views import APIView
@@ -174,6 +175,32 @@ class InstitutionAPI(APIView):
         else:
             organisations = Organization.objects.filter(org_type=org_type)
 
+        params = request.query_params
+        zone_id = params.get("zone_id")
+        state_id = params.get("state_id")
+        country_id = params.get("country_id")
+        affiliation_id = params.get("affiliation_id")
+
+        if zone_id:
+            organisations = organisations.filter(district__zone_id=zone_id)
+        if state_id:
+            organisations = organisations.filter(district__zone__state_id=state_id)
+        if country_id:
+            organisations = organisations.filter(
+                district__zone__state__country_id=country_id
+            )
+        if affiliation_id:
+            organisations = organisations.filter(affiliation_id=affiliation_id)
+
+        karma_subquery = (
+            UserOrganizationLink.objects.filter(
+                org_id=OuterRef("id"), verified=True
+            )
+            .values("org_id")
+            .annotate(total_karma=Sum("user__wallet_user__karma"))
+            .values("total_karma")
+        )
+
         org_queryset = (
             organisations
             .select_related("affiliation")
@@ -186,7 +213,12 @@ class InstitutionAPI(APIView):
                 )
             )
             .annotate(user_count=Count("user_organization_link_org", filter=Q(user_organization_link_org__verified=True)))
-            .order_by("-user_count")  # Sort by highest user_count
+            .annotate(
+                total_karma=Coalesce(
+                    Subquery(karma_subquery, output_field=IntegerField()), 0
+                )
+            )
+            .order_by("-total_karma")  # Sort by highest karma
         )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
@@ -209,6 +241,8 @@ class InstitutionAPI(APIView):
                 "zone": "district__zone__name",
                 "state": "district__zone__state__name",
                 "country": "district__zone__state__country__name",
+                "karma": "total_karma",
+                "user_count": "user_count",
             },
         )
 

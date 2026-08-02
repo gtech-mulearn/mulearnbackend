@@ -11,7 +11,8 @@ from datetime import date
 from rest_framework import serializers
 
 from api.dashboard.media_content.image_utils import resolve_image_url
-from db.events import MediaContent
+from db.events import MediaContent, IgMediaContentLink
+from db.task import InterestGroup
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -40,6 +41,7 @@ class OfficeHoursReadSerializer(serializers.ModelSerializer):
     """
     status = serializers.SerializerMethodField()
     poster_thumbnail = serializers.SerializerMethodField()
+    interest_groups = serializers.SerializerMethodField()
 
     class Meta:
         model = MediaContent
@@ -64,6 +66,16 @@ class OfficeHoursReadSerializer(serializers.ModelSerializer):
 
     def get_poster_thumbnail(self, obj):
         return resolve_image_url(obj.poster_thumbnail, self.context.get('request'))
+
+    def get_interest_groups(self, obj):
+        link_ids = obj.interest_groups or []
+        if not link_ids:
+            return []
+        links = IgMediaContentLink.objects.filter(
+            id__in=link_ids
+        ).select_related('interest_group')
+        names_by_id = {link.id: link.interest_group.name for link in links}
+        return [names_by_id[link_id] for link_id in link_ids if link_id in names_by_id]
 
 
 class GrabYourSuperpowersReadSerializer(serializers.ModelSerializer):
@@ -188,6 +200,21 @@ class OfficeHoursWriteSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 "Invalid date format. Expected DD/MM/YYYY (e.g. 27/06/2025)."
             )
+
+    def validate_interest_groups(self, value):
+        """`value` is a list of interest_group ids. Every id must resolve to
+        an existing InterestGroup."""
+        if not value:
+            return value
+        found_ids = set(
+            InterestGroup.objects.filter(id__in=value).values_list('id', flat=True)
+        )
+        unknown_ids = [ig_id for ig_id in value if ig_id not in found_ids]
+        if unknown_ids:
+            raise serializers.ValidationError(
+                f"Unknown interest group id(s): {', '.join(unknown_ids)}."
+            )
+        return value
 
     def to_internal_value(self, data):
         value = super().to_internal_value(data)

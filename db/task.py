@@ -49,6 +49,7 @@ class InterestGroup(models.Model):
         max_length=20,
         choices=[
             ('active', 'Active'),
+            ('inactive', 'Inactive'),
             ('requested', 'Requested'),
             ('cancelled', 'Cancelled'),
             ('rejected', 'Rejected'),
