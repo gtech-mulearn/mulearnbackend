@@ -334,4 +334,8 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'mu_celery.mentor_tasks.expire_stale_grants',
         'schedule': crontab(hour=0, minute=25),
     },
+    'transition-event-statuses': {
+        'task': 'mu_celery.event_cron.transition_event_statuses_task',
+        'schedule': crontab(hour=0, minute=30),
+    },
 }

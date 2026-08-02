@@ -644,7 +644,7 @@ class ManageEventPublishAPI(APIView):
                 general_message='You do not have permission to manage this event.'
             ).get_failure_response()
 
-        if event.status not in (Event.Status.DRAFT, Event.Status.REJECTED):
+        if event.status.upper() not in (Event.Status.DRAFT, Event.Status.REJECTED):
             return CustomResponse(
                 general_message=f'Only draft or rejected events can be published (current: {event.status}).'
             ).get_failure_response()

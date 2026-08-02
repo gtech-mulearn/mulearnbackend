@@ -418,7 +418,10 @@ class CompanyMentorNominateSerializer(serializers.Serializer):
             user=user,
             mentor_tier=MentorApplication.MentorTier.COMPANY_MENTOR,
             org=org,
-        ).exclude(status=MentorApplication.Status.REJECTED).first()
+        ).exclude(status__in=[
+            MentorApplication.Status.REJECTED,
+            MentorApplication.Status.GRANT_REVOKED
+        ]).first()
         if existing:
             raise serializers.ValidationError(
                 f"This user already has a {existing.status.lower()} Company Mentor application for your company."
@@ -554,7 +557,10 @@ class CompanyMentorApplySerializer(serializers.Serializer):
             user_id=user_id,
             mentor_tier=MentorApplication.MentorTier.COMPANY_MENTOR,
             org=org,
-        ).exclude(status=MentorApplication.Status.REJECTED).first()
+        ).exclude(status__in=[
+            MentorApplication.Status.REJECTED,
+            MentorApplication.Status.GRANT_REVOKED
+        ]).first()
         if existing:
             raise serializers.ValidationError(
                 f"You already have a {existing.status.lower()} Company Mentor application for this company."

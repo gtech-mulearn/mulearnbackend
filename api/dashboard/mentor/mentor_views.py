@@ -6,7 +6,7 @@ from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType, OrganizationType
 from utils.utils import CommonUtils, DateTimeUtils
-from db.user import UserMentor, Socials, MentorApplication
+from db.user import UserMentor, Socials, MentorApplication, MentorScopeGrant
 from db.mentor import MentorshipSession
 from db.organization import Organization
 from db.task import KarmaActivityLog
@@ -588,8 +588,6 @@ class MentorVerifyAPI(APIView):
 
         if application.status in [MentorApplication.Status.APPROVED, MentorApplication.Status.REJECTED]:
             actor = application.verified_by or application.updated_by
-        if application.status in [MentorApplication.Status.APPROVED, MentorApplication.Status.REJECTED]:
-            actor = application.verified_by or application.updated_by
             actor_name = "an administrator"
             if actor:
                 if _is_company_owner_of(actor.id, application):
@@ -776,7 +774,7 @@ class MentorChangeCompanyAPI(APIView):
         except Exception:
             pass
 
-        serializer = serializers.MentorRegisterSerializer(new_application)
+        serializer = serializers.MentorRegisterSerializer(new_mentor_app)
         return CustomResponse(
             general_message=f"Request to change affiliation to {new_org.title} submitted successfully. It is pending approval.",
             response=serializer.data
@@ -915,6 +913,7 @@ class AdminAssignMentorAPI(APIView):
     def delete(self, request, user_muid):
         from db.user import User, UserRoleLink, Role
         from db.task import UserIgLink
+        from db.user import MentorScopeGrant
         from utils.types import RoleType as _RoleType
         from django.db import transaction
 
@@ -937,7 +936,7 @@ class AdminAssignMentorAPI(APIView):
         # Build the queryset of UserMentor records to revoke
         qs = MentorApplication.objects.filter(user=user, status=MentorApplication.Status.APPROVED)
         if mentor_tier:
-            qs = qs.filter(scope_type=mentor_tier)
+            qs = qs.filter(mentor_tier=mentor_tier)
 
         applications = list(qs)
         if not applications:
@@ -945,7 +944,6 @@ class AdminAssignMentorAPI(APIView):
                 general_message="No active mentor grants found to revoke."
             ).get_failure_response(status_code=404)
 
-        now = DateTimeUtils.get_current_utc_time()
         now = DateTimeUtils.get_current_utc_time()
 
         with transaction.atomic():
@@ -957,14 +955,14 @@ class AdminAssignMentorAPI(APIView):
 
                 # Deactivate IG links for IG_MENTOR
                 if app.mentor_tier == MentorApplication.MentorTier.IG_MENTOR:
-                    UserIgLink.objects.filter(
-                        user=user,
-                        ig_id__in=revoked_ig_ids,
-                        assignment_type=UserIgLink.AssignmentType.MENTOR,
-                    ).update(is_active=False)
+                    if app.preferred_ig_ids:
+                        UserIgLink.objects.filter(
+                            user=user,
+                            ig_id__in=app.preferred_ig_ids,
+                            assignment_type=UserIgLink.AssignmentType.MENTOR,
+                        ).update(is_active=False)
 
                 # Deactivate matching scope grants. NOTE: revoking mentor
-                from db.user import MentorScopeGrant
                 MentorScopeGrant.objects.filter(
                     application=app, is_active=True
                 ).update(

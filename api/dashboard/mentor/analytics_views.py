@@ -110,19 +110,16 @@ class MentorProfileCompletionAPI(APIView):
             "linkedin": bool(socials and socials.linkedin),
         }
 
-        is_ig_mentor = MentorApplication.objects.filter(
+        ig_mentor_app = MentorApplication.objects.filter(
             user_id=user_id,
             mentor_tier=MentorApplication.MentorTier.IG_MENTOR,
             status=MentorApplication.Status.APPROVED,
-        ).exists()
-        if is_ig_mentor:
-            has_preferred_igs = MentorApplication.objects.filter(
-                user_id=user_id,
-                mentor_tier=MentorApplication.MentorTier.IG_MENTOR,
-                status=MentorApplication.Status.APPROVED,
-            ).exclude(preferred_ig_ids__isnull=True).exclude(preferred_ig_ids=[]).exists()
-            checklist["preferred_igs"] = has_preferred_igs
+        ).first()
+
+        if ig_mentor_app:
+            checklist["preferred_igs"] = bool(ig_mentor_app.preferred_ig_ids)
         else:
+            # Not an IG mentor, so this check is not applicable
             checklist["preferred_igs"] = None
 
         applicable = [v for v in checklist.values() if v is not None]

@@ -151,6 +151,18 @@ class JobApplicationSerializer(serializers.ModelSerializer):
         if UserJobApplication.objects.filter(user_id=user_id, job=job).exists():
             raise serializers.ValidationError("You have already applied for this job.")
 
+        # Prevent any mentor associated with a company from applying to its jobs.
+        if job.company and job.company.org_id:
+            from db.user import MentorApplication
+
+            is_mentor_for_company = MentorApplication.objects.filter(
+                user_id=user_id,
+                org_id=job.company.org_id,
+                status=MentorApplication.Status.APPROVED
+            ).exists()
+            if is_mentor_for_company:
+                raise serializers.ValidationError("As a mentor associated with this company, you are not eligible to apply for its jobs.")
+
         user = User.objects.filter(id=user_id).first()
         wallet = Wallet.objects.filter(user_id=user_id).first()
         user_karma = wallet.karma if wallet else 0
