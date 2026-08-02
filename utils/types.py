@@ -106,6 +106,7 @@ class IntegrationType(Enum):
 
 class InterestGroupStatus(Enum):
     ACTIVE = "active"
+    INACTIVE = "inactive"
     REQUESTED = "requested"
     CANCELLED = "cancelled"
     REJECTED = "rejected"
