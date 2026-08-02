@@ -55,7 +55,9 @@ class UrlShortenerAPI(APIView):
         responses={200: ShowShortenUrlsSerializer},
     )
     def get(self, request):
-        url_shortener_objects = UrlShortener.objects.all().order_by('-created_at')
+        url_shortener_objects = UrlShortener.objects.select_related(
+            "created_by", "updated_by"
+        ).order_by('-created_at')
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             url_shortener_objects,
@@ -170,6 +172,9 @@ class UrlAnalyticsAPI(APIView):
                 'long_url': s.CharField(),
                 'short_url': s.CharField(),
                 'title': s.CharField(),
+                'created_by': s.CharField(),
+                'updated_by': s.CharField(),
+                'updated_at': s.CharField(),
             },
         )},
     )
@@ -204,6 +209,10 @@ class UrlAnalyticsAPI(APIView):
                 'long_url': url_shortener.long_url,
                 'short_url': url_shortener.short_url,
                 'title': url_shortener.title,
+                'created_by': getattr(url_shortener.created_by, 'full_name', None),
+                'updated_by': getattr(url_shortener.updated_by, 'full_name', None),
+                'updated_at': url_shortener.updated_at.strftime('%Y-%m-%d')
+                if getattr(url_shortener, 'updated_at', None) else None,
             }
             return CustomResponse(response=empty_result).get_success_response()
 
@@ -252,7 +261,11 @@ class UrlAnalyticsAPI(APIView):
             'time_based_data': time_based_data,
             'long_url': url_shortener.long_url,
             'short_url': url_shortener.short_url,
-            'title': url_shortener.title
+            'title': url_shortener.title,
+            'created_by': getattr(url_shortener.created_by, 'full_name', None),
+            'updated_by': getattr(url_shortener.updated_by, 'full_name', None),
+            'updated_at': url_shortener.updated_at.strftime('%Y-%m-%d')
+            if getattr(url_shortener, 'updated_at', None) else None,
         }
 
         return CustomResponse(response=result).get_success_response()
