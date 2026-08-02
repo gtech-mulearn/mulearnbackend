@@ -148,6 +148,7 @@ class InterestGroupSerializer(serializers.ModelSerializer):
     status = serializers.ChoiceField(
         choices=["active", "inactive", "requested", "cancelled", "rejected"]
     )
+    media_content_links = serializers.SerializerMethodField()
 
     class Meta:
         model = InterestGroup
@@ -171,6 +172,7 @@ class InterestGroupSerializer(serializers.ModelSerializer):
             "category",
             "status",
             "members",
+            "media_content_links",
             "updated_by",
             "updated_at",
             "created_by",
@@ -179,6 +181,26 @@ class InterestGroupSerializer(serializers.ModelSerializer):
 
     def get_members(self, obj):
         return obj.user_ig_link_ig.all().count()
+
+    def get_media_content_links(self, obj):
+        """
+        Media content (e.g. Office Hours sessions) linked to this IG via
+        ig_media_content_link, excluding soft-deleted media content.
+        """
+        links = obj.media_content_links.filter(
+            media_content__deleted_at__isnull=True
+        ).select_related("media_content").order_by("-media_content__date")
+
+        return [
+            {
+                "id": link.id,
+                "media_content_id": link.media_content_id,
+                "content_type": link.media_content.content_type,
+                "title": link.media_content.title,
+                "date": link.media_content.date,
+            }
+            for link in links
+        ]
 
     def to_representation(self, instance):
         """Convert JSON-serialized text fields back to Python objects for API output.
