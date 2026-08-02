@@ -8,6 +8,7 @@ urlpatterns = [
     path('request/<str:pk>/', dash_ig_view.InterestGroupRequestAPI.as_view()),  # PATCH: admin status update | DELETE: cancel request
     path('list/', dash_ig_view.InterestGroupListApi.as_view()),  # for public listing without admin permission
     path('csv/', dash_ig_view.InterestGroupCSV.as_view()),  # for IG data CSV download
+    path('impact-projects/public/', impact_project_view.PublicImpactProjectListAPI.as_view()),
     path('<str:ig_id>/impact-projects/', impact_project_view.ImpactProjectListCreateAPI.as_view()),
     path('<str:ig_id>/impact-projects/<str:project_id>/', impact_project_view.ImpactProjectDetailAPI.as_view()),
     path('<str:ig_id>/impact-projects/<str:project_id>/image/', impact_project_view.ImpactProjectImageAPI.as_view()),

@@ -35,10 +35,11 @@ def test_create_weekly_series(mentor_user):
         recurrence_end_date=(start_time + timedelta(days=30)).date()
     )
     
-    children = generate_recurring_sessions(parent_session)
-    
+    children, was_truncated = generate_recurring_sessions(parent_session)
+
     # 30 days = 4 weeks (4 child sessions + 1 parent)
     assert len(children) == 4
+    assert was_truncated is False
     for child in children:
         assert child.parent_session_id == parent_session.id
         assert child.is_recurring is True
@@ -68,10 +69,11 @@ def test_recurrence_hard_cap(mentor_user):
         recurrence_end_date=(start_time + timedelta(days=365*5)).date()
     )
     
-    children = generate_recurring_sessions(parent_session)
-    
+    children, was_truncated = generate_recurring_sessions(parent_session)
+
     # Should be capped at 50
     assert len(children) == 50
+    assert was_truncated is True
 
 @pytest.mark.django_db
 def test_monthly_edge_case(mentor_user):
@@ -97,9 +99,10 @@ def test_monthly_edge_case(mentor_user):
         recurrence_end_date=date(2026, 3, 5)
     )
     
-    children = generate_recurring_sessions(parent_session)
-    
+    children, was_truncated = generate_recurring_sessions(parent_session)
+
     assert len(children) == 1
+    assert was_truncated is False
     # First generated session should be Feb 28th 2026
     assert children[0].starts_at.month == 2
     assert children[0].starts_at.day == 28
