@@ -31,6 +31,7 @@ class InstitutionSerializer(serializers.ModelSerializer):
     state = serializers.ReadOnlyField(source="district.zone.state.name")
     country = serializers.ReadOnlyField(source="district.zone.state.country.name")
     user_count = serializers.SerializerMethodField()
+    total_karma = serializers.SerializerMethodField()
 
     class Meta:
         model = Organization
@@ -44,10 +45,14 @@ class InstitutionSerializer(serializers.ModelSerializer):
             "state",
             "country",
             "user_count",
+            "total_karma",
         ]
 
     def get_user_count(self, obj):
         return obj.user_organization_link_org.filter(verified=True).count()
+
+    def get_total_karma(self, obj):
+        return getattr(obj, "total_karma", 0) or 0
 
 
 # class InstitutionSerializer(serializers.ModelSerializer):

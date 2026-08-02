@@ -5,6 +5,7 @@ from .external_api_views import ExternalUserDetailsAPI
 from . import common_views
 from .college_details_views import CollegeDetailsAPI
 from api.dashboard.company import job_views
+from api.dashboard.career_lab import career_lab_views
 
 urlpatterns = [
     path('campus-details/<str:college_code>/', CollegeDetailsAPI.as_view()),
@@ -36,4 +37,6 @@ urlpatterns = [
     path("external/user/", ExternalUserDetailsAPI.as_view()),
     path('jobs/', job_views.PublicJobAPI.as_view(), name='public-jobs-list'),
     path('ig/<str:pk>/', common_views.IGDetailAPI.as_view()),
+    path('career-lab/ongoing/', career_lab_views.PublicOngoingHiringAPI.as_view(), name='public-career-lab-ongoing'),
+    path('career-lab/previous/', career_lab_views.PublicPreviousHiringAPI.as_view(), name='public-career-lab-previous'),
 ]
