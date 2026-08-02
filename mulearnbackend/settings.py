@@ -326,4 +326,24 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'mu_celery.alumni_cron.update_alumni_status_cron',
         'schedule': crontab(hour=0, minute=15),
     },
+    'transition-mentorship-session-statuses': {
+        'task': 'mu_celery.mentor_tasks.transition_mentorship_session_statuses',
+        'schedule': crontab(minute='*/15'),
+    },
+    'expire-stale-mentor-applications': {
+        'task': 'mu_celery.mentor_tasks.expire_stale_applications',
+        'schedule': crontab(hour=0, minute=20),
+    },
+    'expire-stale-mentor-grants': {
+        'task': 'mu_celery.mentor_tasks.expire_stale_grants',
+        'schedule': crontab(hour=0, minute=25),
+    },
+    'expire-stale-company-jobs': {
+        'task': 'mu_celery.company_tasks.expire_stale_jobs',
+        'schedule': crontab(hour=0, minute=30),
+    },
+    'transition-event-statuses': {
+        'task': 'mu_celery.event_cron.transition_event_statuses_task',
+        'schedule': crontab(hour=0, minute=35),
+    },
 }

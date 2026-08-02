@@ -720,35 +720,21 @@ class InterestGroupGetAPI(APIView):
                     if not target_user:
                         continue
 
-                    # 1. Ensure an approved UserMentor profile exists.
-                    # Never overwrite mentor_tier on an existing profile —
-                    # a Company/Campus mentor gaining IG-mentor authority is
-                    # additive (via the MentorScopeGrant below), not a tier
-                    # replacement.
+                    # 1. Ensure the mentor's single profile row exists. Tier
+                    # membership is never stored here — it's additive via the
+                    # MentorScopeGrant below, so a Company/Campus mentor
+                    # gaining IG-mentor authority never touches any other
+                    # tier's grant.
                     now = DateTimeUtils.get_current_utc_time()
                     mentor_profile, created = UserMentor.objects.get_or_create(
                         user=target_user,
                         defaults={
-                            "status":        UserMentor.Status.APPROVED,
-                            "mentor_tier":   UserMentor.MentorTier.IG_MENTOR,
-                            "verified_by_id": user_id,
-                            "verified_at":   now,
                             "created_by_id": user_id,
                             "updated_by_id": user_id,
                             "created_at":    now,
                             "updated_at":    now,
                         },
                     )
-                    if not created and mentor_profile.status != UserMentor.Status.APPROVED:
-                        mentor_profile.status = UserMentor.Status.APPROVED
-                        mentor_profile.verified_by_id = user_id
-                        mentor_profile.verified_at = now
-                        mentor_profile.updated_by_id = user_id
-                        mentor_profile.updated_at = now
-                        mentor_profile.save(update_fields=[
-                            "status", "verified_by_id", "verified_at",
-                            "updated_by_id", "updated_at",
-                        ])
 
                     # 1b. Grant IG-scoped authority additively.
                     from db.user import MentorScopeGrant
