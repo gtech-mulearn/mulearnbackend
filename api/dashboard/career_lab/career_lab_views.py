@@ -14,7 +14,7 @@ from utils.utils import CommonUtils
 
 from . import career_lab_serializers
 
-CAREER_LAB_ADMIN_ROLES = [RoleType.ADMIN.value]
+CAREER_LAB_ADMIN_ROLES = [RoleType.ADMIN.value, RoleType.ASSOCIATE.value]
 
 SEARCH_FIELDS = ["role", "organization", "title", "location"]
 SORT_FIELDS = {
