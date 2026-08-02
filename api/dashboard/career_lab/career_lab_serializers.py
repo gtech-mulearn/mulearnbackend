@@ -4,12 +4,16 @@ from db.career_lab import Hiring
 
 
 class HiringSerializer(serializers.ModelSerializer):
+    created_by = serializers.ReadOnlyField(source='created_by.full_name')
+    updated_by = serializers.ReadOnlyField(source='updated_by.full_name')
+
     class Meta:
         model = Hiring
         fields = [
             'id', 'posted_date', 'role', 'organization', 'title', 'location',
             'lastdate', 'applylink', 'jdlink', 'duration', 'remuneration',
-            'vacancies', 'extracontent', 'created_at', 'updated_at',
+            'vacancies', 'extracontent', 'created_by', 'created_at',
+            'updated_by', 'updated_at',
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
@@ -44,19 +48,26 @@ class HiringCSVRowSerializer(serializers.ModelSerializer):
 
 
 class PublicOngoingHiringSerializer(serializers.ModelSerializer):
+    created_by = serializers.ReadOnlyField(source='created_by.full_name')
+    updated_by = serializers.ReadOnlyField(source='updated_by.full_name')
+
     class Meta:
         model = Hiring
         fields = [
             'id', 'posted_date', 'role', 'organization', 'title', 'location',
             'lastdate', 'applylink', 'jdlink', 'duration', 'remuneration',
-            'vacancies',
+            'vacancies', 'created_by', 'created_at', 'updated_by', 'updated_at',
         ]
 
 
 class PublicPreviousHiringSerializer(serializers.ModelSerializer):
+    created_by = serializers.ReadOnlyField(source='created_by.full_name')
+    updated_by = serializers.ReadOnlyField(source='updated_by.full_name')
+
     class Meta:
         model = Hiring
         fields = [
             'id', 'role', 'organization', 'title', 'location', 'lastdate',
             'remuneration', 'vacancies', 'duration', 'extracontent',
+            'created_by', 'created_at', 'updated_by', 'updated_at',
         ]
