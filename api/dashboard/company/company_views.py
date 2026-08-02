@@ -897,9 +897,9 @@ class CompanyMentorListAPI(APIView):
                 general_message="Company organization record not found."
             ).get_failure_response(status_code=404)
 
-        from db.user import UserMentor, MentorApplication
+        from db.user import MentorApplication
         applications = MentorApplication.objects.filter(
-            tier=UserMentor.MentorTier.COMPANY_MENTOR,
+            mentor_tier=MentorApplication.MentorTier.COMPANY_MENTOR,
             org=org,
         ).select_related("user").order_by("-created_at")
 

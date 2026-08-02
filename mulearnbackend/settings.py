@@ -338,4 +338,8 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'mu_celery.company_tasks.expire_stale_jobs',
         'schedule': crontab(hour=0, minute=30),
     },
+    'transition-event-statuses': {
+        'task': 'mu_celery.event_cron.transition_event_statuses_task',
+        'schedule': crontab(hour=0, minute=35),
+    },
 }

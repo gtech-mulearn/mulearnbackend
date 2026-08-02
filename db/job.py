@@ -28,15 +28,14 @@ class CompanyJob(models.Model):
     location = models.CharField(max_length=75, null=True, blank=True)
     salary_range = models.CharField(max_length=36, null=True, blank=True)
     job_type = models.CharField(max_length=20) # Enum: Hybrid, Full-Time, Remote, Part-Time, Internship, Gig
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
-    approved_by = models.ForeignKey(
-        'db.User', on_delete=models.SET_NULL, null=True, blank=True,
-        db_column='approved_by', related_name='company_jobs_approved'
-    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    status = models.CharField(max_length=20, default='Draft') # Enum: Draft, Active, Closed, Expired, Pending Approval, Rejected
+    approved_by = models.ForeignKey('db.User', on_delete=models.SET_NULL, null=True, blank=True,
+                                    related_name='company_jobs_approved', db_column='approved_by')
     approved_at = models.DateTimeField(null=True, blank=True)
     rejection_reason = models.CharField(max_length=500, null=True, blank=True)
     is_deleted = models.BooleanField(default=False)
-    total_views = models.IntegerField(default=0)
     duration_value = models.PositiveSmallIntegerField(null=True, blank=True)
     duration_unit = models.CharField(max_length=20, null=True, blank=True) # Enum: days, weeks, months
     hourly_rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
@@ -48,8 +47,7 @@ class CompanyJob(models.Model):
     # Expired once passed. Null means "no auto-expiry", preserving today's
     # manual-only behavior for existing/unset postings.
     expires_at = models.DateTimeField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    total_views = models.IntegerField(default=0)
 
     class Meta:
         managed = False

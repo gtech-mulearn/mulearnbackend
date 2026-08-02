@@ -123,7 +123,7 @@ class IGMentorLeaderboardSerializer(serializers.Serializer):
         return ig.name if ig else None
 
     def get_rank(self, obj):
-        return self.context.get('rankings', {}).get(obj.id, None)
+        return self.context.get('rankings', {}).get(obj.user_id, None)
 
 
 class CampusMentorLeaderboardSerializer(serializers.Serializer):
@@ -143,7 +143,7 @@ class CampusMentorLeaderboardSerializer(serializers.Serializer):
         return campus.title if campus else None
 
     def get_rank(self, obj):
-        return self.context.get('rankings', {}).get(obj.id, None)
+        return self.context.get('rankings', {}).get(obj.user_id, None)
 
 
 class CompanyMentorLeaderboardSerializer(serializers.Serializer):
@@ -163,4 +163,4 @@ class CompanyMentorLeaderboardSerializer(serializers.Serializer):
         return company.name if company else None
 
     def get_rank(self, obj):
-        return self.context.get('rankings', {}).get(obj.id, None)
+        return self.context.get('rankings', {}).get(obj.user_id, None)

@@ -56,13 +56,19 @@ class JobCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         rules_data = validated_data.pop('rules', [])
         user_id = self.context.get('user_id')
+        is_owner = self.context.get('is_owner', False)
 
         company = self.context.get('company')
         if not company:
             raise serializers.ValidationError("You do not have a verified company profile or lack permissions.")
 
-        # Jobs are always created as Draft; status can only be changed via PATCH.
-        validated_data['status'] = 'Draft'
+        if is_owner:
+            validated_data['status'] = 'Draft'
+        else:  # Mentor is creating the job
+            validated_data['status'] = 'Pending Approval'
+
+        validated_data['created_by_id'] = user_id
+        validated_data['updated_by_id'] = user_id
 
         job = CompanyJob.objects.create(company=company, created_by_id=user_id, **validated_data)
 
@@ -174,6 +180,8 @@ class JobListSerializer(serializers.ModelSerializer):
     company_logo = serializers.CharField(source='company.logo', read_only=True)
     rules = JobRuleSerializer(many=True, read_only=True)
     eligibility = serializers.SerializerMethodField()
+    created_by_name = serializers.CharField(source='created_by.full_name', read_only=True, default=None)
+    approved_by_name = serializers.CharField(source='approved_by.full_name', read_only=True, default=None)
 
     class Meta:
         model = CompanyJob
@@ -182,7 +190,8 @@ class JobListSerializer(serializers.ModelSerializer):
             'job_description', 'location', 'salary_range', 'job_type',
             'status', 'duration_value', 'duration_unit', 'hourly_rate',
             'deliverables', 'stipend', 'certificate_provided', 'rules',
-            'eligibility', 'created_at'
+            'eligibility', 'created_at', 'created_by_name', 'rejection_reason',
+            'approved_at', 'approved_by_name', 'expires_at'
         ]
 
     def get_eligibility(self, obj):
@@ -242,6 +251,37 @@ class JobApplicationSerializer(serializers.ModelSerializer):
         user_id = self.context.get('user_id')
         validated_data['user_id'] = user_id
         return UserJobApplication.objects.create(**validated_data)
+
+
+class JobVerifySerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=["Active", "Rejected"])
+    rejection_reason = serializers.CharField(required=False, allow_blank=True)
+
+    def validate(self, data):
+        if data.get("status") == "Rejected" and not data.get("rejection_reason", "").strip():
+            raise serializers.ValidationError({"rejection_reason": "Rejection reason is required when rejecting."})
+        return data
+
+    def update(self, instance, validated_data):
+        user_id = self.context.get("user_id")
+        status = validated_data.get("status")
+        now = DateTimeUtils.get_current_utc_time()
+
+        instance.status = status
+        instance.updated_by_id = user_id
+        instance.updated_at = now
+
+        if status == "Active":
+            instance.rejection_reason = None
+            instance.approved_by_id = user_id
+            instance.approved_at = now
+        elif status == "Rejected":
+            instance.rejection_reason = validated_data.get("rejection_reason")
+            instance.approved_by_id = None
+            instance.approved_at = None
+
+        instance.save()
+        return instance
 
 class ApplicationTrackingSerializer(serializers.ModelSerializer):
     applicant_name = serializers.CharField(source='user.full_name', read_only=True)
@@ -303,4 +343,3 @@ class UserAppliedJobsSerializer(serializers.ModelSerializer):
             'id', 'job', 'resume_link', 'cover_letter', 'status', 
             'rejection_reason', 'applied_at'
         ]
-

@@ -1,6 +1,6 @@
 from rest_framework.views import APIView
 from django.db.models import Q
-from utils.permission import CustomizePermission, JWTUtils, role_required
+from utils.permission import CustomizePermission, JWTUtils, role_required, mentor_active_required
 from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
@@ -25,42 +25,10 @@ class MentorSessionCreateAPI(APIView):
         responses={200: serializers.SessionCreateSerializer},
     )
     @role_required([RoleType.MENTOR.value])
+    @mentor_active_required
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         data = request.data.copy()
-
-        from .dash_mentor_helper import is_mentor_active
-        if not is_mentor_active(user_id):
-            return CustomResponse(
-                general_message="Your mentor account is deactivated and cannot create sessions."
-            ).get_failure_response(status_code=403)
-
-        # ── IG-scoped sessions only ──────────────────────────────────────────
-        # Every session is for an Interest Group the mentor mentors (an active
-        # MENTOR UserIgLink). There are no company- or campus-scoped sessions.
-        ig_id = (request.data.get("ig") or "").strip()
-
-        if not ig_id:
-            return CustomResponse(
-                general_message="Select an Interest Group to create a session."
-            ).get_failure_response(status_code=400)
-
-        if not UserIgLink.objects.filter(
-            user_id=user_id,
-            ig_id=ig_id,
-            assignment_type=UserIgLink.AssignmentType.MENTOR,
-            is_active=True,
-        ).exists():
-            return CustomResponse(
-                general_message="You are not assigned as a mentor for this Interest Group."
-            ).get_failure_response(status_code=403)
-
-        data["entity_id"] = ig_id
-        data["session_type"] = MentorshipSession.SessionType.IG_SESSION
-
-        # Pop 'ig' to prevent DRF unknown field validation errors
-        data.pop("ig", None)
-
         serializer = serializers.SessionCreateSerializer(
             data=data, context={"user_id": user_id}
         )
@@ -127,6 +95,14 @@ class MentorSessionUpdateAPI(APIView):
     @role_required([RoleType.MENTOR.value])
     def patch(self, request, session_id):
         user_id = JWTUtils.fetch_user_id(request)
+
+        from db.user import UserMentor
+        mentor_profile = UserMentor.objects.filter(user_id=user_id).first()
+        if mentor_profile and not mentor_profile.is_active:
+            return CustomResponse(
+                general_message="Your mentor account is deactivated. Please contact an administrator."
+            ).get_failure_response(status_code=403)
+
         session = MentorshipSession.objects.filter(id=session_id, created_by_id=user_id, is_deleted=False).first()
         
         if not session:
@@ -159,6 +135,14 @@ class MentorSessionUpdateAPI(APIView):
     @role_required([RoleType.MENTOR.value])
     def delete(self, request, session_id):
         user_id = JWTUtils.fetch_user_id(request)
+
+        from db.user import UserMentor
+        mentor_profile = UserMentor.objects.filter(user_id=user_id).first()
+        if mentor_profile and not mentor_profile.is_active:
+            return CustomResponse(
+                general_message="Your mentor account is deactivated. Please contact an administrator."
+            ).get_failure_response(status_code=403)
+
         session = MentorshipSession.objects.filter(id=session_id, created_by_id=user_id, is_deleted=False).first()
         
         if not session:
@@ -292,23 +276,28 @@ class AvailableSessionListAPI(APIView):
             user_id=user_id
         ).values_list('ig_id', flat=True)
 
-        # Company orgs the user is linked to
-        company_org_ids = UserOrganizationLink.objects.filter(
+        # Campus orgs the user is linked to
+        campus_org_ids = UserOrganizationLink.objects.filter(
             user_id=user_id,
-            org__org_type='Company',
+            org__org_type='College',
         ).values_list('org_id', flat=True)
 
         sessions = MentorshipSession.objects.filter(
             Q(
+                # IG sessions for the user's groups
                 entity_id__in=user_ig_ids,
                 session_type=MentorshipSession.SessionType.IG_SESSION,
             ) | Q(
-                entity_id__in=company_org_ids,
+                # Campus sessions for the user's college
+                entity_id__in=campus_org_ids,
+                session_type=MentorshipSession.SessionType.CAMPUS_SESSION,
+            ) | Q(
+                # All company sessions are available to every authenticated user
                 session_type=MentorshipSession.SessionType.COMPANY_SESSION,
             ),
             status=MentorshipSession.Status.SCHEDULED,
             is_deleted=False,
-        )
+        ).distinct()
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             sessions, request,

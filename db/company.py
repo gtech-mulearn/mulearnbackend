@@ -51,50 +51,30 @@ class Company(models.Model):
 
 
 class CompanyAdminLink(models.Model):
-    """
-    Addon §6.5 — company owner delegation. A second admin who can approve
-    (events/jobs/mentor applications) in the owner's absence. Only the true
-    owner may invite/revoke these — a delegate can never delegate further.
-    Invite/accept workflow: a delegate only gains authority once they
-    accept (status transitions PENDING -> ACCEPTED); is_company_owner_or_admin
-    only honors ACCEPTED links.
-    """
-
     class Status(models.TextChoices):
-        PENDING = 'pending', 'Pending'
-        ACCEPTED = 'accepted', 'Accepted'
-        DECLINED = 'declined', 'Declined'
-        REVOKED = 'revoked', 'Revoked'
+        PENDING = 'Pending', 'Pending'
+        ACCEPTED = 'Accepted', 'Accepted'
+        DECLINED = 'Declined', 'Declined'
+        REVOKED = 'Revoked', 'Revoked'
 
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     company = models.ForeignKey(Company, on_delete=models.CASCADE, db_column='company_id', related_name='admin_links')
     user = models.ForeignKey('User', on_delete=models.CASCADE, db_column='user_id', related_name='company_admin_links')
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
-    invited_by = models.ForeignKey(
-        'User', on_delete=models.SET_NULL, null=True, blank=True,
-        db_column='invited_by_id', related_name='company_admin_links_invited'
-    )
-    invited_at = models.DateTimeField()
+    invited_by = models.ForeignKey('User', on_delete=models.SET_NULL, null=True, blank=True, db_column='invited_by_id', related_name='company_admin_links_invited_by')
+    invited_at = models.DateTimeField(auto_now_add=True)
     responded_at = models.DateTimeField(null=True, blank=True)
-    revoked_by = models.ForeignKey(
-        'User', on_delete=models.SET_NULL, null=True, blank=True,
-        db_column='revoked_by_id', related_name='company_admin_links_revoked'
-    )
+    revoked_by = models.ForeignKey('User', on_delete=models.SET_NULL, null=True, blank=True, db_column='revoked_by_id', related_name='company_admin_links_revoked_by')
     revoked_at = models.DateTimeField(null=True, blank=True)
-    created_by = models.ForeignKey(
-        'User', on_delete=models.CASCADE,
-        db_column='created_by', related_name='company_admin_links_created'
-    )
-    updated_by = models.ForeignKey(
-        'User', on_delete=models.CASCADE,
-        db_column='updated_by', related_name='company_admin_links_updated'
-    )
+    created_by = models.ForeignKey('User', on_delete=models.CASCADE, db_column='created_by', related_name='company_admin_links_created_by')
+    updated_by = models.ForeignKey('User', on_delete=models.CASCADE, db_column='updated_by', related_name='company_admin_links_updated_by')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         managed = False
         db_table = 'company_admin_link'
+        unique_together = ('company', 'user')
 
 
 class CompanyTalentShortlist(models.Model):

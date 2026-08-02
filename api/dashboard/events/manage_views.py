@@ -4,6 +4,7 @@ Organiser / co-owner access required for all endpoints.
 """
 import uuid
 from django.utils import timezone
+from django.db.models import Q
 from django.db import transaction
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.views import APIView
@@ -87,6 +88,8 @@ def _get_user_company_org_ids(user_id, roles):
             company_org_ids.add(company.org_id)
 
     if RoleType.MENTOR.value in roles:
+        # This part remains as is, for mentors creating events for their company.
+        # The check above handles owners and delegates.
         from db.user import MentorScopeGrant
         from api.dashboard.mentor.dash_mentor_helper import get_scope_ids
         company_org_ids |= get_scope_ids(user_id, MentorScopeGrant.ScopeType.COMPANY_MENTOR)
@@ -181,7 +184,6 @@ class ManageEventListCreateAPI(APIView):
                 ).values_list('event_id', flat=True)
             )
 
-            from django.db.models import Q
             q_filter = Q(created_by_id=user_id) | Q(id__in=co_owned_event_ids)
             
             # Allow Company and Company Mentors to see all events for their company
@@ -203,8 +205,7 @@ class ManageEventListCreateAPI(APIView):
                     # A mentor can hold multiple tiers simultaneously (grants
                     # are additive) — union the pending-approval queues for
                     # every tier they actually hold, instead of picking one
-                    # arbitrary tier via .first().
-                    from django.db.models import Q as _Q
+                    # arbitrary tier via .first().                    from django.db.models import Q as _Q
                     from db.user import MentorScopeGrant
                     from db.task import UserIgLink
                     from api.dashboard.mentor.dash_mentor_helper import get_scope_ids
@@ -218,16 +219,16 @@ class ManageEventListCreateAPI(APIView):
                         ).values_list('ig_id', flat=True)
                     )
 
-                    scope_filter = _Q()
+                    scope_filter = Q()
                     has_any_scope = False
                     if campus_org_ids:
-                        scope_filter |= _Q(
+                        scope_filter |= Q(
                             organiser_type=Event.OrganiserType.CAMPUS_IG,
                             scope_org_id__in=campus_org_ids,
                         )
                         has_any_scope = True
                     if user_ig_ids:
-                        scope_filter |= _Q(
+                        scope_filter |= Q(
                             organiser_type=Event.OrganiserType.GLOBAL_IG,
                             organiser_ig_id__in=user_ig_ids,
                         )
@@ -663,7 +664,7 @@ class ManageEventPublishAPI(APIView):
                 general_message='You do not have permission to manage this event.'
             ).get_failure_response()
 
-        if event.status not in (Event.Status.DRAFT, Event.Status.REJECTED):
+        if event.status.upper() not in (Event.Status.DRAFT, Event.Status.REJECTED):
             return CustomResponse(
                 general_message=f'Only draft or rejected events can be published (current: {event.status}).'
             ).get_failure_response()
@@ -1457,6 +1458,29 @@ class MyEventInvitesAPI(APIView):
 # MENTOR APPROVAL ENDPOINTS
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _is_company_owner_or_delegate(user_id, org_id):
+    """
+    Checks if a user is the owner of a company or an accepted delegate,
+    given the company's organization ID.
+    """
+    if not org_id:
+        return False
+    
+    from db.company import Company, CompanyAdminLink
+    company = Company.objects.filter(org_id=org_id, status="verified").first()
+    if not company:
+        return False
+    
+    if company.company_user_id == user_id:
+        return True
+    
+    return CompanyAdminLink.objects.filter(
+        company=company,
+        user_id=user_id,
+        status='Accepted'
+    ).exists()
+
+
 class MentorEventApproveAPI(APIView):
     authentication_classes = [CustomizePermission]
 
@@ -1508,6 +1532,17 @@ class MentorEventApproveAPI(APIView):
         event.save()
 
         log_event_action(event=event, user_id=user_id, action=EventLog.Action.APPROVED, changes={'Status': {'from': Event.Status.PENDING_MENTOR_APPROVAL, 'to': new_status}})
+
+        from db.mentor import SystemActionLog
+        SystemActionLog.objects.create(
+            action_type=SystemActionLog.ActionType.IG_EVENT_APPROVE,
+            actor_user_id=user_id,
+            subject_user_id=event.created_by_id,
+            entity_name='events',
+            entity_id=event.id,
+            old_data={'status': Event.Status.PENDING_MENTOR_APPROVAL},
+            new_data={'status': new_status},
+        )
 
         # Notify the event creator
         actor = User.objects.filter(id=user_id).first()
@@ -1578,6 +1613,18 @@ class MentorEventRejectAPI(APIView):
 
         log_event_action(event=event, user_id=user_id, action=EventLog.Action.REJECTED, changes={'Status': {'from': old_status, 'to': Event.Status.REJECTED}}, details={'reason': reason})
 
+        from db.mentor import SystemActionLog
+        SystemActionLog.objects.create(
+            action_type=SystemActionLog.ActionType.IG_EVENT_REJECT,
+            actor_user_id=user_id,
+            subject_user_id=event.created_by_id,
+            entity_name='events',
+            entity_id=event.id,
+            old_data={'status': old_status},
+            new_data={'status': Event.Status.REJECTED},
+            remarks=reason,
+        )
+
         # Notify the event creator
         actor = User.objects.filter(id=user_id).first()
         creator = event.created_by
@@ -1639,6 +1686,17 @@ class CompanyEventApproveAPI(APIView):
 
         log_event_action(event=event, user_id=user_id, action=EventLog.Action.APPROVED, changes={'Status': {'from': Event.Status.PENDING_MENTOR_APPROVAL, 'to': new_status}})
 
+        from db.mentor import SystemActionLog
+        SystemActionLog.objects.create(
+            action_type=SystemActionLog.ActionType.COMPANY_EVENT_APPROVE,
+            actor_user_id=user_id,
+            subject_user_id=event.created_by_id,
+            entity_name='events',
+            entity_id=event.id,
+            old_data={'status': Event.Status.PENDING_MENTOR_APPROVAL},
+            new_data={'status': new_status},
+        )
+
         actor = User.objects.filter(id=user_id).first()
         creator = event.created_by
         if creator and actor:
@@ -1689,6 +1747,18 @@ class CompanyEventRejectAPI(APIView):
         event.save()
 
         log_event_action(event=event, user_id=user_id, action=EventLog.Action.REJECTED, changes={'Status': {'from': old_status, 'to': Event.Status.REJECTED}}, details={'reason': reason})
+
+        from db.mentor import SystemActionLog
+        SystemActionLog.objects.create(
+            action_type=SystemActionLog.ActionType.COMPANY_EVENT_REJECT,
+            actor_user_id=user_id,
+            subject_user_id=event.created_by_id,
+            entity_name='events',
+            entity_id=event.id,
+            old_data={'status': old_status},
+            new_data={'status': Event.Status.REJECTED},
+            remarks=reason,
+        )
 
         actor = User.objects.filter(id=user_id).first()
         creator = event.created_by
@@ -1751,6 +1821,17 @@ class CampusEventApproveAPI(APIView):
         event.save()
 
         log_event_action(event=event, user_id=user_id, action=EventLog.Action.APPROVED, changes={'Status': {'from': Event.Status.PENDING_CAMPUS_APPROVAL, 'to': new_status}})
+
+        from db.mentor import SystemActionLog
+        SystemActionLog.objects.create(
+            action_type=SystemActionLog.ActionType.CAMPUS_EVENT_APPROVE,
+            actor_user_id=user_id,
+            subject_user_id=event.created_by_id,
+            entity_name='events',
+            entity_id=event.id,
+            old_data={'status': Event.Status.PENDING_CAMPUS_APPROVAL},
+            new_data={'status': new_status},
+        )
 
         # Notify the event creator
         actor = User.objects.filter(id=user_id).first()
@@ -1828,6 +1909,18 @@ class CampusEventRejectAPI(APIView):
         event.save()
 
         log_event_action(event=event, user_id=user_id, action=EventLog.Action.REJECTED, changes={'Status': {'from': old_status, 'to': Event.Status.REJECTED}}, details={'reason': reason})
+
+        from db.mentor import SystemActionLog
+        SystemActionLog.objects.create(
+            action_type=SystemActionLog.ActionType.CAMPUS_EVENT_REJECT,
+            actor_user_id=user_id,
+            subject_user_id=event.created_by_id,
+            entity_name='events',
+            entity_id=event.id,
+            old_data={'status': old_status},
+            new_data={'status': Event.Status.REJECTED},
+            remarks=reason,
+        )
 
         # Notify the event creator
         actor = User.objects.filter(id=user_id).first()

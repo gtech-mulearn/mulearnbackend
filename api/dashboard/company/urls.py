@@ -11,6 +11,7 @@ urlpatterns = [
     path("profile/public/<str:slug>/jobs/", job_views.PublicCompanyJobListAPI.as_view()),
     path("list/",                     company_views.CompanyListAPI.as_view()),
     path("jobs/",                     job_views.CompanyJobAPI.as_view()),
+    path("jobs/pending/",             job_views.CompanyPendingJobListAPI.as_view()),
     path("jobs/all/",                 job_views.PublicJobAPI.as_view()),
     path("jobs/<str:job_id>/",        job_views.CompanyJobDetailAPI.as_view()),
     path("jobs/<str:job_id>/approve/", job_views.CompanyJobApproveAPI.as_view()),

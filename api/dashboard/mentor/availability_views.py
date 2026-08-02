@@ -65,6 +65,14 @@ class MentorAvailabilitySlotAPI(APIView):
     @role_required([RoleType.MENTOR.value])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
+
+        from db.user import UserMentor
+        mentor_profile = UserMentor.objects.filter(user_id=user_id).first()
+        if mentor_profile and not mentor_profile.is_active:
+            return CustomResponse(
+                general_message="Your mentor account is deactivated. Please contact an administrator."
+            ).get_failure_response(status_code=403)
+
         ig_id = request.data.get("ig")
 
         # Availability is a mentor-level setting. An IG is optional: when one is
@@ -102,6 +110,14 @@ class MentorAvailabilitySlotAPI(APIView):
     @role_required([RoleType.MENTOR.value])
     def patch(self, request, slot_id):
         user_id = JWTUtils.fetch_user_id(request)
+
+        from db.user import UserMentor
+        mentor_profile = UserMentor.objects.filter(user_id=user_id).first()
+        if mentor_profile and not mentor_profile.is_active:
+            return CustomResponse(
+                general_message="Your mentor account is deactivated. Please contact an administrator."
+            ).get_failure_response(status_code=403)
+
         slot = MentorAvailabilitySlot.objects.filter(id=slot_id, mentor_user_id=user_id).first()
         
         if not slot:
@@ -129,6 +145,14 @@ class MentorAvailabilitySlotAPI(APIView):
     @role_required([RoleType.MENTOR.value])
     def delete(self, request, slot_id):
         user_id = JWTUtils.fetch_user_id(request)
+
+        from db.user import UserMentor
+        mentor_profile = UserMentor.objects.filter(user_id=user_id).first()
+        if mentor_profile and not mentor_profile.is_active:
+            return CustomResponse(
+                general_message="Your mentor account is deactivated. Please contact an administrator."
+            ).get_failure_response(status_code=403)
+
         slot = MentorAvailabilitySlot.objects.filter(id=slot_id, mentor_user_id=user_id).first()
         
         if not slot:
@@ -151,14 +175,17 @@ class MentorPublicAvailabilityAPI(APIView):
     )
     def get(self, request, mentor_id):
         from db.user import UserMentor
-        from .dash_mentor_helper import get_mentor_scopes
-
-        mentor = UserMentor.objects.filter(id=mentor_id, is_active=True).first()
-        if not mentor or not get_mentor_scopes(mentor.user_id):
+        from db.user import MentorApplication
+        
+        mentor = UserMentor.objects.filter(id=mentor_id).first()
+        if not mentor:
             return CustomResponse(
-                general_message="Mentor not found or not approved."
+                general_message="Mentor profile not found."
             ).get_failure_response(status_code=404)
-            
+
+        if not MentorApplication.objects.filter(user=mentor.user, status=MentorApplication.Status.APPROVED).exists():
+            return CustomResponse(general_message="This user is not an approved mentor.").get_failure_response(status_code=403)
+
         slots = MentorAvailabilitySlot.objects.filter(mentor_user_id=mentor.user_id, is_active=True)
         serializer = serializers.AvailabilitySlotSerializer(slots, many=True)
         

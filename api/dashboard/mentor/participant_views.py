@@ -45,6 +45,14 @@ class MentorAddParticipantAPI(APIView):
     @role_required([RoleType.MENTOR.value])
     def post(self, request, session_id):
         user_id = JWTUtils.fetch_user_id(request)
+
+        from db.user import UserMentor
+        mentor_profile = UserMentor.objects.filter(user_id=user_id).first()
+        if mentor_profile and not mentor_profile.is_active:
+            return CustomResponse(
+                general_message="Your mentor account is deactivated. Please contact an administrator."
+            ).get_failure_response(status_code=403)
+
         
         serializer = serializers.MentorAddParticipantSerializer(
             data=request.data, context={"user_id": user_id, "session_id": session_id}
@@ -143,6 +151,14 @@ class MentorParticipantUpdateAPI(APIView):
     @role_required([RoleType.MENTOR.value])
     def patch(self, request, link_id):
         user_id = JWTUtils.fetch_user_id(request)
+
+        from db.user import UserMentor
+        mentor_profile = UserMentor.objects.filter(user_id=user_id).first()
+        if mentor_profile and not mentor_profile.is_active:
+            return CustomResponse(
+                general_message="Your mentor account is deactivated. Please contact an administrator."
+            ).get_failure_response(status_code=403)
+
         
         link = MentorshipSessionUserLink.objects.filter(id=link_id).select_related('session').first()
         if not link:

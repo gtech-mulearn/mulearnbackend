@@ -2,7 +2,7 @@ from datetime import timedelta
 from django.db import transaction
 from django.utils import timezone
 from django.core.cache import cache
-from db.user import UserMentor, MentorScopeGrant
+from db.user import UserMentor, MentorScopeGrant, MentorApplication
 from db.organization import UserOrganizationLink
 from db.task import InterestGroup, UserIgLink, TaskList, KarmaActivityLog
 from db.mentor import MentorshipSession, IgOpportunity, SystemActionLog
@@ -13,69 +13,15 @@ from utils.utils import DateTimeUtils
 CACHE_TTL = 15 * 60  # 15 minutes
 
 
-def notify_admins_company_mentor_decision(actor, application, decision):
+def get_mentor_company(application):
     """
-    Company-owner decisions on COMPANY_MENTOR applications are not gated by
-    admin — admin has no approval authority over this tier — but every such
-    decision still needs to be visible to admin for after-the-fact audit
-    (PRD §4.5 / §7.1): an in-app notification per admin plus a
-    SystemActionLog entry recording actor, applicant, and outcome.
+    Resolve an application's organization title.
     """
-    from api.notification.notifications_utils import NotificationUtils
-    from db.user import UserRoleLink
-    from utils.types import RoleType
-    from django.conf import settings
-
-    admin_links = UserRoleLink.objects.filter(
-        role__title=RoleType.ADMIN.value, is_active=True
-    ).select_related('user')
-
-    for admin_link in admin_links:
-        NotificationUtils.insert_notification(
-            user=admin_link.user,
-            title=f"Company Mentor Application {decision.capitalize()} by Owner",
-            description=(
-                f"{actor.full_name} (owner) has {decision} the company mentor "
-                f"application for {application.user.full_name}. For your "
-                f"visibility — no action needed."
-            ),
-            button="View",
-            url=f"{settings.FR_DOMAIN_NAME}/dashboard/mentor/applications/{application.id}/",
-            created_by=actor,
-        )
-
-    SystemActionLog.objects.create(
-        action_type=SystemActionLog.ActionType.COMPANY_MENTOR_VERIFY,
-        actor_user=actor,
-        subject_user=application.user,
-        entity_name='mentor_application',
-        entity_id=application.id,
-        old_data={'status': 'PENDING'},
-        new_data={'status': application.status},
-        remarks=application.verification_note,
-    )
-
-
-def get_mentor_company(mentor):
-    """
-    Resolve a mentor's employer title.
-
-    A mentor's company is their identity, not a permission scope — it must
-    be visible regardless of which tier(s) they hold. `mentor` is a
-    UserMentor instance (the single profile row); tier scoping now lives on
-    MentorScopeGrant, not on this row, so we resolve via an active
-    COMPANY_MENTOR grant's scope_id first, falling back to the user's actual
-    employment record for IG-only mentors who never hold a company grant.
-    """
-    org_ids = get_scope_ids(mentor.user_id, MentorScopeGrant.ScopeType.COMPANY_MENTOR)
-    if org_ids:
-        from db.organization import Organization
-        org = Organization.objects.filter(id__in=org_ids).first()
-        if org:
-            return org.title
+    if application.org:
+        return application.org.title
 
     org_link = UserOrganizationLink.objects.filter(
-        user=mentor.user, org__org_type="Company"
+        user=application.user, org__org_type="Company"
     ).select_related("org").first()
     return org_link.org.title if org_link else None
 
@@ -88,27 +34,72 @@ def get_mentor_scopes(user_id):
     stored anywhere on UserMentor, they are derived entirely from which
     MentorScopeGrant rows are active for them.
     """
-    grants = MentorScopeGrant.objects.filter(
-        mentor__user_id=user_id,
-        mentor__is_active=True,
+    grants = MentorScopeGrant.objects.select_related('application').filter(
+        application__user_id=user_id,
+        application__status=MentorApplication.Status.APPROVED,
         is_active=True,
     ).values_list('scope_type', 'scope_id')
-
     return set(grants)
-
-
-def is_mentor_active(user_id):
-    """
-    True if this user has a (non-deactivated) mentor profile at all. Does
-    NOT imply they hold any active tier grant — callers that need "is this
-    user currently a mentor of tier X" should combine this with has_scope.
-    """
-    return UserMentor.objects.filter(user_id=user_id, is_active=True).exists()
 
 
 def has_scope(user_id, scope_type, scope_id=None):
     scope_id = str(scope_id) if scope_id is not None else None
     return (scope_type, scope_id) in get_mentor_scopes(user_id)
+
+
+def is_mentor_active(user_id):
+    """
+    False if the user has no UserMentor profile, or has one that's been
+    admin-deactivated (§6.1) — used to block session/event/opportunity
+    creation without touching individual MentorScopeGrant rows.
+    """
+    return UserMentor.objects.filter(user_id=user_id, is_active=True).exists()
+
+
+def notify_admins_company_mentor_decision(actor, application, outcome):
+    """
+    Passive admin visibility for company-mentor approve/reject decisions
+    (§4.5) — the company owner is the sole verifier for this tier, so admin
+    gets a notification-only copy rather than approval authority.
+    """
+    from db.user import UserRoleLink
+    from api.notification.notifications_utils import NotificationUtils
+    from utils.types import RoleType
+
+    admins = UserRoleLink.objects.filter(role__title=RoleType.ADMIN.value).select_related('user')
+    for link in admins:
+        NotificationUtils.insert_notification(
+            user=link.user,
+            title=f"Company Mentor {outcome.title()}",
+            description=f"{actor.full_name} {outcome} the company-mentor application for {application.user.full_name}.",
+            button="View",
+            url=None,
+            created_by=actor,
+        )
+
+
+def notify_ig_leads(ig, applicant, application):
+    """
+    Notify an IG's lead(s) that a learner has applied to become that IG's
+    mentor — the leads (in addition to admins) can act on this via
+    MentorVerifyAPI's IG-lead authorization branch.
+    """
+    from db.user import UserRoleLink
+    from api.notification.notifications_utils import NotificationUtils
+    from utils.types import RoleType
+    from django.conf import settings
+
+    lead_role_title = RoleType.IG_LEAD_ROLE(ig.code)
+    leads = UserRoleLink.objects.filter(role__title=lead_role_title).select_related('user')
+    for link in leads:
+        NotificationUtils.insert_notification(
+            user=link.user,
+            title="New IG Mentor Application",
+            description=f"{applicant.full_name} has applied to be a mentor for {ig.name}.",
+            button="View Application",
+            url=f"{settings.FR_DOMAIN_NAME}/dashboard/mentor/applications/{application.id}/",
+            created_by=applicant,
+        )
 
 
 def get_scope_ids(user_id, scope_type):
@@ -150,7 +141,7 @@ def get_verified_company_for_mentor(user_id):
 
 
 @transaction.atomic
-def reconcile_mentor_ig_grants(mentor, preferred_ig_ids, actor_user_id):
+def reconcile_mentor_ig_grants(application, actor_user_id):
     """
     Make the mentor's active IG_MENTOR MentorScopeGrant set exactly equal
     the (valid) preferred_ig_ids — the MentorScopeGrant counterpart to
@@ -158,6 +149,7 @@ def reconcile_mentor_ig_grants(mentor, preferred_ig_ids, actor_user_id):
     Company/Campus grant this mentor holds is untouched (grants are additive
     and independent per scope).
     """
+    preferred_ig_ids = application.preferred_ig_ids
     desired = {str(i) for i in (preferred_ig_ids or []) if i}
     if desired:
         desired &= {
@@ -169,7 +161,7 @@ def reconcile_mentor_ig_grants(mentor, preferred_ig_ids, actor_user_id):
 
     ig_grants = list(
         MentorScopeGrant.objects.filter(
-            mentor=mentor, scope_type=MentorScopeGrant.ScopeType.IG_MENTOR
+            application=application, scope_type=MentorScopeGrant.ScopeType.IG_MENTOR
         )
     )
     current_active = {g.scope_id for g in ig_grants if g.is_active}
@@ -187,7 +179,7 @@ def reconcile_mentor_ig_grants(mentor, preferred_ig_ids, actor_user_id):
             existing.save(update_fields=["is_active", "revoked_by", "revoked_at"])
         else:
             MentorScopeGrant.objects.create(
-                mentor=mentor,
+                application=application,
                 scope_type=MentorScopeGrant.ScopeType.IG_MENTOR,
                 scope_id=ig_id,
                 is_active=True,
@@ -197,7 +189,7 @@ def reconcile_mentor_ig_grants(mentor, preferred_ig_ids, actor_user_id):
 
     if to_remove:
         MentorScopeGrant.objects.filter(
-            mentor=mentor,
+            application=application,
             scope_type=MentorScopeGrant.ScopeType.IG_MENTOR,
             scope_id__in=to_remove,
         ).update(is_active=False, revoked_by_id=actor_user_id, revoked_at=now)
@@ -272,20 +264,20 @@ def get_mentor_overview(user_id):
         """
         active_scopes = []
 
-        # 1. Campus and Company Scopes, derived from active grants — tier
-        # membership is not stored on UserMentor.
-        from db.organization import Organization
-
-        for scope_type, scope_id in get_mentor_scopes(user_id):
-            if scope_type in (
-                MentorScopeGrant.ScopeType.CAMPUS_MENTOR,
-                MentorScopeGrant.ScopeType.COMPANY_MENTOR,
-            ) and scope_id:
-                org = Organization.objects.filter(id=scope_id).first()
+        # 1. Campus and Company Scopes from UserMentor
+        applications = MentorApplication.objects.filter(user_id=user_id, status=MentorApplication.Status.APPROVED).select_related('org')
+        for app in applications:
+            if app.mentor_tier == MentorApplication.MentorTier.CAMPUS_MENTOR and app.org_id:
                 active_scopes.append({
-                    "scope_type": scope_type,
-                    "scope_id": scope_id,
-                    "scope_name": org.title if org else None
+                    "scope_type": "CAMPUS_MENTOR",
+                    "scope_id": app.org_id,
+                    "scope_name": app.org.title
+                })
+            elif app.mentor_tier == MentorApplication.MentorTier.COMPANY_MENTOR and app.org_id:
+                active_scopes.append({
+                    "scope_type": "COMPANY_MENTOR",
+                    "scope_id": app.org_id,
+                    "scope_name": app.org.title
                 })
 
         # 2. IG Scopes from UserIgLink

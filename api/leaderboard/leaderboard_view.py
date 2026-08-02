@@ -6,7 +6,7 @@ from decouple import config as decouple_config
 from . import serializers
 from db.task import TaskList, InterestGroup
 from db.organization import Organization, UserOrganizationLink
-from db.user import User, UserRoleLink, UserMentor, MentorScopeGrant
+from db.user import User, UserRoleLink, UserMentor, MentorScopeGrant, MentorApplication
 from db.mentor import MentorshipSession, MentorshipSessionUserLink
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
@@ -338,15 +338,16 @@ class IGMentorLeaderboard(APIView):
             .values('cnt')
         )
 
-        ig_mentor_ids = MentorScopeGrant.objects.filter(
+        ig_mentor_user_ids = MentorScopeGrant.objects.filter(
             scope_type=MentorScopeGrant.ScopeType.IG_MENTOR,
             scope_id=str(ig.id),
             is_active=True,
-        ).values_list('mentor_id', flat=True)
+            application__status=MentorApplication.Status.APPROVED,
+        ).values_list('application__user_id', flat=True)
 
         mentor_qs = (
             UserMentor.objects.filter(
-                id__in=ig_mentor_ids,
+                user_id__in=ig_mentor_user_ids,
                 is_active=True,
                 user__user_ig_link_user__ig=ig,
                 user__user_ig_link_user__assignment_type='MENTOR',
@@ -364,7 +365,7 @@ class IGMentorLeaderboard(APIView):
             .order_by('-completed_sessions', '-total_karma')
         )
 
-        rankings = {mentor.id: idx + 1 for idx, mentor in enumerate(mentor_qs)}
+        rankings = {mentor.user_id: idx + 1 for idx, mentor in enumerate(mentor_qs)}
         serialized = serializers.IGMentorLeaderboardSerializer(
             mentor_qs,
             many=True,
@@ -403,15 +404,16 @@ class CampusMentorLeaderboard(APIView):
             .values('cnt')
         )
 
-        campus_mentor_ids = MentorScopeGrant.objects.filter(
+        campus_mentor_user_ids = MentorScopeGrant.objects.filter(
             scope_type=MentorScopeGrant.ScopeType.CAMPUS_MENTOR,
             scope_id=str(campus.id),
             is_active=True,
-        ).values_list('mentor_id', flat=True)
+            application__status=MentorApplication.Status.APPROVED,
+        ).values_list('application__user_id', flat=True)
 
         mentor_qs = (
             UserMentor.objects.filter(
-                id__in=campus_mentor_ids,
+                user_id__in=campus_mentor_user_ids,
                 is_active=True,
             )
             .select_related('user__wallet_user')
@@ -425,7 +427,7 @@ class CampusMentorLeaderboard(APIView):
             .order_by('-completed_sessions', '-total_karma')
         )
 
-        rankings = {mentor.id: idx + 1 for idx, mentor in enumerate(mentor_qs)}
+        rankings = {mentor.user_id: idx + 1 for idx, mentor in enumerate(mentor_qs)}
         serialized = serializers.CampusMentorLeaderboardSerializer(
             mentor_qs,
             many=True,
@@ -446,6 +448,7 @@ class CompanyMentorLeaderboard(APIView):
     )
     def get(self, request, company_id):
         from db.company import Company
+
         company = Company.objects.filter(id=company_id, status="verified").first()
         if not company or not company.org_id:
             return CustomResponse(general_message="Company not found").get_failure_response()
@@ -455,7 +458,7 @@ class CompanyMentorLeaderboard(APIView):
                 user_id=OuterRef('user_id'),
                 participant_role=MentorshipSessionUserLink.ParticipantRole.MENTOR,
                 session__session_type=MentorshipSession.SessionType.COMPANY_SESSION,
-                session__entity_id=company.org_id,
+                session__entity_id=str(company.org_id),
                 session__status=MentorshipSession.Status.COMPLETED,
             )
             .values('user_id')
@@ -463,15 +466,16 @@ class CompanyMentorLeaderboard(APIView):
             .values('cnt')
         )
 
-        company_mentor_ids = MentorScopeGrant.objects.filter(
+        company_mentor_user_ids = MentorScopeGrant.objects.filter(
             scope_type=MentorScopeGrant.ScopeType.COMPANY_MENTOR,
             scope_id=str(company.org_id),
             is_active=True,
-        ).values_list('mentor_id', flat=True)
+            application__status=MentorApplication.Status.APPROVED,
+        ).values_list('application__user_id', flat=True)
 
         mentor_qs = (
             UserMentor.objects.filter(
-                id__in=company_mentor_ids,
+                user_id__in=company_mentor_user_ids,
                 is_active=True,
             )
             .select_related('user__wallet_user')
@@ -485,7 +489,7 @@ class CompanyMentorLeaderboard(APIView):
             .order_by('-completed_sessions', '-total_karma')
         )
 
-        rankings = {mentor.id: idx + 1 for idx, mentor in enumerate(mentor_qs)}
+        rankings = {mentor.user_id: idx + 1 for idx, mentor in enumerate(mentor_qs)}
         serialized = serializers.CompanyMentorLeaderboardSerializer(
             mentor_qs,
             many=True,

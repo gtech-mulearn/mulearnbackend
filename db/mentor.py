@@ -13,15 +13,15 @@ class MentorshipSession(models.Model):
     class Status(models.TextChoices):
         REQUESTED = 'REQUESTED', 'Requested'
         SCHEDULED = 'SCHEDULED', 'Scheduled'
-        PENDING_APPROVAL = 'PENDING_APPROVAL', 'Pending Approval'
+        PENDING_APPROVAL = 'PENDING_APPROVAL', 'Pending_Approval'
         COMPLETED = 'COMPLETED', 'Completed'
         CANCELLED = 'CANCELLED', 'Cancelled'
         REJECTED = 'REJECTED', 'Rejected'
 
     class SessionType(models.TextChoices):
-        IG_SESSION      = 'ig_session',      'IG Session'
-        CAMPUS_SESSION  = 'campus_session',  'Campus Session'
-        COMPANY_SESSION = 'company_session', 'Company Session'
+        IG_SESSION      = 'IG_SESSION',      'IG_Session'
+        CAMPUS_SESSION  = 'CAMPUS_SESSION',  'Campus_Session'
+        COMPANY_SESSION = 'COMPANY_SESSION', 'Company_Session'
 
     class RecurrenceType(models.TextChoices):
         DAILY   = 'DAILY',   'Daily'
@@ -203,8 +203,13 @@ class MentorKarmaAward(models.Model):
 class SystemActionLog(models.Model):
 
     class ActionType(models.TextChoices):
-        PERSONA_SWITCH   = 'PERSONA_SWITCH',   'Persona Switch'
+        MENTOR_APP_SUBMITTED = 'MENTOR_APP_SUBMITTED', 'Mentor App Submitted'
         MENTOR_VERIFY    = 'MENTOR_VERIFY',    'Mentor Verify'
+        MENTOR_DEACTIVATE = 'MENTOR_DEACTIVATE', 'Mentor Deactivate'
+        DELEGATE_INVITED = 'DELEGATE_INVITED', 'Delegate Invited'
+        DELEGATE_RESPONDED = 'DELEGATE_RESPONDED', 'Delegate Responded'
+        DELEGATE_REVOKED = 'DELEGATE_REVOKED', 'Delegate Revoked'
+        MENTOR_REACTIVATE = 'MENTOR_REACTIVATE', 'Mentor Reactivate'
         TASK_REVIEW      = 'TASK_REVIEW',      'Task Review'
         EVENT_REVIEW     = 'EVENT_REVIEW',     'Event Review'
         SESSION_CREATE   = 'SESSION_CREATE',   'Session Create'
@@ -225,6 +230,11 @@ class SystemActionLog(models.Model):
         JOB_APPROVE           = 'JOB_APPROVE',           'Job Approve'
         JOB_REJECT            = 'JOB_REJECT',            'Job Reject'
         COMPANY_EVENT_APPROVE = 'COMPANY_EVENT_APPROVE', 'Company Event Approve'
+        COMPANY_EVENT_REJECT = 'COMPANY_EVENT_REJECT', 'Company Event Reject'
+        CAMPUS_EVENT_APPROVE = 'CAMPUS_EVENT_APPROVE', 'Campus Event Approve'
+        CAMPUS_EVENT_REJECT = 'CAMPUS_EVENT_REJECT', 'Campus Event Reject'
+        IG_EVENT_APPROVE = 'IG_EVENT_APPROVE', 'IG Event Approve'
+        IG_EVENT_REJECT = 'IG_EVENT_REJECT', 'IG Event Reject'
         IMPACT_PROJECT_PUBLISH = 'IMPACT_PROJECT_PUBLISH', 'Impact Project Publish'
         COMPANY_DEACTIVATED   = 'COMPANY_DEACTIVATED',   'Company Deactivated'
 
