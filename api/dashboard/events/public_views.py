@@ -182,6 +182,92 @@ class EventListAPI(APIView):
         )
 
 
+class PublicEventListAPI(APIView):
+    """
+    GET /api/v1/public/events/
+
+    Fully public event listing: no authentication and no campus/IG scope
+    gating (every viewer sees the same set). Only lifecycle-public events
+    (published, ongoing, completed) are returned; draft/pending/cancelled/
+    rejected events are never exposed here.
+    """
+    permission_classes = []
+
+    @extend_schema(
+        tags=['Public - Events'],
+        description="Fully public, unauthenticated list of events with status and date filters.",
+        responses={200: EventListItemSerializer},
+    )
+    def get(self, request):
+        params = request.query_params
+        now = timezone.now()
+
+        events = get_live_events().select_related(
+            'category', 'organiser_ig', 'organiser_org'
+        ).filter(
+            status__in=[Event.Status.PUBLISHED, Event.Status.ONGOING, Event.Status.COMPLETED]
+        )
+
+        # ── status filter — repeated params (?status=a&status=b) and/or
+        # comma-separated (?status=a,b) are both accepted and OR'd together.
+        # Computed from start/end datetime rather than the lifecycle `status`
+        # field, since a published event may not have started yet.
+        raw_statuses = params.getlist('status')
+        statuses = {
+            s.strip().lower()
+            for raw in raw_statuses
+            for s in raw.split(',')
+            if s.strip()
+        }
+        if statuses:
+            status_q = Q()
+            if 'upcoming' in statuses:
+                status_q |= Q(start_datetime__gt=now)
+            if 'ongoing' in statuses:
+                status_q |= Q(start_datetime__lte=now, end_datetime__gte=now)
+            if 'completed' in statuses:
+                status_q |= Q(end_datetime__lt=now)
+            if status_q:
+                events = events.filter(status_q)
+
+        # ── date range filter ────────────────────────────────────────────
+        if start_date := params.get('start_date'):
+            events = events.filter(start_datetime__date__gte=start_date)
+        if end_date := params.get('end_date'):
+            events = events.filter(end_datetime__date__lte=end_date)
+
+        # ── other filters ────────────────────────────────────────────────
+        if event_type := params.get('event_type'):
+            events = events.filter(event_type=event_type)
+        if scope := params.get('scope'):
+            events = events.filter(scope=scope)
+        if ig_id := params.get('ig_id'):
+            events = events.filter(scope_ig_id=ig_id)
+        if campus_id := params.get('campus_id'):
+            events = events.filter(scope_org_id=campus_id)
+        if cluster := params.get('cluster'):
+            events = events.filter(organiser_ig__category=cluster)
+        if is_featured := params.get('is_featured'):
+            events = events.filter(is_featured=is_featured.lower() == 'true')
+        if tags := params.get('tags'):
+            events = events.filter(tags__icontains=tags)
+
+        paginated = CommonUtils.get_paginated_queryset(
+            events, request,
+            search_fields=['title', 'description', 'venue_city'],
+            sort_fields=_PUBLIC_EVENT_SORT_FIELDS,
+        )
+
+        serializer = EventListItemSerializer(
+            paginated['queryset'], many=True,
+            context={'user_id': None, 'request': request},
+        )
+        return CustomResponse().paginated_response(
+            data=serializer.data,
+            pagination=paginated['pagination'],
+        )
+
+
 class EventFeaturedAPI(APIView):
     """
     GET /events/featured/  and  GET /events/is-featured/
