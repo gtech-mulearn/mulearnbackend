@@ -28,7 +28,7 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
     social_links = serializers.SerializerMethodField()
     campus_lead = serializers.SerializerMethodField()
     execom = serializers.SerializerMethodField()
-    top_10_mulearn_leaderboard = serializers.SerializerMethodField()
+    top_10_campus_leaderboard = serializers.SerializerMethodField()
     active_ig_chapters = serializers.SerializerMethodField()
     karma_by_cluster = serializers.SerializerMethodField()
 
@@ -46,7 +46,7 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
             "social_links",
             "campus_lead",
             "execom",
-            "top_10_mulearn_leaderboard",
+            "top_10_campus_leaderboard",
             "active_ig_chapters",
             "karma_by_cluster",
         ]
@@ -134,12 +134,14 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
 
         return ExecomMemberSerializer(execom_links, many=True).data
 
-    def get_top_10_mulearn_leaderboard(self, obj):
+    def get_top_10_campus_leaderboard(self, obj):
         from db.task import Wallet
 
-        top_wallets = Wallet.objects.select_related("user").order_by(
-            "-karma", "created_at"
-        )[:10]
+        top_wallets = Wallet.objects.filter(
+            user__user_organization_link_user__org=obj,
+            user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+            user__user_organization_link_user__verified=True,
+        ).select_related("user").distinct().order_by("-karma", "created_at")[:10]
 
         return [
             {
