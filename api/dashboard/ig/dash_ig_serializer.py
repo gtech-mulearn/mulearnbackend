@@ -150,6 +150,7 @@ class InterestGroupSerializer(serializers.ModelSerializer):
         choices=["active", "inactive", "requested", "cancelled", "rejected"]
     )
     media_content_links = serializers.SerializerMethodField()
+    community_partners = serializers.SerializerMethodField()
 
     class Meta:
         model = InterestGroup
@@ -174,6 +175,7 @@ class InterestGroupSerializer(serializers.ModelSerializer):
             "status",
             "members",
             "media_content_links",
+            "community_partners",
             "updated_by",
             "updated_at",
             "created_by",
@@ -204,6 +206,25 @@ class InterestGroupSerializer(serializers.ModelSerializer):
                 "date": link.media_content.date,
                 "link": link.media_content.link,
                 "status": "ongoing" if link.media_content.date == today else "upcoming",
+            }
+            for link in links
+        ]
+
+    def get_community_partners(self, obj):
+        """
+        Community partners linked to this IG via ig_community_partner_link.
+        """
+        links = obj.community_partner_links.select_related("community_partner")
+        return [
+            {
+                "id": link.community_partner.id,
+                "name": link.community_partner.name,
+                "logo_key": link.community_partner.logo_key,
+                "description": link.community_partner.description,
+                "linkedin": link.community_partner.linkedin,
+                "github": link.community_partner.github,
+                "website": link.community_partner.website,
+                "instagram": link.community_partner.instagram,
             }
             for link in links
         ]
