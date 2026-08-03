@@ -272,10 +272,7 @@ class PublicEventListAPI(APIView):
     future) are returned; draft/pending/cancelled/rejected/completed
     events are never exposed here.
 
-    Paginated (pageIndex/perPage) — matches every other list endpoint in
-    this codebase. A flat, unbounded-looking response can't safely represent
-    a table that may exceed one page without either silently dropping rows
-    past a cap or growing the payload without limit.
+    Unpaginated — returns the full matching set in one response.
     """
     permission_classes = []
 
@@ -287,20 +284,20 @@ class PublicEventListAPI(APIView):
     def get(self, request):
         events = _fully_public_events_queryset(request)
 
-        paginated = CommonUtils.get_paginated_queryset(
+        events = CommonUtils.get_paginated_queryset(
             events, request,
             search_fields=['title', 'description', 'venue_city'],
             sort_fields=_PUBLIC_EVENT_SORT_FIELDS,
+            is_pagination=False,
         )
 
         serializer = EventListItemSerializer(
-            paginated['queryset'], many=True,
+            events, many=True,
             context={'user_id': None, 'request': request},
         )
-        return CustomResponse().paginated_response(
-            data=serializer.data,
-            pagination=paginated['pagination'],
-        )
+        return CustomResponse(
+            response=serializer.data,
+        ).get_success_response()
 
 
 class PublicEventFeaturedAPI(APIView):
