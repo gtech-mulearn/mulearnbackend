@@ -190,6 +190,8 @@ class PublicEventListAPI(APIView):
     gating (every viewer sees the same set). Only lifecycle-public events
     (published, ongoing, completed) are returned; draft/pending/cancelled/
     rejected events are never exposed here.
+
+    Unpaginated — returns the full matching set in one response.
     """
     permission_classes = []
 
@@ -252,20 +254,20 @@ class PublicEventListAPI(APIView):
         if tags := params.get('tags'):
             events = events.filter(tags__icontains=tags)
 
-        paginated = CommonUtils.get_paginated_queryset(
+        events = CommonUtils.get_paginated_queryset(
             events, request,
             search_fields=['title', 'description', 'venue_city'],
             sort_fields=_PUBLIC_EVENT_SORT_FIELDS,
+            is_pagination=False,
         )
 
         serializer = EventListItemSerializer(
-            paginated['queryset'], many=True,
+            events, many=True,
             context={'user_id': None, 'request': request},
         )
-        return CustomResponse().paginated_response(
-            data=serializer.data,
-            pagination=paginated['pagination'],
-        )
+        return CustomResponse(
+            response=serializer.data,
+        ).get_success_response()
 
 
 class EventFeaturedAPI(APIView):
