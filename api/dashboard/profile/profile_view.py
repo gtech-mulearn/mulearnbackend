@@ -251,7 +251,7 @@ class UserIgEditView(APIView):
         user = User.objects.get(id=user_id)
 
         serializer = profile_serializer.UserIgEditSerializer(
-            user, data=request.data, partial=True
+            user, data=request.data
         )
 
         if not serializer.is_valid():

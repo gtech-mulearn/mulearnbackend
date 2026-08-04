@@ -8,7 +8,7 @@ from db.organization import Organization, UserOrganizationLink
 from db.task import Channel, InterestGroup, Level, TaskList, TaskType, UserIgLink
 from db.user import UserMentor
 from db.skill import Skill, TaskSkillLink
-from utils.permission import CustomizePermission, JWTUtils, role_required
+from utils.permission import CustomizePermission, JWTUtils, OptionalAuthentication, role_required
 from utils.response import CustomResponse
 from utils.types import Events, OrganizationType, RoleType
 from utils.utils import CommonUtils, DateTimeUtils, ImportCSV
@@ -32,15 +32,17 @@ from utils.schema_utils import CustomResponseSerializer
 
 
 class TaskPublicListAPI(APIView):
-    authentication_classes = [CustomizePermission]
+    authentication_classes = [OptionalAuthentication]
 
     @extend_schema(
         tags=['Dashboard - Task'],
         description=(
-            "Retrieve active tasks grouped into three journey sections: "
+            "Retrieve active tasks grouped into three journey sections, available to "
+            "both authenticated and unauthenticated callers: "
             "'start_journey' (generic, level-ordered tasks — excludes IG, intern and event tasks), "
             "'become_expert' (the caller's IG task(s) plus company-submitted tasks, level-ordered), "
-            "'events' (event-linked tasks visible to the caller)."
+            "'events' (event-linked tasks visible to the caller). "
+            "Unauthenticated callers see global-scope events and company/global tasks only."
         ),
         parameters=[
             OpenApiParameter(
@@ -67,9 +69,11 @@ class TaskPublicListAPI(APIView):
         from api.dashboard.events.serializers import get_live_events
         from db.events import Event
         from db.user import UserRoleLink
+        from db.task import KarmaActivityLog
 
         base_queryset = TaskList.objects.select_related(
-            "channel", "type", "level", "ig", "org", "event_fk", "requested_by"
+            "channel", "type", "level", "ig", "org", "event_fk",
+            "requested_by", "requested_by__company_profile",
         ).filter(active=True)
 
         # --- Visibility filtering ---
@@ -105,10 +109,18 @@ class TaskPublicListAPI(APIView):
                     is_active=True,
                 ).values_list("ig_id", flat=True)
             )
+
+            # Tasks the caller has already been awarded karma for.
+            completed_task_ids = set(
+                KarmaActivityLog.objects.filter(
+                    user_id=user_id, appraiser_approved=True
+                ).values_list("task_id", flat=True)
+            )
         else:
             # Unauthenticated: global + company tasks only
             org_filter = Q(org__isnull=True) | Q(org__org_type=OrganizationType.COMPANY.value)
             member_ig_ids = []
+            completed_task_ids = set()
 
         # ---------- start_journey: generic, level-ordered tasks ----------
         # No IG, no event, and not an "intern" task (same convention used by
@@ -129,51 +141,56 @@ class TaskPublicListAPI(APIView):
             .order_by("level__level_order", "title")
         )
 
-        # ---------- become_expert & events: authenticated callers only ----------
-        # Unauthenticated callers only get start_journey.
-        become_expert_data = []
-        events_data = []
+        # ---------- become_expert: caller's IG task(s) + company tasks ----------
+        # Available to unauthenticated callers too (company tasks + any IG
+        # previewed via ig_id); member_ig_ids is only populated when logged in.
+        ig_id_param = request.query_params.get("ig_id")
+        target_ig_ids = [ig_id_param] if ig_id_param else member_ig_ids
 
-        if is_authenticated:
-            # become_expert: caller's IG task(s) + company tasks, level-ordered
-            ig_id_param = request.query_params.get("ig_id")
-            target_ig_ids = [ig_id_param] if ig_id_param else member_ig_ids
+        become_expert_filter = Q(
+            requested_by__isnull=False,
+            requested_by__company_profile__isnull=False,
+        )
+        if target_ig_ids:
+            become_expert_filter |= Q(ig_id__in=target_ig_ids)
 
-            become_expert_filter = Q(
-                requested_by__isnull=False,
-                requested_by__company_profile__isnull=False,
+        become_expert_qs = (
+            base_queryset.filter(event_fk__isnull=True)
+            .filter(become_expert_filter)
+            .order_by("level__level_order", "title")
+            .distinct()
+        )
+        serializer_context = {"completed_task_ids": completed_task_ids}
+        become_expert_data = TaskListPublicSerializer(
+            become_expert_qs, many=True, context=serializer_context
+        ).data
+
+        # ---------- events: event-linked tasks visible to the caller ----------
+        # _get_viewer_id/_build_scope_filter already degrade gracefully to
+        # global-scope-only visibility when the caller is unauthenticated.
+        viewer_id = _get_viewer_id(request)
+        scope_filter = _build_scope_filter(viewer_id)
+        accessible_event_ids = list(
+            get_live_events()
+            .filter(
+                scope_filter,
+                status__in=[Event.Status.PUBLISHED, Event.Status.ONGOING],
             )
-            if target_ig_ids:
-                become_expert_filter |= Q(ig_id__in=target_ig_ids)
-
-            become_expert_qs = (
-                base_queryset.filter(event_fk__isnull=True)
-                .filter(become_expert_filter)
-                .order_by("level__level_order", "title")
-                .distinct()
-            )
-            become_expert_data = TaskListPublicSerializer(become_expert_qs, many=True).data
-
-            # events: event-linked tasks visible to the caller
-            viewer_id = _get_viewer_id(request)
-            scope_filter = _build_scope_filter(viewer_id)
-            accessible_event_ids = list(
-                get_live_events()
-                .filter(
-                    scope_filter,
-                    status__in=[Event.Status.PUBLISHED, Event.Status.ONGOING],
-                )
-                .values_list("id", flat=True)
-            )
-            events_qs = base_queryset.filter(
-                event_fk__isnull=False,
-                event_fk_id__in=accessible_event_ids,
-            ).order_by("event_fk__title", "title")
-            events_data = TaskListPublicSerializer(events_qs, many=True).data
+            .values_list("id", flat=True)
+        )
+        events_qs = base_queryset.filter(
+            event_fk__isnull=False,
+            event_fk_id__in=accessible_event_ids,
+        ).order_by("event_fk__title", "title")
+        events_data = TaskListPublicSerializer(
+            events_qs, many=True, context=serializer_context
+        ).data
 
         return CustomResponse(
             response={
-                "start_journey": TaskListPublicSerializer(start_journey_qs, many=True).data,
+                "start_journey": TaskListPublicSerializer(
+                    start_journey_qs, many=True, context=serializer_context
+                ).data,
                 "become_expert": become_expert_data,
                 "events": events_data,
             }

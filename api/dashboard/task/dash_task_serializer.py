@@ -2,7 +2,7 @@ import uuid
 
 from rest_framework import serializers
 
-from db.task import TaskList, TaskType
+from db.task import KarmaActivityLog, TaskList, TaskType
 from utils.permission import JWTUtils
 from utils.utils import DateTimeUtils
 
@@ -14,6 +14,10 @@ class TaskListPublicSerializer(serializers.ModelSerializer):
     level = serializers.CharField(source="level.name", required=False, default=None)
     ig = serializers.CharField(source="ig.name", required=False, default=None)
     event_id = serializers.CharField(source="event_fk_id", required=False, allow_null=True)
+    company_name = serializers.CharField(
+        source="requested_by.company_profile.name", required=False, default=None
+    )
+    completed = serializers.SerializerMethodField()
 
     class Meta:
         model = TaskList
@@ -31,7 +35,15 @@ class TaskListPublicSerializer(serializers.ModelSerializer):
             "ig",
             "event",
             "event_id",
+            "company_name",
+            "completed",
         ]
+
+    def get_completed(self, obj):
+        completed_task_ids = self.context.get("completed_task_ids")
+        if completed_task_ids is None:
+            return False
+        return obj.id in completed_task_ids
 
 
 class TaskListSerializer(serializers.ModelSerializer):

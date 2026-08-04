@@ -331,9 +331,10 @@ class MediaContent(models.Model):
     """
 
     class ContentType(models.TextChoices):
-        OFFICE_HOURS        = 'office_hours',         'Office Hours'
-        SALT_MANGO_TREE     = 'salt_mango_tree',      'Salt Mango Tree'
-        INSPIRATION_STATION = 'inspiration_station',  'Inspiration Station Radio'
+        OFFICE_HOURS          = 'office_hours',           'Office Hours'
+        SALT_MANGO_TREE       = 'salt_mango_tree',        'Salt Mango Tree'
+        INSPIRATION_STATION   = 'inspiration_station',    'Inspiration Station Radio'
+        GRAB_YOUR_SUPERPOWERS = 'grab_your_superpowers',  'Grab Your Superpowers'
 
     class Zone(models.TextChoices):
         NORTH   = 'north',   'North'
@@ -353,13 +354,14 @@ class MediaContent(models.Model):
     # both are stored in this single column.
     title       = models.CharField(max_length=300)
     date        = models.DateField()
+    time        = models.TimeField(blank=True, null=True)  # required at the serializer level for all content types
     description = models.TextField(blank=True, null=True)
     link        = models.CharField(max_length=500, blank=True, null=True)
 
     # ── Office Hours specific ─────────────────────────────────────────────────
     performer        = models.CharField(max_length=200, blank=True, null=True)
     designation      = models.CharField(max_length=200, blank=True, null=True)
-    interest_groups  = models.JSONField(blank=True, null=True)   # list of IG slugs
+    interest_groups  = models.JSONField(blank=True, null=True)   # list of ig_media_content_link ids for this record
     poster_thumbnail = models.CharField(max_length=512, blank=True, null=True)
 
     # ── SMT & Inspiration Station specific ────────────────────────────────────
@@ -389,3 +391,26 @@ class MediaContent(models.Model):
         indexes = [
             models.Index(fields=['content_type', 'date']),
         ]
+
+
+class IgMediaContentLink(models.Model):
+    """
+    Links a MediaContent record (e.g. an Office Hours session) to an
+    InterestGroup. MediaContent.interest_groups stores the ids of these
+    link rows rather than IG ids/codes directly.
+    """
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    media_content = models.ForeignKey(
+        MediaContent, on_delete=models.CASCADE,
+        db_column='media_content_id', related_name='ig_links'
+    )
+    interest_group = models.ForeignKey(
+        InterestGroup, on_delete=models.CASCADE,
+        db_column='ig_id', related_name='media_content_links'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        managed = False
+        db_table = 'ig_media_content_link'
+        unique_together = [('media_content', 'interest_group')]

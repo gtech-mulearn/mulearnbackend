@@ -8,7 +8,7 @@ from db.user import User, Role
 from utils.permission import CustomizePermission
 from utils.permission import JWTUtils, role_required
 from utils.response import CustomResponse
-from utils.types import RoleType, WebHookActions, WebHookCategory
+from utils.types import RoleType, WebHookActions, WebHookCategory, InterestGroupStatus
 from utils.utils import CommonUtils, DiscordWebhooks
 from .dash_ig_serializer import (
     InterestGroupSerializer,
@@ -486,6 +486,54 @@ class InterestGroupAPI(APIView):
         return CustomResponse(
             general_message="ig deleted successfully"
         ).get_success_response()
+
+
+class InterestGroupActivateAPIView(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, RoleType.IG_LEAD.value])
+    @extend_schema(
+        tags=['Dashboard - Ig'],
+        description="Activate an Interest Group.",
+        responses={200: InterestGroupSerializer},
+    )
+    def post(self, request, pk):
+        ig = InterestGroup.objects.filter(id=pk).first()
+        if not ig:
+            return CustomResponse(general_message="Interest Group not found").get_failure_response()
+
+        if ig.status == InterestGroupStatus.ACTIVE.value:
+            return CustomResponse(general_message="Interest Group is already active").get_failure_response()
+
+        ig.status = InterestGroupStatus.ACTIVE.value
+        ig.updated_by_id = JWTUtils.fetch_user_id(request)
+        ig.save()
+
+        return CustomResponse(general_message=f"{ig.name} activated").get_success_response()
+
+
+class InterestGroupDeactivateAPIView(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, RoleType.IG_LEAD.value])
+    @extend_schema(
+        tags=['Dashboard - Ig'],
+        description="Deactivate an Interest Group.",
+        responses={200: InterestGroupSerializer},
+    )
+    def post(self, request, pk):
+        ig = InterestGroup.objects.filter(id=pk).first()
+        if not ig:
+            return CustomResponse(general_message="Interest Group not found").get_failure_response()
+
+        if ig.status == InterestGroupStatus.INACTIVE.value:
+            return CustomResponse(general_message="Interest Group is already inactive").get_failure_response()
+
+        ig.status = InterestGroupStatus.INACTIVE.value
+        ig.updated_by_id = JWTUtils.fetch_user_id(request)
+        ig.save()
+
+        return CustomResponse(general_message=f"{ig.name} deactivated").get_success_response()
 
 
 class InterestGroupCSV(APIView):

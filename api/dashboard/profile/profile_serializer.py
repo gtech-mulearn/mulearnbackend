@@ -277,14 +277,14 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     def get_interest_groups(self, obj):
         
-        # Get all IGs where user has a level entry (has interacted with this IG)
-        user_ig_levels = UserIgLvlLink.objects.filter(user=obj).select_related('ig', 'level')
-        
         # Get user's currently selected IGs
         selected_ig_ids = set(
             UserIgLink.objects.filter(user=obj, is_active=True, assignment_type=UserIgLink.AssignmentType.LEARNER).values_list('ig_id', flat=True)
         )
-        
+
+        # Get level entries only for IGs the user currently has selected
+        user_ig_levels = UserIgLvlLink.objects.filter(user=obj, ig_id__in=selected_ig_ids).select_related('ig', 'level')
+
         interest_groups = []
         for ig_level_link in user_ig_levels:
             # Calculate IG-specific karma
@@ -553,13 +553,34 @@ class UserIgListSerializer(serializers.ModelSerializer):
 
 
 class UserIgEditSerializer(serializers.ModelSerializer):
-    interest_group = serializers.ListField(write_only=True)
+    interest_group = serializers.ListField(
+        child=serializers.UUIDField(), write_only=True
+    )
+
+    def validate_interest_group(self, value):
+        if len(value) > 3:
+            raise serializers.ValidationError(
+                "Cannot select more than 3 interest groups"
+            )
+
+        unique_ids = {str(ig_id) for ig_id in value}
+        if len(unique_ids) != len(value):
+            raise serializers.ValidationError(
+                "Duplicate interest groups are not allowed"
+            )
+
+        existing_count = InterestGroup.objects.filter(id__in=unique_ids).count()
+        if existing_count != len(unique_ids):
+            raise serializers.ValidationError(
+                "One or more interest groups are invalid"
+            )
+
+        return value
 
     def update(self, instance, validated_data):
         with transaction.atomic():
-            ig_details = set(validated_data.pop("interest_group", []))
-            if len(ig_details) > 3:
-                raise CustomException("Cannot add more than 3 interest groups")
+            ig_details = set(validated_data.pop("interest_group"))
+
             # Only remove LEARNER-type links; preserve MENTOR/LEAD/MODERATOR assignments.
             instance.user_ig_link_user.filter(
                 assignment_type=UserIgLink.AssignmentType.LEARNER
@@ -577,31 +598,32 @@ class UserIgEditSerializer(serializers.ModelSerializer):
                 for ig_data in ig_details
             ]
             UserIgLink.objects.bulk_create(user_ig_links)
-            
-            # Initialize IG levels for newly added IGs
-            from django.db import connection
-            for ig_id in ig_details:
-                # Get level 1 ID
-                with connection.cursor() as cursor:
-                    cursor.execute("SELECT id FROM level WHERE level_order = 1 LIMIT 1")
-                    level_1_id = cursor.fetchone()
-                    if level_1_id:
-                        # UPSERT: Insert level 1 if doesn't exist, do nothing if exists
-                        cursor.execute("""
-                            INSERT INTO user_ig_lvl_link (id, user_id, ig_id, level_id, created_by, created_at, updated_by, updated_at)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                            ON DUPLICATE KEY UPDATE updated_at = updated_at
-                        """, [
-                            str(uuid.uuid4()),
-                            str(instance.id),
-                            str(ig_id),
-                            level_1_id[0],
-                            str(instance.id),
-                            DateTimeUtils.get_current_utc_time(),
-                            str(instance.id),
-                            DateTimeUtils.get_current_utc_time()
-                        ])
-            
+
+            # Initialize IG levels (level 1) for the newly selected IGs, without
+            # touching levels for IGs the user already had.
+            if ig_details:
+                level_1 = Level.objects.filter(level_order=1).first()
+                if level_1:
+                    existing_ig_ids = set(
+                        UserIgLvlLink.objects.filter(
+                            user=instance, ig_id__in=ig_details
+                        ).values_list("ig_id", flat=True)
+                    )
+                    new_links = [
+                        UserIgLvlLink(
+                            id=uuid.uuid4(),
+                            user=instance,
+                            ig_id=ig_id,
+                            level=level_1,
+                            created_by=instance,
+                            updated_by=instance,
+                        )
+                        for ig_id in ig_details
+                        if str(ig_id) not in {str(i) for i in existing_ig_ids}
+                    ]
+                    if new_links:
+                        UserIgLvlLink.objects.bulk_create(new_links)
+
             return super().update(instance, validated_data)
 
     class Meta:
