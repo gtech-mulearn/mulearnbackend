@@ -321,7 +321,7 @@ class UserSerializer(serializers.ModelSerializer):
         UserSettings.objects.create(**additional_values)
 
         if level := Level.objects.filter(level_order="1").first():
-            UserLvlLink.objects.create(level=level, **additional_values)
+            UserLvlLink.objects.create(level=level, grit=100, **additional_values)
 
         additional_values.pop("updated_by")
 
