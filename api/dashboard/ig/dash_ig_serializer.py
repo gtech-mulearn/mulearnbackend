@@ -112,7 +112,18 @@ def _resolve_ig_mentors(ig):
     socials_map = {s["user_id"]: s for s in socials_qs}
     mentor_profiles = {
         m.user_id: m
-        for m in UserMentor.objects.filter(user_id__in=user_ids).select_related("org")
+        for m in UserMentor.objects.filter(user_id__in=user_ids)
+    }
+
+    # get_mentor_company expects a MentorApplication (which has an 'org' FK),
+    # not a UserMentor. Batch-fetch approved applications for these users.
+    from db.user import MentorApplication
+    applications = {
+        a.user_id: a
+        for a in MentorApplication.objects.filter(
+            user_id__in=user_ids,
+            status=MentorApplication.Status.APPROVED,
+        ).select_related("org")
     }
 
     mentors = []
@@ -124,13 +135,13 @@ def _resolve_ig_mentors(ig):
             for key in ["github", "facebook", "instagram", "linkedin",
                         "dribble", "behance", "stackoverflow", "medium", "hackerrank"]
         }
-        mentor_profile = mentor_profiles.get(user.id)
+        application = applications.get(user.id)
         mentors.append({
             "muid": user.muid,
             "full_name": user.full_name,
             "email": user.email,
             "profile_pic": user.profile_pic,
-            "company": get_mentor_company(mentor_profile) if mentor_profile else None,
+            "company": get_mentor_company(application) if application else None,
             "socials": socials,
         })
     return mentors
