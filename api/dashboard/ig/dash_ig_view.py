@@ -57,7 +57,11 @@ class InterestGroupAPI(APIView):
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        request_data = request.data
+        request_data = (
+            request.data.copy()
+            if hasattr(request.data, "copy")
+            else request.data
+        )
 
         request_data["created_by"] = request_data["updated_by"] = user_id
 
@@ -141,7 +145,11 @@ class InterestGroupAPI(APIView):
         ig_old_name = ig.name
         ig_old_code = ig.code
 
-        request_data = request.data
+        request_data = (
+            request.data.copy()
+            if hasattr(request.data, "copy")
+            else request.data
+        )
         request_data["updated_by"] = user_id
 
         serializer = InterestGroupCreateUpdateSerializer(
@@ -200,6 +208,10 @@ class InterestGroupAPI(APIView):
 
         if ig is None:
             return CustomResponse(general_message="invalid ig").get_success_response()
+
+        if ig.banner_image:
+            ig.banner_image.delete(save=False)
+
         ig_role = Role.objects.filter(title=ig.name).first()
         if ig_role:
             ig_role.delete()
