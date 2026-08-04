@@ -1,3 +1,6 @@
+from functools import wraps
+from db.user import UserMentor
+from utils.response import CustomResponse
 import datetime
 from datetime import datetime
 
@@ -18,6 +21,17 @@ from .response import CustomResponse
 from db.user import DynamicRole, DynamicUser
 from utils.types import RoleType
 
+
+def mentor_active_required(func):
+    @wraps(func)
+    def wrapper(self, request, *args, **kwargs):
+        user_id = JWTUtils.fetch_user_id(request)
+        if not UserMentor.objects.filter(user_id=user_id, is_active=True).exists():
+            return CustomResponse(
+                general_message="Your mentor account is deactivated. Please contact an administrator."
+            ).get_failure_response(status_code=403)
+        return func(self, request, *args, **kwargs)
+    return wrapper
 
 # def get_current_utc_time():
 #     return format_time(datetime.utcnow())
