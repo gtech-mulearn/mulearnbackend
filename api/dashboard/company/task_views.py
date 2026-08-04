@@ -6,7 +6,7 @@ from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes, OpenApiResponse, inline_serializer
 from rest_framework import serializers as s
 
-from db.task import TaskList
+from db.task import TaskList,Channel
 from db.skill import Skill, TaskSkillLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
@@ -19,6 +19,10 @@ from .task_serializers import (
     CompanyTaskUpdateSerializer,
     CompanyTaskPatchSerializer,
 )
+
+# PRD §15 — rate/abuse limit: cap how many pending/changes-requested tasks a
+# company can have open at once, mirroring job_views.MAX_PENDING_JOBS_PER_MENTOR.
+MAX_PENDING_TASKS_PER_COMPANY = 5
 
 
 def _save_task_skills(task_id, skill_ids, user_id):
@@ -75,9 +79,15 @@ class CompanyTaskListCreateAPI(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
+        company = get_verified_company(user_id)
+        if not company:
+            return CustomResponse(
+                general_message="You must have a verified company profile to view tasks."
+            ).get_failure_response(status_code=403)
+
         queryset = TaskList.objects.select_related(
             "channel", "type", "level", "ig", "org", "requested_by"
-        ).filter(requested_by_id=user_id, is_deleted=False)
+        ).filter(submitted_by_company=company, is_deleted=False)
 
         approval_status = request.query_params.get("approval_status")
         if approval_status:
@@ -135,6 +145,18 @@ class CompanyTaskListCreateAPI(APIView):
                 general_message="You must have a verified company profile to submit tasks."
             ).get_failure_response(status_code=403)
 
+        # PRD §15 — rate/abuse limit, mirroring the job-posting cap: a
+        # company can't spam pending task submissions faster than admin can
+        # review them.
+        pending_count = TaskList.objects.filter(
+            submitted_by_company=company, is_deleted=False,
+            approval_status__in=["pending", "changes_requested"],
+        ).count()
+        if pending_count >= MAX_PENDING_TASKS_PER_COMPANY:
+            return CustomResponse(
+                general_message=f"You already have {MAX_PENDING_TASKS_PER_COMPANY} pending/changes-requested tasks. Resolve those before submitting more."
+            ).get_failure_response(status_code=429)
+
         mutable_data = request.data.copy()
         mutable_data["created_by"] = user_id
         mutable_data["updated_by"] = user_id
@@ -160,6 +182,7 @@ class CompanyTaskListCreateAPI(APIView):
                 active=False,
                 requested_by_id=user_id,
                 requested_at=DateTimeUtils.get_current_utc_time(),
+                submitted_by_company=company,
             )
 
             if skill_ids:
@@ -188,7 +211,7 @@ class CompanyTaskDetailAPI(APIView):
 
         task = TaskList.objects.select_related(
             "channel", "type", "level", "ig", "org", "requested_by"
-        ).filter(id=task_id, requested_by_id=user_id, is_deleted=False).first()
+        ).filter(id=task_id, submitted_by_company=company, is_deleted=False).first()
 
         if not task:
             return CustomResponse(
@@ -209,15 +232,17 @@ class CompanyTaskDetailAPI(APIView):
         responses={200: OpenApiResponse(description="Task updated and re-submitted for approval.")},
     )
     def put(self, request, task_id):
+        from api.dashboard.company.company_views import is_company_owner_or_admin
+
         user_id = JWTUtils.fetch_user_id(request)
         company = get_verified_company(user_id)
-        if not company:
+        if not company or not is_company_owner_or_admin(user_id, company):
             return CustomResponse(
-                general_message="Access denied. Verified company profile required."
+                general_message="You must be the company owner or an accepted co-admin to edit tasks."
             ).get_failure_response(status_code=403)
 
         task = TaskList.objects.filter(
-            id=task_id, requested_by_id=user_id, is_deleted=False
+            id=task_id, submitted_by_company=company, is_deleted=False
         ).first()
 
         if not task:
@@ -267,15 +292,17 @@ class CompanyTaskDetailAPI(APIView):
     )
     def patch(self, request, task_id):
         from rest_framework import status
+        from api.dashboard.company.company_views import is_company_owner_or_admin
+
         user_id = JWTUtils.fetch_user_id(request)
         company = get_verified_company(user_id)
-        if not company:
+        if not company or not is_company_owner_or_admin(user_id, company):
             return CustomResponse(
-                general_message="Access denied. Verified company profile required."
+                general_message="You must be the company owner or an accepted co-admin to edit tasks."
             ).get_failure_response(status_code=403)
 
         task = TaskList.objects.filter(
-            id=task_id, requested_by_id=user_id, is_deleted=False
+            id=task_id, submitted_by_company=company, is_deleted=False
         ).first()
 
         if not task:
@@ -300,7 +327,6 @@ class CompanyTaskDetailAPI(APIView):
         skill_ids = data.pop("skill_ids", None)
 
         from db.task import InterestGroup, TaskType, Level
-        from db.channels import Channel
         
         # Resolve FKs if provided
         if "ig_id" in data:
@@ -340,15 +366,17 @@ class CompanyTaskDetailAPI(APIView):
         responses={200: OpenApiResponse(description="Task deleted successfully.")},
     )
     def delete(self, request, task_id):
+        from api.dashboard.company.company_views import is_company_owner_or_admin
+
         user_id = JWTUtils.fetch_user_id(request)
         company = get_verified_company(user_id)
-        if not company:
+        if not company or not is_company_owner_or_admin(user_id, company):
             return CustomResponse(
-                general_message="Access denied. Verified company profile required."
+                general_message="You must be the company owner or an accepted co-admin to delete tasks."
             ).get_failure_response(status_code=403)
 
         task = TaskList.objects.filter(
-            id=task_id, requested_by_id=user_id, is_deleted=False
+            id=task_id, submitted_by_company=company, is_deleted=False
         ).first()
 
         if not task:
@@ -374,4 +402,75 @@ class CompanyTaskDetailAPI(APIView):
                 "deleted_at": task.deleted_at.strftime('%Y-%m-%dT%H:%M:%SZ')
             }
         ).get_success_response()
+
+
+class CompanyTaskTemplateListCreateAPI(APIView):
+    """PRD §6.3 — reusable task templates so a company can reuse structure across similar/recurring tasks."""
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(tags=["Dashboard - Company Task"], description="List the company's saved task templates.")
+    def get(self, request):
+        from db.company import CompanyTaskTemplate
+
+        user_id = JWTUtils.fetch_user_id(request)
+        company = get_verified_company(user_id)
+        if not company:
+            return CustomResponse(general_message="Access denied. Verified company profile required.").get_failure_response(status_code=403)
+
+        templates = CompanyTaskTemplate.objects.filter(company=company).select_related("type").order_by("-created_at")
+        data = [{
+            "id": str(t.id), "title": t.title, "hashtag_prefix": t.hashtag_prefix,
+            "description": t.description, "karma": t.karma,
+            "type_id": str(t.type_id) if t.type_id else None,
+            "type_title": t.type.title if t.type else None,
+        } for t in templates]
+        return CustomResponse(response={"data": data}).get_success_response()
+
+    @extend_schema(tags=["Dashboard - Company Task"], description="Save a new task template (owner or accepted co-admin only).")
+    def post(self, request):
+        from api.dashboard.company.company_views import is_company_owner_or_admin
+        from db.company import CompanyTaskTemplate
+
+        user_id = JWTUtils.fetch_user_id(request)
+        company = get_verified_company(user_id)
+        if not company or not is_company_owner_or_admin(user_id, company):
+            return CustomResponse(general_message="You must be the company owner or an accepted co-admin to save templates.").get_failure_response(status_code=403)
+
+        title = request.data.get("title")
+        if not title:
+            return CustomResponse(general_message="title is required.").get_failure_response()
+
+        template = CompanyTaskTemplate.objects.create(
+            company=company,
+            title=title,
+            hashtag_prefix=request.data.get("hashtag_prefix"),
+            description=request.data.get("description"),
+            karma=request.data.get("karma"),
+            type_id=request.data.get("type_id"),
+            created_by_id=user_id,
+        )
+        return CustomResponse(
+            general_message="Task template saved successfully.",
+            response={"id": str(template.id)},
+        ).get_success_response()
+
+
+class CompanyTaskTemplateDetailAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(tags=["Dashboard - Company Task"], description="Delete a saved task template (owner or accepted co-admin only).")
+    def delete(self, request, template_id):
+        from api.dashboard.company.company_views import is_company_owner_or_admin
+        from db.company import CompanyTaskTemplate
+
+        user_id = JWTUtils.fetch_user_id(request)
+        company = get_verified_company(user_id)
+        if not company or not is_company_owner_or_admin(user_id, company):
+            return CustomResponse(general_message="You must be the company owner or an accepted co-admin to delete templates.").get_failure_response(status_code=403)
+
+        template = CompanyTaskTemplate.objects.filter(id=template_id, company=company).first()
+        if not template:
+            return CustomResponse(general_message="Template not found.").get_failure_response(status_code=404)
+        template.delete()
+        return CustomResponse(general_message="Task template deleted successfully.").get_success_response()
 

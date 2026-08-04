@@ -2,12 +2,14 @@ import uuid
 
 from rest_framework import serializers
 
-from db.user import Role, User, UserRoleLink, UserMentor
+from db.user import Role, User, UserRoleLink, UserMentor, MentorApplication
 from utils.permission import JWTUtils
 from utils.utils import DateTimeUtils, DiscordWebhooks
 from utils.types import WebHookActions, WebHookCategory, RoleType, InternGuild
 from django.db.models import Q
 from django.db import transaction
+from db.user import MentorApplication
+
 
 
 class UserRoleLinkManagementSerializer(serializers.ModelSerializer):
@@ -121,7 +123,7 @@ class UserRoleCreateSerializer(serializers.ModelSerializer):
     )
     # Required when assigning the Mentor role — determines the mentor tier.
     mentor_tier = serializers.ChoiceField(
-        choices=UserMentor.MentorTier.choices,
+        choices=MentorApplication.MentorTier.choices,
         required=False,
         allow_null=True,
         default=None,
@@ -168,7 +170,7 @@ class UserRoleCreateSerializer(serializers.ModelSerializer):
             if not mentor_tier:
                 errors["mentor_tier"] = "mentor_tier is required when assigning the Mentor role."
             else:
-                if mentor_tier == UserMentor.MentorTier.IG_MENTOR:
+                if mentor_tier == MentorApplication.MentorTier.IG_MENTOR:
                     if not ig_ids:
                         errors["ig_ids"] = "ig_ids is required for IG_MENTOR tier."
                     else:
@@ -180,15 +182,15 @@ class UserRoleCreateSerializer(serializers.ModelSerializer):
                             errors["ig_ids"] = f"Invalid IG IDs: {', '.join(invalid_igs)}"
 
                 elif mentor_tier in (
-                    UserMentor.MentorTier.CAMPUS_MENTOR,
-                    UserMentor.MentorTier.COMPANY_MENTOR,
+                    MentorApplication.MentorTier.CAMPUS_MENTOR,
+                    MentorApplication.MentorTier.COMPANY_MENTOR,
                 ):
                     if not org_id:
                         errors["org_id"] = f"org_id is required for {mentor_tier}."
                     else:
                         expected_type = (
                             OrganizationType.COLLEGE.value
-                            if mentor_tier == UserMentor.MentorTier.CAMPUS_MENTOR
+                            if mentor_tier == MentorApplication.MentorTier.CAMPUS_MENTOR
                             else OrganizationType.COMPANY.value
                         )
                         org = Organization.objects.filter(
@@ -256,68 +258,79 @@ class UserRoleCreateSerializer(serializers.ModelSerializer):
                 role_link = existing
 
             # --- Mentor-specific provisioning ---
-            # When the Mentor role is assigned, auto-create/approve UserMentor
-            # plus all tier-specific linked rows (UserIgLink / UserOrganizationLink).
+            # When the Mentor role is assigned, create an already-APPROVED
+            # MentorApplication (source=ADMIN_ASSIGNED) and apply the shared
+            # approval side-effects (profile upsert, MentorScopeGrant, IG
+            # links / org link) via _apply_application_approval — the same
+            # path AdminAssignMentorAPI and CompanyMentorNominateAPI use, so
+            # tier membership always ends up backed by a real grant.
             if is_mentor_role and mentor_tier:
-                from db.task import UserIgLink, InterestGroup
+                from db.task import InterestGroup
+                from db.organization import UserOrganizationLink
+                from db.user import MentorScopeGrant
+                from api.dashboard.mentor.dash_mentor_helper import reconcile_mentor_ig_links, reconcile_mentor_ig_grants
 
-                # 1. Create / approve UserMentor record
-                mentor_record, created = UserMentor.objects.get_or_create(
+                # 1. Create/update the single UserMentor profile
+                UserMentor.objects.get_or_create(
                     user_id=target_user_id,
-                    mentor_tier=mentor_tier,
+                    defaults={
+                        "created_by_id": admin_user_id,
+                        "updated_by_id": admin_user_id,
+                        "created_at": now,
+                        "updated_at": now,
+                    }
+                )
+
+                # 2. Create an approved MentorApplication record
+                application, app_created = MentorApplication.objects.get_or_create(
+                    user_id=target_user_id,
+                    tier=mentor_tier,
                     org=org,
                     defaults={
-                        "status":           UserMentor.Status.APPROVED,
+                        "status": MentorApplication.Status.APPROVED,
                         "preferred_ig_ids": ig_ids if ig_ids else None,
-                        "verified_by_id":   admin_user_id,
-                        "verified_at":      now,
-                        "updated_by_id":    admin_user_id,
-                        "updated_at":       now,
-                        "created_by_id":    admin_user_id,
-                        "created_at":       now,
-                    },
+                        "verified_by_id": admin_user_id,
+                        "verified_at": now,
+                        "created_by_id": admin_user_id,
+                        "updated_by_id": admin_user_id,
+                        "created_at": now,
+                        "updated_at": now,
+                    }
                 )
-                if not created and mentor_record.status != UserMentor.Status.APPROVED:
-                    mentor_record.status         = UserMentor.Status.APPROVED
-                    mentor_record.verified_by_id = admin_user_id
-                    mentor_record.verified_at    = now
-                    mentor_record.updated_by_id  = admin_user_id
-                    mentor_record.updated_at     = now
-                    mentor_record.save(update_fields=[
-                        "status", "verified_by_id", "verified_at",
-                        "updated_by_id", "updated_at",
-                    ])
+                if not app_created and application.status != MentorApplication.Status.APPROVED:
+                    application.status = MentorApplication.Status.APPROVED
+                    application.verified_by_id = admin_user_id
+                    application.verified_at = now
+                    application.save()
 
-                # 2. IG_MENTOR: create/activate UserIgLink per ig_id
-                if mentor_tier == UserMentor.MentorTier.IG_MENTOR and ig_ids:
-                    for ig_id in ig_ids:
-                        ig = InterestGroup.objects.filter(id=ig_id).first()
-                        if ig:
-                            ig_link, _ = UserIgLink.objects.get_or_create(
-                                user_id=target_user_id,
-                                ig=ig,
-                                defaults={
-                                    "assignment_type": UserIgLink.AssignmentType.MENTOR,
-                                    "is_active":       True,
-                                    "assigned_by_id":  admin_user_id,
-                                    "created_by_id":   admin_user_id,
-                                    "created_at":      now,
-                                },
-                            )
-                            if not ig_link.is_active:
-                                ig_link.assignment_type = UserIgLink.AssignmentType.MENTOR
-                                ig_link.is_active       = True
-                                ig_link.assigned_by_id  = admin_user_id
-                                ig_link.save(update_fields=[
-                                    "assignment_type", "is_active", "assigned_by_id"
-                                ])
+                # 3. Grant the tier being assigned (additive).
+                if mentor_tier != MentorApplication.MentorTier.IG_MENTOR:
+                    scope_id = str(org.id) if org else None
+                    grant, grant_created = MentorScopeGrant.objects.get_or_create(
+                        application=application,
+                        scope_type=mentor_tier,
+                        scope_id=scope_id,
+                        defaults={
+                            "is_active": True,
+                            "granted_by_id": admin_user_id,
+                            "granted_at": now,
+                        },
+                    )
+                    if not grant_created and not grant.is_active:
+                        grant.is_active = True
+                        grant.revoked_by = None
+                        grant.revoked_at = None
+                        grant.save(update_fields=["is_active", "revoked_by", "revoked_at"])
 
-                # 3. CAMPUS/COMPANY_MENTOR: create/verify UserOrganizationLink
-                elif mentor_tier in (
-                    UserMentor.MentorTier.CAMPUS_MENTOR,
-                    UserMentor.MentorTier.COMPANY_MENTOR,
+                # 4. Side-effects (IG links + org link)
+                if ig_ids:
+                    reconcile_mentor_ig_links(application.user, ig_ids, admin_user_id)
+                    reconcile_mentor_ig_grants(application, admin_user_id)
+
+                if mentor_tier in (
+                    MentorApplication.MentorTier.CAMPUS_MENTOR,
+                    MentorApplication.MentorTier.COMPANY_MENTOR,
                 ) and org:
-                    from db.organization import UserOrganizationLink
                     org_link, _ = UserOrganizationLink.objects.get_or_create(
                         user_id=target_user_id,
                         org=org,
@@ -331,7 +344,7 @@ class UserRoleCreateSerializer(serializers.ModelSerializer):
                         org_link.verified = True
                         org_link.save(update_fields=["verified"])
 
-                role_link._mentor_profile_created = created
+                role_link._mentor_profile_created = app_created
             else:
                 role_link._mentor_profile_created = False
 

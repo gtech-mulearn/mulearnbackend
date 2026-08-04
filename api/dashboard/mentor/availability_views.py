@@ -1,5 +1,5 @@
 from rest_framework.views import APIView
-from utils.permission import CustomizePermission, JWTUtils, role_required
+from utils.permission import CustomizePermission, JWTUtils, role_required, mentor_active_required
 from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
@@ -63,8 +63,10 @@ class MentorAvailabilitySlotAPI(APIView):
         responses={200: serializers.AvailabilitySlotCreateUpdateSerializer},
     )
     @role_required([RoleType.MENTOR.value])
+    @mentor_active_required
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
+
         ig_id = request.data.get("ig")
 
         # Availability is a mentor-level setting. An IG is optional: when one is
@@ -100,15 +102,17 @@ class MentorAvailabilitySlotAPI(APIView):
         responses={200: serializers.AvailabilitySlotCreateUpdateSerializer},
     )
     @role_required([RoleType.MENTOR.value])
+    @mentor_active_required
     def patch(self, request, slot_id):
         user_id = JWTUtils.fetch_user_id(request)
+
         slot = MentorAvailabilitySlot.objects.filter(id=slot_id, mentor_user_id=user_id).first()
-        
+
         if not slot:
             return CustomResponse(
                 general_message="Availability slot not found."
             ).get_failure_response(status_code=404)
-            
+
         serializer = serializers.AvailabilitySlotCreateUpdateSerializer(
             slot, data=request.data, partial=True, context={"user_id": user_id}
         )
@@ -127,8 +131,10 @@ class MentorAvailabilitySlotAPI(APIView):
         description="Delete a mentor availability slot.",
     )
     @role_required([RoleType.MENTOR.value])
+    @mentor_active_required
     def delete(self, request, slot_id):
         user_id = JWTUtils.fetch_user_id(request)
+
         slot = MentorAvailabilitySlot.objects.filter(id=slot_id, mentor_user_id=user_id).first()
         
         if not slot:
@@ -151,13 +157,17 @@ class MentorPublicAvailabilityAPI(APIView):
     )
     def get(self, request, mentor_id):
         from db.user import UserMentor
+        from db.user import MentorApplication
         
-        mentor = UserMentor.objects.filter(id=mentor_id, status=UserMentor.Status.APPROVED).first()
+        mentor = UserMentor.objects.filter(id=mentor_id).first()
         if not mentor:
             return CustomResponse(
-                general_message="Mentor not found or not approved."
+                general_message="Mentor profile not found."
             ).get_failure_response(status_code=404)
-            
+
+        if not MentorApplication.objects.filter(user=mentor.user, status=MentorApplication.Status.APPROVED).exists():
+            return CustomResponse(general_message="This user is not an approved mentor.").get_failure_response(status_code=403)
+
         slots = MentorAvailabilitySlot.objects.filter(mentor_user_id=mentor.user_id, is_active=True)
         serializer = serializers.AvailabilitySlotSerializer(slots, many=True)
         

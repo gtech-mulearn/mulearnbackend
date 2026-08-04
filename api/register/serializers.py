@@ -159,15 +159,20 @@ class MentorSerializer(serializers.ModelSerializer):
         reason = validated_data.get("reason", None)
         hours = validated_data.get("hours", None)
 
-        UserMentor.objects.create(
+        # UserMentor is now a single profile row per user — get_or_create
+        # rather than create, since a prior mentor application may already
+        # have provisioned this user's profile row.
+        UserMentor.objects.get_or_create(
             user=validated_data["user"],
-            about=about,
-            reason=reason,
-            hours=hours,
-            created_by=validated_data["user"],
-            created_at=DateTimeUtils.get_current_utc_time(),
-            updated_by=validated_data["user"],
-            updated_at=DateTimeUtils.get_current_utc_time(),
+            defaults={
+                "about": about,
+                "reason": reason,
+                "hours": hours or 0,
+                "created_by": validated_data["user"],
+                "created_at": DateTimeUtils.get_current_utc_time(),
+                "updated_by": validated_data["user"],
+                "updated_at": DateTimeUtils.get_current_utc_time(),
+            },
         )
 
     class Meta:

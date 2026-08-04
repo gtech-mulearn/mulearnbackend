@@ -90,10 +90,13 @@ def _detect_user_role(request, user_id):
     if RoleType.MENTOR.value in roles:
         return 'mentor'
 
-    # Also check UserMentor table for approved mentors
-    if UserMentor.objects.filter(
-        user_id=user_id,
-        status=UserMentor.Status.APPROVED,
+    # Also check for an active mentor scope grant (approved tier membership)
+    from db.user import MentorScopeGrant, MentorApplication
+    if MentorScopeGrant.objects.filter(
+        application__user_id=user_id,
+        application__status=MentorApplication.Status.APPROVED,
+        application__user__mentor_profile__is_active=True,
+        is_active=True,
     ).exists():
         return 'mentor'
 

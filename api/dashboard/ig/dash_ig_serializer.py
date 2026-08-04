@@ -150,6 +150,9 @@ class InterestGroupSerializer(serializers.ModelSerializer):
         choices=["active", "inactive", "requested", "cancelled", "rejected"]
     )
     media_content_links = serializers.SerializerMethodField()
+    is_sponsored = serializers.SerializerMethodField()
+    sponsor_company_name = serializers.SerializerMethodField()
+    sponsor_company_logo = serializers.SerializerMethodField()
     community_partners = serializers.SerializerMethodField()
 
     class Meta:
@@ -175,6 +178,9 @@ class InterestGroupSerializer(serializers.ModelSerializer):
             "status",
             "members",
             "media_content_links",
+            "is_sponsored",
+            "sponsor_company_name",
+            "sponsor_company_logo",
             "community_partners",
             "updated_by",
             "updated_at",
@@ -228,6 +234,15 @@ class InterestGroupSerializer(serializers.ModelSerializer):
             }
             for link in links
         ]
+
+    def get_is_sponsored(self, obj):
+        return obj.sponsor_status == "approved" and obj.sponsor_company_id is not None
+
+    def get_sponsor_company_name(self, obj):
+        return obj.sponsor_company.name if self.get_is_sponsored(obj) else None
+
+    def get_sponsor_company_logo(self, obj):
+        return obj.sponsor_company.logo if self.get_is_sponsored(obj) else None
 
     def to_representation(self, instance):
         """Convert JSON-serialized text fields back to Python objects for API output.

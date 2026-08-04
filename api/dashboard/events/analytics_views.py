@@ -7,7 +7,7 @@ from rest_framework.views import APIView
 from django.db.models import Sum, Count
 from django.db.models.functions import TruncDate
 
-from db.events import EventInterest
+from db.events import EventInterest, EventConnection
 from db.task import TaskList, KarmaActivityLog
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
@@ -65,6 +65,29 @@ class EventAnalyticsAPI(APIView):
         # ── Interest stats ───────────────────────────────────────
         interests = EventInterest.objects.filter(event=event)
         total_interests = interests.count()
+
+        # ── RSVP / attendance stats (PRD §8.3 — event analytics: RSVPs,
+        # attendance, repeat attendance) ──────────────────────────
+        tickets = EventConnection.objects.filter(event=event, entity_type=EventConnection.EntityType.USER_TICKET)
+        total_rsvps = tickets.count()
+        attendee_ids = list(tickets.filter(ticket_status=EventConnection.TicketStatus.ACTIVE).values_list("entity_id", flat=True))
+        total_attendance = len(attendee_ids)
+        attendance_rate = f"{(total_attendance / total_rsvps * 100):.2f}%" if total_rsvps > 0 else "0.00%"
+
+        repeat_attendees = 0
+        if attendee_ids:
+            repeat_attendees = EventConnection.objects.filter(
+                entity_type=EventConnection.EntityType.USER_TICKET,
+                ticket_status=EventConnection.TicketStatus.ACTIVE,
+                entity_id__in=attendee_ids,
+            ).exclude(event=event).values("entity_id").distinct().count()
+
+        # ── Learner satisfaction (structured feedback, PRD §13) ───
+        from db.company import CompanyFeedback
+        from django.db.models import Avg
+        feedback_agg = CompanyFeedback.objects.filter(
+            interaction_type=CompanyFeedback.InteractionType.EVENT, entity_id=event.id,
+        ).aggregate(avg=Avg("rating"), count=Count("id"))
 
         # Interest trend (day-by-day)
         interest_trend = list(
@@ -134,6 +157,14 @@ class EventAnalyticsAPI(APIView):
                     'pending_tasks': pending_tasks,
                     'total_task_completions': total_completions,
                     'total_karma_awarded': total_karma_awarded,
+                    'total_rsvps': total_rsvps,
+                    'total_attendance': total_attendance,
+                    'attendance_rate': attendance_rate,
+                    'repeat_attendees': repeat_attendees,
+                    'learner_satisfaction': {
+                        'average_rating': round(feedback_agg['avg'], 2) if feedback_agg['avg'] else None,
+                        'rating_count': feedback_agg['count'] or 0,
+                    },
                 },
                 'interest_trend': interest_trend,
                 'task_breakdown': task_breakdown,
