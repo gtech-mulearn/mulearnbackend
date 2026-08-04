@@ -1022,8 +1022,12 @@ class LearningCircleMemberDetailsView(APIView):
             # Sort by karma (highest first)
             member_details = sorted(member_details, key=lambda x: x['ig_karma'], reverse=True)
 
-            # Build owner details from the circle's created_by FK
-            owner = circle.created_by
+            # Build owner details from the current leader, falling back to circle creator
+            leader_id = next(iter(leaders), None)
+            if leader_id and leader_id in users:
+                owner = users[leader_id]
+            else:
+                owner = circle.created_by
             owner_details = {
                 'id': owner.id,
                 'full_name': owner.full_name,
