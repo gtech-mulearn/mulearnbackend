@@ -7,7 +7,7 @@ from rest_framework import serializers as s
 
 from db.task import TaskList, InterestGroup, UserIgLink
 from db.skill import Skill, TaskSkillLink
-from utils.permission import CustomizePermission, JWTUtils, role_required
+from utils.permission import CustomizePermission, JWTUtils, role_required, mentor_active_required
 from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils, DateTimeUtils
@@ -150,8 +150,10 @@ class MentorTaskListCreateAPI(APIView):
         responses={200: OpenApiResponse(description="Task submitted for approval.")},
     )
     @role_required([RoleType.MENTOR.value])
+    @mentor_active_required
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
+
         mutable_data = request.data.copy()
         mutable_data["created_by"] = user_id
         mutable_data["updated_by"] = user_id
@@ -223,6 +225,7 @@ class MentorTaskDetailAPI(APIView):
         responses={200: OpenApiResponse(description="Task updated and re-submitted for approval.")},
     )
     @role_required([RoleType.MENTOR.value])
+    @mentor_active_required
     def put(self, request, task_id):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -279,6 +282,7 @@ class MentorTaskDetailAPI(APIView):
         responses={200: OpenApiResponse(description="Task deleted successfully.")},
     )
     @role_required([RoleType.MENTOR.value])
+    @mentor_active_required
     def delete(self, request, task_id):
         user_id = JWTUtils.fetch_user_id(request)
 

@@ -719,17 +719,15 @@ def can_manage_event(user_id, event):
         return True
         
     if event.organiser_type == Event.OrganiserType.COMPANY.value and event.organiser_org_id:
-        from db.organization import Organization
         from db.company import Company
         from db.user import MentorScopeGrant
         from api.dashboard.mentor.dash_mentor_helper import has_scope
+        from api.dashboard.company.company_views import is_company_owner_or_admin
 
-        # Check if user is company creator for this org
-        org = Organization.objects.filter(id=event.organiser_org_id).first()
-        if org:
-            company = Company.objects.filter(name=org.title, company_user_id=user_id, status="verified").first()
-            if company:
-                return True
+        # Check if user is the company owner or an accepted co-admin for this org
+        company = Company.objects.filter(org_id=event.organiser_org_id, status="verified").first()
+        if is_company_owner_or_admin(user_id, company):
+            return True
 
         # Check if user holds an active COMPANY_MENTOR grant for this org
         if has_scope(user_id, MentorScopeGrant.ScopeType.COMPANY_MENTOR, event.organiser_org_id):

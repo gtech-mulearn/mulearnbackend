@@ -1,6 +1,6 @@
 from rest_framework.views import APIView
 from django.db.models import Q
-from utils.permission import CustomizePermission, JWTUtils, role_required
+from utils.permission import CustomizePermission, JWTUtils, role_required, mentor_active_required
 from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
@@ -25,43 +25,23 @@ class MentorSessionCreateAPI(APIView):
         responses={200: serializers.SessionCreateSerializer},
     )
     @role_required([RoleType.MENTOR.value])
+    @mentor_active_required
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         data = request.data.copy()
-
-        # ── IG-scoped sessions only ──────────────────────────────────────────
-        # Every session is for an Interest Group the mentor mentors (an active
-        # MENTOR UserIgLink). There are no company- or campus-scoped sessions.
-        ig_id = (request.data.get("ig") or "").strip()
-
-        if not ig_id:
-            return CustomResponse(
-                general_message="Select an Interest Group to create a session."
-            ).get_failure_response(status_code=400)
-
-        if not UserIgLink.objects.filter(
-            user_id=user_id,
-            ig_id=ig_id,
-            assignment_type=UserIgLink.AssignmentType.MENTOR,
-            is_active=True,
-        ).exists():
-            return CustomResponse(
-                general_message="You are not assigned as a mentor for this Interest Group."
-            ).get_failure_response(status_code=403)
-
-        data["entity_id"] = ig_id
-        data["session_type"] = MentorshipSession.SessionType.IG_SESSION
-
-        # Pop 'ig' to prevent DRF unknown field validation errors
-        data.pop("ig", None)
-
         serializer = serializers.SessionCreateSerializer(
             data=data, context={"user_id": user_id}
         )
         if serializer.is_valid():
             serializer.save()
+            message = "Session created successfully."
+            if serializer.data.get("recurrence_truncated"):
+                message += (
+                    " Note: the recurrence series was capped at 50 occurrences — "
+                    "not all sessions through your requested end date were created."
+                )
             return CustomResponse(
-                general_message="Session created successfully.",
+                general_message=message,
                 response=serializer.data
             ).get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
@@ -101,7 +81,9 @@ class MentorSessionListAPI(APIView):
             sort_fields={"created_at": "created_at", "starts_at": "starts_at"}
         )
         
-        serializer = serializers.SessionListSerializer(paginated_queryset.get("queryset"), many=True)
+        page = list(paginated_queryset.get("queryset"))
+        ig_map, org_map = serializers.SessionListSerializer.build_entity_maps(page)
+        serializer = serializers.SessionListSerializer(page, many=True, context={"ig_map": ig_map, "org_map": org_map})
         return CustomResponse(
             response={
                 "data": serializer.data,
@@ -114,36 +96,71 @@ class MentorSessionUpdateAPI(APIView):
 
     @extend_schema(
         tags=['Dashboard - Mentor Session'],
-        description="Update or cancel a mentorship session.",
+        description=(
+            "Update or cancel a mentorship session. "
+            "For a recurring session, pass apply_to_series=true to also apply the same "
+            "logistics fields (title, description, mode, venue, meeting_link, max_participants — "
+            "not starts_at/ends_at, which are per-occurrence) to every other still-SCHEDULED "
+            "session in the series. Without it, only this occurrence is changed and the rest "
+            "of the series is left untouched."
+        ),
         request=serializers.SessionUpdateSerializer,
         responses={200: serializers.SessionUpdateSerializer},
     )
     @role_required([RoleType.MENTOR.value])
+    @mentor_active_required
     def patch(self, request, session_id):
         user_id = JWTUtils.fetch_user_id(request)
+
         session = MentorshipSession.objects.filter(id=session_id, created_by_id=user_id, is_deleted=False).first()
-        
+
         if not session:
             return CustomResponse(
                 general_message="Session not found."
             ).get_failure_response(status_code=404)
-            
+
         if session.status in [MentorshipSession.Status.COMPLETED, MentorshipSession.Status.CANCELLED, MentorshipSession.Status.REJECTED]:
             return CustomResponse(
                 general_message=f"Cannot edit a session that is {session.status.lower()}."
             ).get_failure_response()
 
+        data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
+        apply_to_series = bool(data.pop('apply_to_series', False))
+
         serializer = serializers.SessionUpdateSerializer(
-            session, data=request.data, partial=True, context={"user_id": user_id}
+            session, data=data, partial=True, context={"user_id": user_id}
         )
-        
+
         if serializer.is_valid():
             serializer.save()
+
+            series_updated = 0
+            if apply_to_series and session.is_recurring:
+                # Only logistics fields make sense across a whole series —
+                # starts_at/ends_at are per-occurrence and must stay untouched.
+                propagate_fields = {"title", "description", "mode", "venue", "meeting_link", "max_participants"}
+                propagate_data = {k: v for k, v in serializer.validated_data.items() if k in propagate_fields}
+                if propagate_data:
+                    from utils.utils import DateTimeUtils
+                    root_id = session.parent_session_id or session.id
+                    propagate_data["updated_by_id"] = user_id
+                    # .update() bypasses auto_now — set it explicitly.
+                    propagate_data["updated_at"] = DateTimeUtils.get_current_utc_time()
+                    series_updated = MentorshipSession.objects.filter(
+                        Q(id=root_id) | Q(parent_session_id=root_id),
+                        status=MentorshipSession.Status.SCHEDULED,
+                        is_deleted=False,
+                    ).exclude(id=session.id).update(**propagate_data)
+
+            message = "Session updated successfully."
+            if apply_to_series and session.is_recurring:
+                message = f"Session updated successfully. Propagated to {series_updated} other session(s) in the series."
+
             return CustomResponse(
-                general_message="Session updated successfully. Status reset to pending if previously scheduled.",
+                general_message=message,
                 response=serializer.data
             ).get_success_response()
-            
+
         return CustomResponse(message=serializer.errors).get_failure_response()
 
     @extend_schema(
@@ -151,8 +168,10 @@ class MentorSessionUpdateAPI(APIView):
         description="Delete a mentorship session.",
     )
     @role_required([RoleType.MENTOR.value])
+    @mentor_active_required
     def delete(self, request, session_id):
         user_id = JWTUtils.fetch_user_id(request)
+
         session = MentorshipSession.objects.filter(id=session_id, created_by_id=user_id, is_deleted=False).first()
         
         if not session:
@@ -165,6 +184,61 @@ class MentorSessionUpdateAPI(APIView):
         return CustomResponse(
             general_message="Session deleted successfully."
         ).get_success_response()
+
+
+class MentorSessionCompleteAPI(APIView):
+    """
+    POST /session/complete/<session_id>/ — the mentor manually marks a
+    SCHEDULED session they created as COMPLETED, without waiting for the
+    periodic transition_mentorship_session_statuses cron. Also records the
+    session's duration as the mentor's contributed_minutes on their MENTOR
+    participant link, and marks that link ATTENDED.
+    """
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['Dashboard - Mentor Session'],
+        description="Mark a scheduled mentorship session as completed.",
+    )
+    @role_required([RoleType.MENTOR.value])
+    @mentor_active_required
+    def post(self, request, session_id):
+        user_id = JWTUtils.fetch_user_id(request)
+
+        session = MentorshipSession.objects.filter(
+            id=session_id, created_by_id=user_id, is_deleted=False
+        ).first()
+        if not session:
+            return CustomResponse(
+                general_message="Session not found."
+            ).get_failure_response(status_code=404)
+
+        if session.status != MentorshipSession.Status.SCHEDULED:
+            return CustomResponse(
+                general_message=f"Only a scheduled session can be marked completed (current status: {session.status})."
+            ).get_failure_response()
+
+        from db.mentor import MentorshipSessionUserLink
+        from utils.utils import DateTimeUtils
+
+        now = DateTimeUtils.get_current_utc_time()
+        session.status = MentorshipSession.Status.COMPLETED
+        session.updated_by_id = user_id
+        session.save(update_fields=["status", "updated_by_id", "updated_at"])
+
+        duration_minutes = int((session.ends_at - session.starts_at).total_seconds() // 60)
+        MentorshipSessionUserLink.objects.filter(
+            session=session,
+            participant_role=MentorshipSessionUserLink.ParticipantRole.MENTOR,
+        ).update(
+            attendance_status=MentorshipSessionUserLink.AttendanceStatus.ATTENDED,
+            contributed_minutes=duration_minutes,
+        )
+
+        return CustomResponse(
+            general_message="Session marked as completed."
+        ).get_success_response()
+
 
 class AdminSessionListAPI(APIView):
     permission_classes = [CustomizePermission]
@@ -196,7 +270,9 @@ class AdminSessionListAPI(APIView):
             sort_fields={"starts_at": "starts_at", "created_at": "created_at", "status": "status"}
         )
         
-        serializer = serializers.SessionListSerializer(paginated_queryset.get("queryset"), many=True)
+        page = list(paginated_queryset.get("queryset"))
+        ig_map, org_map = serializers.SessionListSerializer.build_entity_maps(page)
+        serializer = serializers.SessionListSerializer(page, many=True, context={"ig_map": ig_map, "org_map": org_map})
         return CustomResponse(
             response={
                 "data": serializer.data,
@@ -286,23 +362,28 @@ class AvailableSessionListAPI(APIView):
             user_id=user_id
         ).values_list('ig_id', flat=True)
 
-        # Company orgs the user is linked to
-        company_org_ids = UserOrganizationLink.objects.filter(
+        # Campus orgs the user is linked to
+        campus_org_ids = UserOrganizationLink.objects.filter(
             user_id=user_id,
-            org__org_type='Company',
+            org__org_type='College',
         ).values_list('org_id', flat=True)
 
         sessions = MentorshipSession.objects.filter(
             Q(
+                # IG sessions for the user's groups
                 entity_id__in=user_ig_ids,
                 session_type=MentorshipSession.SessionType.IG_SESSION,
             ) | Q(
-                entity_id__in=company_org_ids,
+                # Campus sessions for the user's college
+                entity_id__in=campus_org_ids,
+                session_type=MentorshipSession.SessionType.CAMPUS_SESSION,
+            ) | Q(
+                # All company sessions are available to every authenticated user
                 session_type=MentorshipSession.SessionType.COMPANY_SESSION,
             ),
             status=MentorshipSession.Status.SCHEDULED,
             is_deleted=False,
-        )
+        ).distinct()
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             sessions, request,
@@ -310,7 +391,9 @@ class AvailableSessionListAPI(APIView):
             sort_fields={"created_at": "created_at", "starts_at": "starts_at"}
         )
 
-        serializer = serializers.SessionListSerializer(paginated_queryset.get("queryset"), many=True)
+        page = list(paginated_queryset.get("queryset"))
+        ig_map, org_map = serializers.SessionListSerializer.build_entity_maps(page)
+        serializer = serializers.SessionListSerializer(page, many=True, context={"ig_map": ig_map, "org_map": org_map})
         return CustomResponse(
             response={
                 "data": serializer.data,
