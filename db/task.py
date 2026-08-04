@@ -114,6 +114,8 @@ class UserLvlLink(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="user_lvl_link_user")
     level = models.ForeignKey(Level, on_delete=models.CASCADE, related_name="user_lvl_link_level")
+    grit = models.IntegerField(default=50)
+    last_level_down_at = models.DateTimeField(null=True, blank=True)
     updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="updated_by",
                                    related_name="user_lvl_link_updated_by")
     updated_at = models.DateTimeField(auto_now=True)
