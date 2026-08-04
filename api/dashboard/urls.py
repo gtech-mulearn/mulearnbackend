@@ -33,6 +33,7 @@ urlpatterns = [
     path("skill/", include("api.dashboard.skill.urls")),
     path("task-report/", include("api.dashboard.task_report.urls")),
     path("media-content/", include("api.dashboard.media_content.urls")),
+    path("community-partner/", include("api.dashboard.community_partner.urls")),
 
     path("category/", include("api.dashboard.category.urls")),
     path("mentor/", include("api.dashboard.mentor.urls")),
@@ -40,6 +41,6 @@ urlpatterns = [
     path("manage-interns/", include("api.dashboard.manage_interns.urls")),
     path("company/", include("api.dashboard.company.urls")),
     path("feature/", include("api.dashboard.feature.urls")),
-    # path("career-lab/", include("api.dashboard.career_lab.urls")),
+    path("career-lab/", include("api.dashboard.career_lab.urls")),
     # mentorship/ has been consolidated into mentor/ — do not re-add
 ]

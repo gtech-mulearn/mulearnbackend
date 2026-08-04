@@ -21,14 +21,16 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
     college_name = serializers.ReadOnlyField(source="title")
     campus_code = serializers.ReadOnlyField(source="code")
     campus_zone = serializers.ReadOnlyField(source="district.zone.name")
-    campus_level = serializers.SerializerMethodField()
     total_karma = serializers.SerializerMethodField()
     total_members = serializers.SerializerMethodField()
     active_members = serializers.SerializerMethodField()
     rank = serializers.SerializerMethodField()
     social_links = serializers.SerializerMethodField()
-   
-    
+    campus_lead = serializers.SerializerMethodField()
+    execom = serializers.SerializerMethodField()
+    top_10_campus_leaderboard = serializers.SerializerMethodField()
+    active_ig_chapters = serializers.SerializerMethodField()
+    karma_by_cluster = serializers.SerializerMethodField()
 
     class Meta:
         model = Organization
@@ -37,29 +39,26 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
             "college_name",
             "campus_code",
             "campus_zone",
-            "campus_level",
             "total_karma",
             "total_members",
             "active_members",
             "rank",
             "social_links",
+            "campus_lead",
+            "execom",
+            "top_10_campus_leaderboard",
+            "active_ig_chapters",
+            "karma_by_cluster",
         ]
-
-    def get_campus_level(self, obj):
-        campus = obj.college_org
-        if campus:
-            return campus.level
-
-        return None
 
     def get_total_members(self, obj):
         return obj.user_organization_link_org.filter(verified=True).values('user').distinct().count()
 
     def get_active_members(self, obj):
+        since = DateTimeUtils.get_current_utc_time() - timedelta(days=30)
         return obj.user_organization_link_org.filter(
             verified=True,
-            user__discord_id__isnull=False,
-            user__exist_in_guild=True
+            user__wallet_user__karma_last_updated_at__gte=since
         ).values('user').distinct().count()
 
     def get_total_karma(self, obj):
@@ -103,6 +102,141 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
         links = CampusSocialLink.objects.filter(org=obj)
         return CampusSocialLinkSerializer(links, many=True).data
 
+    def get_campus_lead(self, obj):
+        lead_link = UserRoleLink.objects.filter(
+            user__user_organization_link_user__org=obj,
+            user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+            user__user_organization_link_user__verified=True,
+            role__title=RoleType.CAMPUS_LEAD.value,
+        ).select_related("user", "role").first()
+
+        if not lead_link:
+            return None
+
+        user = lead_link.user
+        return {
+            "user_id": str(user.id),
+            "full_name": user.full_name,
+            "muid": user.muid,
+            "profile_pic": str(user.profile_pic) if user.profile_pic else None,
+            "role": lead_link.role.title,
+        }
+
+    def get_execom(self, obj):
+        campus_user_ids = obj.user_organization_link_org.filter(
+            verified=True
+        ).values_list("user_id", flat=True)
+
+        execom_links = UserRoleLink.objects.filter(
+            user_id__in=campus_user_ids,
+            role__is_execom_role=True,
+        ).select_related("user", "role")
+
+        return ExecomMemberSerializer(execom_links, many=True).data
+
+    def get_top_10_campus_leaderboard(self, obj):
+        from db.task import Wallet
+
+        top_wallets = Wallet.objects.filter(
+            user__user_organization_link_user__org=obj,
+            user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+            user__user_organization_link_user__verified=True,
+        ).select_related("user").distinct().order_by("-karma", "created_at")[:10]
+
+        return [
+            {
+                "rank": index + 1,
+                "user_id": str(wallet.user.id),
+                "full_name": wallet.user.full_name,
+                "muid": wallet.user.muid,
+                "profile_pic": str(wallet.user.profile_pic) if wallet.user.profile_pic else None,
+                "karma": wallet.karma,
+            }
+            for index, wallet in enumerate(top_wallets)
+        ]
+
+    def get_active_ig_chapters(self, obj):
+        chapters = CampusIGChapter.objects.filter(
+            org=obj, is_active=True
+        ).select_related("ig", "lead")
+
+        result = []
+        for chapter in chapters:
+            member_count = UserIgLink.objects.filter(
+                ig=chapter.ig,
+                is_active=True,
+                assignment_type=UserIgLink.AssignmentType.LEARNER,
+                user__user_organization_link_user__org=obj,
+                user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+                user__user_organization_link_user__verified=True,
+            ).values("user").distinct().count()
+
+            result.append({
+                "ig_chapter_id": chapter.id,
+                "ig_name": chapter.ig.name,
+                "ig_code": chapter.ig.code,
+                "lead": {
+                    "user_id": str(chapter.lead.id),
+                    "full_name": chapter.lead.full_name,
+                    "muid": chapter.lead.muid,
+                } if chapter.lead else None,
+                "member_count": member_count,
+            })
+
+        return result
+
+    def get_karma_by_cluster(self, obj):
+        from django.db.models import OuterRef, Subquery
+        from collections import defaultdict
+        from db.task import Wallet
+
+        wallet_karma_sq = Wallet.objects.filter(
+            user=OuterRef("pk")
+        ).values("karma")[:1]
+
+        primary_category_sq = (
+            UserIgLink.objects.filter(
+                user_id=OuterRef("pk"),
+                is_active=True,
+                assignment_type=UserIgLink.AssignmentType.LEARNER,
+            )
+            .order_by("created_at")
+            .values("ig__category")[:1]
+        )
+
+        all_rows = (
+            User.objects.filter(
+                user_organization_link_user__org=obj,
+                user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+                user_organization_link_user__verified=True,
+            )
+            .annotate(
+                user_karma=Subquery(wallet_karma_sq),
+                primary_category=Subquery(primary_category_sq),
+            )
+            .values("id", "primary_category", "user_karma")
+            .distinct()
+        )
+
+        category_map = defaultdict(lambda: {"total_karma": 0, "member_count": 0, "seen_users": set()})
+
+        for row in all_rows:
+            category = row["primary_category"] or "unclustered"
+            user_id = row["id"]
+            karma = row["user_karma"] or 0
+
+            if user_id not in category_map[category]["seen_users"]:
+                category_map[category]["seen_users"].add(user_id)
+                category_map[category]["total_karma"] += karma
+                category_map[category]["member_count"] += 1
+
+        return {
+            category: {
+                "total_karma": data["total_karma"],
+                "member_count": data["member_count"],
+            }
+            for category, data in category_map.items()
+        }
 
 
 class CampusListSerializer(serializers.ModelSerializer):
