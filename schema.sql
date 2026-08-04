@@ -1994,6 +1994,8 @@ CREATE TABLE `user_lvl_link` (
   `id` varchar(36) NOT NULL,
   `user_id` varchar(75) NOT NULL,
   `level_id` varchar(75) NOT NULL,
+  `grit` int NOT NULL DEFAULT '50',
+  `last_level_down_at` datetime DEFAULT NULL,
   `updated_by` varchar(36) NOT NULL,
   `updated_at` datetime NOT NULL,
   `created_by` varchar(36) NOT NULL,
