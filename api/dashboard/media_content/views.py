@@ -70,15 +70,28 @@ def _apply_common_filters(qs, request, *, has_zone: bool = False):
     """Apply shared query-param filters to a MediaContent queryset."""
     params = request.query_params
     from datetime import date
+    from django.db.models import Q
 
-    if status := params.get('status'):
-        status = status.lower()
-        if status == 'upcoming':
-            qs = qs.filter(date__gt=date.today())
-        elif status == 'ongoing':
-            qs = qs.filter(date=date.today())
-        elif status == 'completed':
-            qs = qs.filter(date__lt=date.today())
+    # Accepts repeated params (?status=a&status=b) and/or comma-separated
+    # values (?status=a,b) — both are normalized into one status list.
+    raw_statuses = params.getlist('status')
+    statuses = {
+        s.strip().lower()
+        for raw in raw_statuses
+        for s in raw.split(',')
+        if s.strip()
+    }
+
+    if statuses:
+        status_q = Q()
+        if 'upcoming' in statuses:
+            status_q |= Q(date__gt=date.today())
+        if 'ongoing' in statuses:
+            status_q |= Q(date=date.today())
+        if 'completed' in statuses:
+            status_q |= Q(date__lt=date.today())
+        if status_q:
+            qs = qs.filter(status_q)
 
     if has_zone:
         if zone := params.get('zone'):
