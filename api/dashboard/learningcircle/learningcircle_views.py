@@ -1267,11 +1267,11 @@ class CircleJoinAPI(APIView):
 
         try:
             link = UserCircleLink.objects.get(
-                id=link_id, circle=circle, is_invited=False, accepted__isnull=True
+                id=link_id, circle=circle, accepted__isnull=True
             )
         except UserCircleLink.DoesNotExist:
             return CustomResponse(
-                general_message="Pending join request not found"
+                general_message="Pending request not found"
             ).get_failure_response()
 
         action = request.data.get("action")
