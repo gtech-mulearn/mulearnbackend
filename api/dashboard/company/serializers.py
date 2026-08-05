@@ -19,6 +19,21 @@ def generate_unique_code():
         if not Organization.objects.filter(code=code).exists():
             return code
 
+def normalize_json_array(value):
+    """
+    Coerce a JSONField value into a list for API output.
+
+    Some existing rows predate strict array validation on perks/testimonials/
+    gallery and hold a bare string (or null) instead of a list — this keeps
+    the response contract (always an array) stable regardless of what's
+    stored, without needing a data migration.
+    """
+    if isinstance(value, list):
+        return value
+    if value in (None, ""):
+        return []
+    return [value]
+
 class CompanyRegisterSerializer(serializers.ModelSerializer):
     district_id = serializers.PrimaryKeyRelatedField(queryset=District.objects.all(), required=False, allow_null=True, source="district")
     state_id = serializers.PrimaryKeyRelatedField(queryset=State.objects.all(), required=False, allow_null=True, source="state")
@@ -68,13 +83,28 @@ class CompanyRegisterSerializer(serializers.ModelSerializer):
         return value
 
     def validate_perks(self, value):
-        if value and len(value) > 2000:
-            raise serializers.ValidationError("Perks must not exceed 2000 characters.")
+        if value in (None, ""):
+            return []
+        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+            raise serializers.ValidationError("Perks must be a list of strings.")
+        if len(value) > 2000:
+            raise serializers.ValidationError("Perks must not exceed 2000 entries.")
         return value
 
     def validate_testimonials(self, value):
-        if value and len(value) > 3000:
-            raise serializers.ValidationError("Testimonials must not exceed 3000 characters.")
+        if value in (None, ""):
+            return []
+        if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
+            raise serializers.ValidationError("Testimonials must be a list of testimonial objects.")
+        if len(value) > 3000:
+            raise serializers.ValidationError("Testimonials must not exceed 3000 entries.")
+        return value
+
+    def validate_gallery(self, value):
+        if value in (None, ""):
+            return []
+        if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
+            raise serializers.ValidationError("Gallery must be a list of gallery item objects.")
         return value
 
     def validate_short_pitch(self, value):
@@ -170,13 +200,28 @@ class CompanyUpdateSerializer(serializers.ModelSerializer):
         return value
 
     def validate_perks(self, value):
-        if value and len(value) > 2000:
-            raise serializers.ValidationError("Perks must not exceed 2000 characters.")
+        if value in (None, ""):
+            return []
+        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+            raise serializers.ValidationError("Perks must be a list of strings.")
+        if len(value) > 2000:
+            raise serializers.ValidationError("Perks must not exceed 2000 entries.")
         return value
 
     def validate_testimonials(self, value):
-        if value and len(value) > 3000:
-            raise serializers.ValidationError("Testimonials must not exceed 3000 characters.")
+        if value in (None, ""):
+            return []
+        if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
+            raise serializers.ValidationError("Testimonials must be a list of testimonial objects.")
+        if len(value) > 3000:
+            raise serializers.ValidationError("Testimonials must not exceed 3000 entries.")
+        return value
+
+    def validate_gallery(self, value):
+        if value in (None, ""):
+            return []
+        if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
+            raise serializers.ValidationError("Gallery must be a list of gallery item objects.")
         return value
 
     def validate_short_pitch(self, value):
@@ -268,10 +313,22 @@ class CompanyDetailSerializer(serializers.ModelSerializer):
     district_name = serializers.CharField(source='district.name', read_only=True, default=None)
     profile_completeness = serializers.SerializerMethodField()
     verification_sla_message = serializers.SerializerMethodField()
+    perks = serializers.SerializerMethodField()
+    testimonials = serializers.SerializerMethodField()
+    gallery = serializers.SerializerMethodField()
 
     class Meta:
         model = Company
         fields = "__all__"
+
+    def get_perks(self, obj):
+        return normalize_json_array(obj.perks)
+
+    def get_testimonials(self, obj):
+        return normalize_json_array(obj.testimonials)
+
+    def get_gallery(self, obj):
+        return normalize_json_array(obj.gallery)
 
     # PRD §4.3 — profile completeness scoring, shown to both the company (as
     # a nudge) and to admin (as a signal of how genuine/complete an
@@ -378,6 +435,9 @@ class PublicCompanyProfileSerializer(serializers.ModelSerializer):
     verified_since = serializers.DateTimeField(source='verified_at', read_only=True, default=None)
     collaboration_summary = serializers.SerializerMethodField()
     impact_summary = serializers.SerializerMethodField()
+    perks = serializers.SerializerMethodField()
+    testimonials = serializers.SerializerMethodField()
+    gallery = serializers.SerializerMethodField()
 
     class Meta:
         model = Company
@@ -408,6 +468,15 @@ class PublicCompanyProfileSerializer(serializers.ModelSerializer):
             "collaboration_summary",
             "impact_summary",
         ]
+
+    def get_perks(self, obj):
+        return normalize_json_array(obj.perks)
+
+    def get_testimonials(self, obj):
+        return normalize_json_array(obj.testimonials)
+
+    def get_gallery(self, obj):
+        return normalize_json_array(obj.gallery)
 
     def get_collaboration_summary(self, obj):
         """
