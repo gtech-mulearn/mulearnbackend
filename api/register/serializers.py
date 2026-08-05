@@ -34,7 +34,7 @@ from db.user import (
 )
 from utils.exception import CustomException
 from utils.types import OrganizationType, RoleType
-from utils.utils import DateTimeUtils
+from utils.utils import DateTimeUtils, check_alumni_status
 from . import register_helper
 
 
@@ -137,6 +137,7 @@ class UserOrgLinkSerializer(serializers.ModelSerializer):
                     verified=True,
                     department=department if is_college(org) else None,
                     graduation_year=graduation_year if is_college(org) else None,
+                    is_alumni=check_alumni_status(graduation_year) if is_college(org) else False,
                 )
                 for org in validated_data["organizations"]
             }
@@ -158,15 +159,20 @@ class MentorSerializer(serializers.ModelSerializer):
         reason = validated_data.get("reason", None)
         hours = validated_data.get("hours", None)
 
-        UserMentor.objects.create(
+        # UserMentor is now a single profile row per user — get_or_create
+        # rather than create, since a prior mentor application may already
+        # have provisioned this user's profile row.
+        UserMentor.objects.get_or_create(
             user=validated_data["user"],
-            about=about,
-            reason=reason,
-            hours=hours,
-            created_by=validated_data["user"],
-            created_at=DateTimeUtils.get_current_utc_time(),
-            updated_by=validated_data["user"],
-            updated_at=DateTimeUtils.get_current_utc_time(),
+            defaults={
+                "about": about,
+                "reason": reason,
+                "hours": hours or 0,
+                "created_by": validated_data["user"],
+                "created_at": DateTimeUtils.get_current_utc_time(),
+                "updated_by": validated_data["user"],
+                "updated_at": DateTimeUtils.get_current_utc_time(),
+            },
         )
 
     class Meta:
@@ -308,9 +314,8 @@ class UserSerializer(serializers.ModelSerializer):
             validated_data["full_name"]
         )
 
-        password = validated_data.pop("password")
-        hashed_password = make_password(password)
-        validated_data["password"] = hashed_password
+        password = validated_data.pop("password", None)
+        validated_data["password"] = make_password(password) if password else None
 
         user = super().create(validated_data)
 
@@ -321,14 +326,20 @@ class UserSerializer(serializers.ModelSerializer):
         UserSettings.objects.create(**additional_values)
 
         if level := Level.objects.filter(level_order="1").first():
-            UserLvlLink.objects.create(level=level, **additional_values)
+            UserLvlLink.objects.create(level=level, grit=100, **additional_values)
+
+        additional_values.pop("updated_by")
+
+        if not role:
+            role = Role.objects.filter(title=RoleType.MULEARNER.value).first()
 
         if role:
-            additional_values.pop("updated_by")
-
             UserRoleLink.objects.create(
                 role=role,
-                verified=role.title == RoleType.STUDENT.value,
+                verified=role.title in (
+                    RoleType.STUDENT.value,
+                    RoleType.MULEARNER.value,
+                ),
                 **additional_values,
             )
 
@@ -360,6 +371,10 @@ class UserSerializer(serializers.ModelSerializer):
             "district",
             "area_of_interest",
         ]
+        extra_kwargs = {
+            # Google sign-ups don't supply a password — must be optional here.
+            "password": {"required": False, "allow_null": True},
+        }
 
 
 # class UserInterestSerializer(serializers.ModelSerializer):

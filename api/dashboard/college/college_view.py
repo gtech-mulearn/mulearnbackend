@@ -7,12 +7,18 @@ from utils.permission import JWTUtils
 from utils.response import CustomResponse
 from utils.types import OrganizationType
 from utils.utils import CommonUtils
+from drf_spectacular.utils import extend_schema
 from .serializer import (
     CollegeListSerializer,
     CollegeChangeSerializer,
 )
 
 class CollegeApi(APIView):
+    @extend_schema(
+        tags=['Dashboard - College'],
+        description="Retrieve College Api.",
+        responses={200: CollegeListSerializer},
+    )
     def get(self, request, college_code=None):
         if college_code:
             colleges = College.objects.filter(id=college_code)
@@ -36,6 +42,12 @@ class CollegeApi(APIView):
 
 
 class CollegeChangeAPI(APIView):
+    @extend_schema(
+        tags=['Dashboard - College'],
+        description="Partially update College Change.",
+        request=CollegeChangeSerializer,
+        responses={200: CollegeChangeSerializer},
+    )
     def patch(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         serializer = CollegeChangeSerializer(data=request.data)
@@ -58,21 +70,29 @@ class CollegeChangeAPI(APIView):
                 existing_links = UserOrganizationLink.objects.filter(
                     user_id=user_id,
                     org__org_type=OrganizationType.COLLEGE.value
-                )
+                ).order_by('-created_at', '-id')
 
                 if existing_links.exists():
-                    update_data = {
-                        'org': new_organization,
-                        'verified': False
-                    }
-                    
-                    if department_id is not None:
-                        update_data['department'] = department
-                    
-                    existing_links.update(**update_data)
                     current_link = existing_links.select_related('department').first()
-                    current_department = current_link.department
-                    
+
+                    # Dedupe: a user should only ever have one college link. Drop any
+                    # extras so the final .get() below can't raise MultipleObjectsReturned.
+                    duplicate_ids = list(
+                        existing_links.exclude(id=current_link.id).values_list('id', flat=True)
+                    )
+                    if duplicate_ids:
+                        UserOrganizationLink.objects.filter(id__in=duplicate_ids).delete()
+
+                    current_link.org = new_organization
+                    # Auto-verified: there is no manual campus-transfer approval
+                    # flow, so leaving this False would strand the student
+                    # unverified at both the old and new campus indefinitely.
+                    current_link.verified = True
+                    if department_id is not None:
+                        current_link.department = department
+                    current_link.save()
+                    final_department = current_link.department
+
                     if department_id is not None:
                         if department:
                             message = (
@@ -85,24 +105,25 @@ class CollegeChangeAPI(APIView):
                                 f"Department removed"
                             )
                     else:
-                        if current_department:
+                        if final_department:
                             message = (
                                 f"College updated successfully to {new_organization.title}. "
-                                f"Department remains {current_department.title}"
+                                f"Department remains {final_department.title}"
                             )
                         else:
                             message = f"College updated successfully to {new_organization.title}"
-                    
+
                     action = "updated"
                 else:
-                    UserOrganizationLink.objects.create(
+                    new_link = UserOrganizationLink.objects.create(
                         user=user,
                         org=new_organization,
                         department=department,
-                        verified=False,
+                        verified=True,
                         created_by=user,
                     )
-                    
+                    final_department = new_link.department
+
                     if department:
                         message = (
                             f"College linked successfully to {new_organization.title}. "
@@ -110,14 +131,8 @@ class CollegeChangeAPI(APIView):
                         )
                     else:
                         message = f"College linked successfully to {new_organization.title}"
-                    
-                    action = "created"
 
-            final_link = UserOrganizationLink.objects.select_related('department').get(
-                user_id=user_id,
-                org__org_type=OrganizationType.COLLEGE.value
-            )
-            final_department = final_link.department
+                    action = "created"
 
             return CustomResponse(
                 general_message=message, 

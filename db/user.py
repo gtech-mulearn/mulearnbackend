@@ -22,7 +22,7 @@ class User(models.Model):
     email = models.EmailField(unique=True, max_length=200)
     password = models.CharField(max_length=200, blank=True, null=True)
     mobile = models.CharField(unique=True, max_length=15, blank=True, null=True)
-    gender = models.CharField(max_length=10, blank=True, null=True, choices=[("Male", "Male"), ("Female", "Female")])
+    gender = models.CharField(max_length=20, blank=True, null=True, choices=[("Male", "Male"), ("Female", "Female"), ("Other", "Other"), ("Prefer not to say", "Prefer not to say")])
     dob = models.DateField(blank=True, null=True)
     admin = models.BooleanField(default=False)
     exist_in_guild = models.BooleanField(default=False)
@@ -44,6 +44,13 @@ class User(models.Model):
     def profile_pic(self):
         fs = FileSystemStorage()
         path = f'user/profile/{self.id}.png'
+        if fs.exists(path):
+            return f"{decouple_config('BE_DOMAIN_NAME')}{fs.url(path)}"
+
+    @property
+    def cover_pic(self):
+        fs = FileSystemStorage()
+        path = f'user/cover/{self.id}.png'
         if fs.exists(path):
             return f"{decouple_config('BE_DOMAIN_NAME')}{fs.url(path)}"
 
@@ -70,6 +77,45 @@ class UserDomains(models.Model):
     class Meta:
         managed = False
         db_table = 'user_domains'
+
+class MentorApplication(models.Model):
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', 'Pending'
+        APPROVED = 'APPROVED', 'Approved'
+        REJECTED = 'REJECTED', 'Rejected'
+        GRANT_REVOKED = 'GRANT_REVOKED', 'Grant Revoked'
+
+    class MentorTier(models.TextChoices):
+        IG_MENTOR      = 'IG_MENTOR',      'IG Mentor'
+        MENTOR         = 'MENTOR',         'Mentor'
+        COMPANY_MENTOR = 'COMPANY_MENTOR', 'Company Mentor'
+        CAMPUS_MENTOR  = 'CAMPUS_MENTOR',  'Campus Mentor'
+
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='mentor_applications')
+    mentor_tier = models.CharField(max_length=30, choices=MentorTier.choices)
+    org = models.ForeignKey('db.Organization', on_delete=models.SET_NULL, null=True, blank=True, db_column='org_id', related_name='mentor_applications')
+    status = models.CharField(max_length=30, choices=Status.choices, default=Status.PENDING)
+    reason = models.CharField(max_length=1000, blank=True, null=True)
+    preferred_ig_ids = models.JSONField(null=True, blank=True)
+    verification_note = models.CharField(max_length=500, blank=True, null=True)
+    verified_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, db_column='verified_by_id', related_name='verified_mentor_applications')
+    verified_at = models.DateTimeField(blank=True, null=True)
+    # Addon §6.2 — nomination/application expiry: a PENDING application past
+    # this timestamp is auto-rejected by mu_celery.mentor_tasks.expire_stale_applications.
+    nomination_expires_at = models.DateTimeField(blank=True, null=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by_id', related_name='created_mentor_applications')
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by_id', related_name='updated_mentor_applications')
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'mentor_application'
+
+    def __str__(self):
+        return f"{self.user.full_name} - {self.get_mentor_tier_display()}"
+
 
 class UserEndgoals(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=lambda: str(uuid.uuid4()))
@@ -99,20 +145,82 @@ class UserEndgoals(models.Model):
 
 class UserMentor(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_mentor_user')
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='mentor_profile'
+    )
+
     about = models.CharField(max_length=1000, blank=True, null=True)
-    reason = models.CharField(max_length=1000, blank=True, null=True)
-    hours = models.IntegerField()
-    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by',
-                                   related_name='user_mentor_updated_by_set')
-    updated_at = models.DateTimeField(blank=True, null=True)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by',
-                                   related_name='user_mentor_created_by_set')
-    created_at = models.DateTimeField(blank=True, null=True)
+
+    expertise = models.TextField(blank=True, null=True)
+
+    hours = models.PositiveIntegerField(default=0)
+
+    is_active = models.BooleanField(default=True)
+
+    updated_by = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        db_column='updated_by',
+        related_name='user_mentor_updated_by'
+    )
+
+    updated_at = models.DateTimeField(auto_now=True, blank=True, null=True)
+
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        db_column='created_by',
+        related_name='user_mentor_created_by'
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True, blank=True, null=True)
 
     class Meta:
         managed = False
         db_table = 'user_mentor'
+class MentorScopeGrant(models.Model):
+    class ScopeType(models.TextChoices):
+        COMPANY_MENTOR = 'COMPANY_MENTOR', 'Company Mentor'
+        IG_MENTOR      = 'IG_MENTOR',      'IG Mentor'
+        CAMPUS_MENTOR  = 'CAMPUS_MENTOR',  'Campus Mentor'
+        MENTOR         = 'MENTOR',         'Mentor'
+
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    application = models.ForeignKey(
+        MentorApplication,
+        on_delete=models.CASCADE,
+        db_column='application_id',
+        related_name='scope_grants'
+    )
+    scope_type = models.CharField(max_length=30, choices=ScopeType.choices)
+    scope_id = models.CharField(max_length=36, null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    granted_by = models.ForeignKey(
+        User,
+        on_delete=models.SET(settings.SYSTEM_ADMIN_ID),
+        db_column='granted_by',
+        related_name='mentor_grants_given'
+    )
+    granted_at = models.DateTimeField()
+    # Addon §6.8 — optional periodic re-verification: an active grant past this
+    # timestamp is auto-revoked by mu_celery.mentor_tasks.expire_stale_grants.
+    # NULL means "never expires" (today's default behavior for existing grants).
+    expires_at = models.DateTimeField(null=True, blank=True)
+    revoked_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_column='revoked_by',
+        related_name='mentor_grants_revoked'
+    )
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        managed = False
+        db_table = 'mentor_scope_grant'
 
 
 class UserReferralLink(models.Model):
@@ -142,6 +250,7 @@ class Role(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='created_by',
                                    related_name='role_created_by')
     created_at = models.DateTimeField(auto_now_add=True)
+    is_execom_role = models.BooleanField(default=False)
 
     class Meta:
         managed = False
@@ -152,7 +261,20 @@ class UserRoleLink(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_role_link_user')
     role = models.ForeignKey(Role, on_delete=models.CASCADE)
+    # IG-scoped role support: NULL = global platform role, SET = IG-specific role
+    ig = models.ForeignKey(
+        'db.InterestGroup', on_delete=models.CASCADE,
+        null=True, blank=True, db_column='ig_id',
+        related_name='user_role_link_ig'
+    )
     verified = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    is_primary = models.BooleanField(default=False)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    revoked_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        db_column='revoked_by', related_name='user_role_link_revoked_by'
+    )
     created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='created_by',
                                    related_name='user_role_link_created_by')
     created_at = models.DateTimeField(auto_now_add=True)
@@ -160,9 +282,6 @@ class UserRoleLink(models.Model):
     class Meta:
         managed = False
         db_table = 'user_role_link'
-        constraints = [
-            models.UniqueConstraint(fields=['role', 'user'], name="UserToRole")
-        ]
 
 
 class Socials(models.Model):
@@ -171,7 +290,7 @@ class Socials(models.Model):
     github = models.CharField(max_length=60, blank=True, null=True)
     facebook = models.CharField(max_length=60, blank=True, null=True)
     instagram = models.CharField(max_length=60, blank=True, null=True)
-    linkedin = models.CharField(max_length=60, blank=True, null=True)
+    linkedin = models.CharField(max_length=255, blank=True, null=True)
     dribble = models.CharField(max_length=60, blank=True, null=True)
     behance = models.CharField(max_length=60, blank=True, null=True)
     stackoverflow = models.CharField(max_length=60, blank=True, null=True)
@@ -201,15 +320,53 @@ class ForgotPassword(models.Model):
 
 
 class UserSettings(models.Model):
+
+    class PersonaType(models.TextChoices):
+        LEARNER = 'learner', 'Learner'
+        MENTOR = 'mentor', 'Mentor'
+
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="user_settings_user")
+
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='user_settings_user'
+    )
+
     is_public = models.BooleanField(default=False)
+
     is_userterms_approved = models.BooleanField(default=False)
-    updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='updated_by',
-                                   related_name='user_settings_updated_by')
+
+    # Active contextual persona state
+    active_persona = models.CharField(
+        max_length=10,
+        choices=PersonaType.choices,
+        default=PersonaType.LEARNER
+    )
+    active_scope_type = models.CharField(max_length=30, null=True, blank=True)
+    active_scope_id = models.CharField(max_length=36, null=True, blank=True)
+    
+    last_persona_switched_at = models.DateTimeField(
+        null=True,
+        blank=True
+    )
+
+    updated_by = models.ForeignKey(
+        User,
+        on_delete=models.SET(settings.SYSTEM_ADMIN_ID),
+        db_column='updated_by',
+        related_name='user_settings_updated_by'
+    )
+
     updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='created_by',
-                                   related_name='user_settings_created_by')
+
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET(settings.SYSTEM_ADMIN_ID),
+        db_column='created_by',
+        related_name='user_settings_created_by'
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

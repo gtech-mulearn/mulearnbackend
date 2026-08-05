@@ -1,11 +1,15 @@
 from django.urls import path, include
+from api.calendar.dashboard_calendar_view import DashboardCalendarAPI
 
 # app_name will help us do a reverse look-up latter.
 urlpatterns = [
+    path("calendar/events/", DashboardCalendarAPI.as_view()),
+    path("home/", include("api.dashboard.home.urls")),
     path("user/", include("api.dashboard.user.urls")),
     path("zonal/", include("api.dashboard.zonal.urls")),
     path("district/", include("api.dashboard.district.urls")),
     path("campus/", include("api.dashboard.campus.urls")),
+    path("enabler/", include("api.dashboard.enabler.urls")),
     path("roles/", include("api.dashboard.roles.urls")),
     path("ig/", include("api.dashboard.ig.urls")),
     path("task/", include("api.dashboard.task.urls")),
@@ -26,4 +30,16 @@ urlpatterns = [
     path("coupon/", include("api.dashboard.coupon.urls")),
     path("projects/", include("api.dashboard.projects.urls")),
     path("achievement/", include("api.dashboard.achievement.urls")),
+    path("skill/", include("api.dashboard.skill.urls")),
+    path("media-content/", include("api.dashboard.media_content.urls")),
+    path("community-partner/", include("api.dashboard.community_partner.urls")),
+
+    path("category/", include("api.dashboard.category.urls")),
+    path("mentor/", include("api.dashboard.mentor.urls")),
+    path("intern/", include("api.dashboard.intern.urls")),
+    path("manage-interns/", include("api.dashboard.manage_interns.urls")),
+    path("company/", include("api.dashboard.company.urls")),
+    path("feature/", include("api.dashboard.feature.urls")),
+    path("career-lab/", include("api.dashboard.career_lab.urls")),
+    # mentorship/ has been consolidated into mentor/ — do not re-add
 ]

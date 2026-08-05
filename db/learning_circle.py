@@ -18,7 +18,11 @@ class LearningCircle(models.Model):
     title = models.CharField(max_length=100, blank=False, null=False)
     created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="created_by",
                                    related_name="learning_circle_created_by")
-    created_at = models.DateTimeField(auto_now=True)
+    # Was `auto_now=True` until 2026-07-20, which overwrote created_at on every save().
+    # Rows saved before that fix carry a created_at that reflects their last edit, not
+    # their actual creation time, and this cannot be recovered without a manual
+    # DB-level backfill (there is no other historical source for the true value).
+    created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -31,7 +35,9 @@ class UserCircleLink(models.Model):
     circle = models.ForeignKey(LearningCircle, on_delete=models.CASCADE, related_name='user_circle_link_circle')
     lead = models.BooleanField(default=False)
     is_invited = models.BooleanField(default=False)
-    accepted = models.BooleanField()
+    invited_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name='user_circle_link_invited_by', db_column='invited_by')
+    accepted = models.BooleanField(null=True, blank=True)
     accepted_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now=True)
 

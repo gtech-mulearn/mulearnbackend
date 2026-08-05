@@ -21,13 +21,20 @@ from utils.types import RoleType
 from utils.utils import DateTimeUtils
 from utils.utils import ImportCSV, CommonUtils
 from .karma_voucher_serializer import VoucherLogCSVSerializer, VoucherLogSerializer, VoucherLogCreateSerializer, \
-    VoucherLogUpdateSerializer
+    VoucherLogUpdateSerializer, ALLOWED_MONTHS, ALLOWED_WEEKS
+from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 
 class ImportVoucherLogAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value])
+    @extend_schema(
+        tags=['Dashboard - Karma Voucher'],
+        description="Create Import Voucher Log.",
+        request=VoucherLogCSVSerializer,
+        responses={200: VoucherLogCSVSerializer},
+    )
     def post(self, request):
         try:
             file_obj = request.FILES['voucher_log']
@@ -95,6 +102,12 @@ class ImportVoucherLogAPI(APIView):
                     error_rows.append(row)
                 elif month is None:
                     row['error'] = "Month cannot be empty"
+                    error_rows.append(row)
+                elif month not in ALLOWED_MONTHS:
+                    row['error'] = f"Month must be one of {ALLOWED_MONTHS}"
+                    error_rows.append(row)
+                elif week and week not in ALLOWED_WEEKS:
+                    row['error'] = f"Week must be one of {ALLOWED_WEEKS}"
                     error_rows.append(row)
                 else:
                     existing_codes = set(
@@ -225,6 +238,11 @@ class VoucherLogAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value])
+    @extend_schema(
+        tags=['Dashboard - Karma Voucher'],
+        description="Retrieve Voucher Log.",
+        responses={200: VoucherLogSerializer},
+    )
     def get(self, request):
         voucher_queryset = VoucherLog.objects.all()
         paginated_queryset = CommonUtils.get_paginated_queryset(
@@ -255,6 +273,12 @@ class VoucherLogAPI(APIView):
                                                    pagination=paginated_queryset.get('pagination'))
 
     @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value])
+    @extend_schema(
+        tags=['Dashboard - Karma Voucher'],
+        description="Create Voucher Log.",
+        request=VoucherLogCreateSerializer,
+        responses={200: VoucherLogSerializer},
+    )
     def post(self, request):
         serializer = VoucherLogCreateSerializer(
             data=request.data, context={'request': request})
@@ -323,6 +347,11 @@ class VoucherLogAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value])
+    @extend_schema(
+        tags=['Dashboard - Karma Voucher'],
+        description="Partially update Voucher Log.",
+        responses={200: VoucherLogUpdateSerializer},
+    )
     def patch(self, request, voucher_id):
         user_id = JWTUtils.fetch_user_id(request)
         context = {'user_id': user_id}
@@ -338,14 +367,21 @@ class VoucherLogAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value])
+    @extend_schema(tags=['Dashboard - Karma Voucher'], description="Delete Voucher Log.",
+        responses={200: VoucherLogSerializer},
+    )
     def delete(self, request, voucher_id):
         if voucher_log := VoucherLog.objects.filter(id=voucher_id).first():
+            if voucher_log.claimed:
+                return CustomResponse(
+                    general_message='Cannot delete a voucher that has already been claimed.'
+                ).get_failure_response()
             voucher_log.delete()
             return CustomResponse(
-                general_message=f'Voucher successfully deleted'
+                general_message='Voucher successfully deleted'
             ).get_success_response()
         return CustomResponse(
-            general_message=f'Invalid Voucher'
+            general_message='Invalid Voucher'
         ).get_failure_response()
 
 
@@ -353,6 +389,11 @@ class ExportVoucherLogAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value])
+    @extend_schema(
+        tags=['Dashboard - Karma Voucher'],
+        description="Retrieve Export Voucher Log.",
+        responses={200: VoucherLogSerializer},
+    )
     def get(self, request):
         voucher_serializer = VoucherLog.objects.all()
         voucher_serializer_data = VoucherLogSerializer(
@@ -364,6 +405,9 @@ class ExportVoucherLogAPI(APIView):
 class VoucherBaseTemplateAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Karma Voucher'], description="Retrieve Voucher Base Template.",
+        responses={200: OpenApiResponse(description="XLSX file download")},
+    )
     def get(self, request):
         wb = load_workbook('./excel-templates/voucher_base_template.xlsx')
         ws = wb['Data Definitions']

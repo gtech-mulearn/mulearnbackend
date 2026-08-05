@@ -17,10 +17,17 @@ from utils.utils import DateTimeUtils, send_template_mail
 from .. import integrations_helper
 from . import kkem_helper
 from .kkem_serializer import KKEMAuthorization, KKEMUserSerializer
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
+from rest_framework import serializers as s
 
 
 class KKEMBulkKarmaAPI(APIView):
     @integrations_helper.token_required(IntegrationType.KKEM.value)
+    @extend_schema(
+        tags=['Integrations - Kkem'],
+        description="Retrieve K K E M Bulk Karma.",
+        responses={200: KKEMUserSerializer},
+    )
     def get(self, request):
         base_queryset = (
             User.objects.filter(
@@ -72,6 +79,11 @@ class KKEMBulkKarmaAPI(APIView):
 
 class KKEMIndividualKarmaAPI(APIView):
     @integrations_helper.token_required(IntegrationType.KKEM.value)
+    @extend_schema(
+        tags=['Integrations - Kkem'],
+        description="Retrieve K K E M Individual Karma.",
+        responses={200: KKEMUserSerializer},
+    )
     def get(self, request, muid):
         kkem_user = (
             User.objects.filter(
@@ -93,6 +105,9 @@ class KKEMIndividualKarmaAPI(APIView):
 
 
 class KKEMAuthorizationAPI(APIView):
+    @extend_schema(tags=['Integrations - Kkem'], description="Create K K E M Authorization.",
+        responses={200: OpenApiResponse(description="Authorization created; confirmation email sent.")},
+    )
     def post(self, request):
         request.data["verified"] = False
         kkem_auth_serializer = KKEMAuthorization(
@@ -125,6 +140,15 @@ class KKEMAuthorizationAPI(APIView):
         except CustomException as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
 
+    @extend_schema(tags=['Integrations - Kkem'], description="Partially update K K E M Authorization.",
+        responses={200: inline_serializer(
+            name='KkemAuthorizationPatchResponse',
+            fields={
+                'accessToken': s.CharField(),
+                'refreshToken': s.CharField(),
+            },
+        )},
+    )
     def patch(self, request, token):
         try:
             link_id = integrations_helper.get_authorization_id(token)
@@ -153,6 +177,26 @@ class KKEMAuthorizationAPI(APIView):
 
 
 class KKEMIntegrationLogin(APIView):
+    @extend_schema(tags=['Integrations - Kkem'], description="Create K K E M Integration Login.",
+        responses={200: inline_serializer(
+            name='KkemIntegrationLoginResponse',
+            fields={
+                'accessToken': s.CharField(),
+                'refreshToken': s.CharField(),
+                'data': inline_serializer(
+                    name='KkemIntegrationLoginDataResponse',
+                    fields={
+                        'email': s.CharField(),
+                        'full_name': s.CharField(),
+                        'muid': s.CharField(),
+                        'link_id': s.CharField(),
+                        'verified': s.BooleanField(),
+                    },
+                    allow_null=True, required=False,
+                ),
+            },
+        )},
+    )
     def post(self, request):
         try:
             email_or_muid = request.data.get("emailOrMuid")
@@ -189,6 +233,9 @@ class KKEMIntegrationLogin(APIView):
 
 
 class KKEMdetailsFetchAPI(APIView):
+    @extend_schema(tags=['Integrations - Kkem'], description="Retrieve K K E Mdetails Fetch.",
+        responses={200: OpenApiResponse(description="KKEM jobseeker details returned from the KKEM API.")},
+    )
     def get(self, request, encrypted_data):
         try:
             details = kkem_helper.decrypt_kkem_data(encrypted_data)
@@ -223,6 +270,9 @@ class KKEMdetailsFetchAPI(APIView):
 
 
 class KKEMUserStatusAPI(APIView):
+    @extend_schema(tags=['Integrations - Kkem'], description="Retrieve K K E M User Status.",
+        responses={200: KKEMUserSerializer},
+    )
     def get(self, request, encrypted_data):
         try:
             details = kkem_helper.decrypt_kkem_data(encrypted_data)
@@ -236,6 +286,20 @@ class KKEMUserStatusAPI(APIView):
 
 class HackathonStatsAPI(APIView):
     @integrations_helper.token_required(IntegrationType.KKEM.value)
+    @extend_schema(tags=['Integrations - Kkem'], description="Retrieve Hackathon Stats.",
+        responses={200: inline_serializer(
+            name='KkemHackathonStatResponse',
+            fields={
+                'hackathon': s.CharField(),
+                'registered_people': s.IntegerField(),
+                'shortlisted_people': s.IntegerField(),
+                'selection_criteria': s.CharField(),
+                'total_participants': s.IntegerField(),
+                'winning_team_members': s.IntegerField(),
+            },
+            many=True,
+        )},
+    )
     def get(self, request):
         return CustomResponse(
             response=[

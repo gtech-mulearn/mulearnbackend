@@ -2,7 +2,7 @@ import uuid
 
 from rest_framework import serializers
 
-from db.task import TaskList, TaskType
+from db.task import KarmaActivityLog, TaskList, TaskType
 from utils.permission import JWTUtils
 from utils.utils import DateTimeUtils
 
@@ -13,6 +13,11 @@ class TaskListPublicSerializer(serializers.ModelSerializer):
     type = serializers.CharField(source="type.title")
     level = serializers.CharField(source="level.name", required=False, default=None)
     ig = serializers.CharField(source="ig.name", required=False, default=None)
+    event_id = serializers.CharField(source="event_fk_id", required=False, allow_null=True)
+    company_name = serializers.CharField(
+        source="requested_by.company_profile.name", required=False, default=None
+    )
+    completed = serializers.SerializerMethodField()
 
     class Meta:
         model = TaskList
@@ -29,7 +34,16 @@ class TaskListPublicSerializer(serializers.ModelSerializer):
             "level",
             "ig",
             "event",
+            "event_id",
+            "company_name",
+            "completed",
         ]
+
+    def get_completed(self, obj):
+        completed_task_ids = self.context.get("completed_task_ids")
+        if completed_task_ids is None:
+            return False
+        return obj.id in completed_task_ids
 
 
 class TaskListSerializer(serializers.ModelSerializer):
@@ -38,7 +52,9 @@ class TaskListSerializer(serializers.ModelSerializer):
     level = serializers.CharField(source="level.name", required=False, default=None)
     ig = serializers.CharField(source="ig.name", required=False, default=None)
     org = serializers.CharField(source="org.title", required=False, default=None)
+    event_id = serializers.CharField(source="event_fk_id", required=False, allow_null=True)
     total_karma_gainers = serializers.SerializerMethodField()
+    skills = serializers.SerializerMethodField()
 
     created_by = serializers.CharField(source="created_by.full_name")
     updated_by = serializers.CharField(source="updated_by.full_name")
@@ -61,19 +77,32 @@ class TaskListSerializer(serializers.ModelSerializer):
             "org",
             "ig",
             "event",
+            "event_id",
             "updated_at",
             "updated_by",
             "created_by",
             "created_at",
             "bonus_time",
             "bonus_karma",
+            "skills",
         ]
 
     def get_total_karma_gainers(self, obj):
+        if hasattr(obj, 'total_karma_gainers_count'):
+            return obj.total_karma_gainers_count
         return obj.karma_activity_log_task.filter(appraiser_approved=True).count()
+
+    def get_skills(self, obj):
+        """Get all skills linked to this task"""
+        return [
+            {'id': link.skill.id, 'name': link.skill.name, 'code': link.skill.code}
+            for link in obj.skill_links.all()
+        ]
 
 
 class TaskModifySerializer(serializers.ModelSerializer):
+    event_id = serializers.CharField(source="event_fk_id", required=False, allow_null=True)
+
     class Meta:
         model = TaskList
         fields = (
@@ -95,7 +124,19 @@ class TaskModifySerializer(serializers.ModelSerializer):
             "created_by",
             "bonus_karma",
             "bonus_time",
+            "event_id",
         )
+
+    def validate_event_id(self, value):
+        if not value:
+            return value
+
+        try:
+            uuid.UUID(str(value))
+        except (ValueError, TypeError):
+            raise serializers.ValidationError("Invalid event id.")
+
+        return value
 
 
 class TaskImportSerializer(serializers.ModelSerializer):
@@ -187,6 +228,6 @@ class TaskTypeCreateUpdateSerializer(serializers.ModelSerializer):
         instance.title = updated_title
         user_id = JWTUtils.fetch_user_id(self.context.get("request"))
         instance.updated_by_id = user_id
-        instance.updated_at = (DateTimeUtils.get_current_utc_time(),)
+        instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.save()
         return instance

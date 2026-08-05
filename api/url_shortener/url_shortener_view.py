@@ -10,6 +10,8 @@ from utils.permission import role_required
 from utils.types import RoleType
 from utils.response import CustomResponse
 from utils.utils import CommonUtils
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers as s
 
 
 class UrlShortenerAPI(APIView):
@@ -17,6 +19,12 @@ class UrlShortenerAPI(APIView):
 
     @role_required(
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value]
+    )
+    @extend_schema(
+        tags=['Url Shortener'],
+        description="Create Url Shortener.",
+        request=ShortenUrlsCreateUpdateSerializer,
+        responses={200: ShortenUrlsCreateUpdateSerializer},
     )
     def post(self, request):
 
@@ -41,8 +49,15 @@ class UrlShortenerAPI(APIView):
     @role_required(
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value]
     )
+    @extend_schema(
+        tags=['Url Shortener'],
+        description="Retrieve Url Shortener.",
+        responses={200: ShowShortenUrlsSerializer},
+    )
     def get(self, request):
-        url_shortener_objects = UrlShortener.objects.all().order_by('-created_at')
+        url_shortener_objects = UrlShortener.objects.select_related(
+            "created_by", "updated_by"
+        ).order_by('-created_at')
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             url_shortener_objects,
@@ -78,6 +93,11 @@ class UrlShortenerAPI(APIView):
     @role_required(
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value]
     )
+    @extend_schema(
+        tags=['Url Shortener'],
+        description="Update Url Shortener.",
+        responses={200: ShortenUrlsCreateUpdateSerializer},
+    )
     def put(self, request, url_id):
         url_shortener = UrlShortener.objects.filter(
             id=url_id
@@ -109,6 +129,9 @@ class UrlShortenerAPI(APIView):
     @role_required(
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value]
     )
+    @extend_schema(tags=['Url Shortener'], description="Delete Url Shortener.",
+        responses={200: ShortenUrlsCreateUpdateSerializer},
+    )
     def delete(self, request, url_id):
         url_shortener_object = UrlShortener.objects.filter(
             id=url_id
@@ -131,16 +154,67 @@ class UrlAnalyticsAPI(APIView):
     @role_required(
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value]
     )
+    @extend_schema(tags=['Url Shortener'], description="Retrieve Url Analytics.",
+        responses={200: inline_serializer(
+            name='UrlShortenerAnalyticsResponse',
+            fields={
+                'total_clicks': s.IntegerField(),
+                'created_on': s.CharField(),
+                'browsers': s.JSONField(),
+                'platforms': s.JSONField(),
+                'devices': s.JSONField(),
+                'sources': s.JSONField(),
+                'ip_address': s.JSONField(),
+                'city': s.JSONField(),
+                'region': s.JSONField(),
+                'countries': s.JSONField(),
+                'time_based_data': s.JSONField(),
+                'long_url': s.CharField(),
+                'short_url': s.CharField(),
+                'title': s.CharField(),
+                'created_by': s.CharField(),
+                'updated_by': s.CharField(),
+                'updated_at': s.CharField(),
+            },
+        )},
+    )
     def get(self, request, url_id):
         queryset = UrlShortenerTracker.objects.filter(url_shortener__id=url_id)
         # long and short url
         url_shortener = UrlShortener.objects.filter(id=url_id).first()
 
-        if not queryset.exists():
-            # Return an appropriate response for the case where no records are found
+        if not url_shortener:
+            # The short URL itself does not exist — this is a genuine 404.
             return CustomResponse(
-                general_message="No records found"
-            ).get_failure_response()
+                general_message="Short URL not found"
+            ).get_failure_response(status_code=404)
+
+        if not queryset.exists():
+            # The URL exists but has not been clicked yet. This is a valid empty
+            # state, not an error, so return a 200 with zero-value analytics.
+            # The client renders zeros instead of a failure screen.
+            empty_result = {
+                'total_clicks': 0,
+                'created_on': url_shortener.created_at.strftime('%Y-%m-%d')
+                if getattr(url_shortener, 'created_at', None) else None,
+                'browsers': {},
+                'platforms': {},
+                'devices': {},
+                'sources': {},
+                'ip_address': {},
+                'city': {},
+                'region': {},
+                'countries': {},
+                'time_based_data': {'all_time': []},
+                'long_url': url_shortener.long_url,
+                'short_url': url_shortener.short_url,
+                'title': url_shortener.title,
+                'created_by': getattr(url_shortener.created_by, 'full_name', None),
+                'updated_by': getattr(url_shortener.updated_by, 'full_name', None),
+                'updated_at': url_shortener.updated_at.strftime('%Y-%m-%d')
+                if getattr(url_shortener, 'updated_at', None) else None,
+            }
+            return CustomResponse(response=empty_result).get_success_response()
 
         browsers = {}
         platforms = {}
@@ -187,7 +261,11 @@ class UrlAnalyticsAPI(APIView):
             'time_based_data': time_based_data,
             'long_url': url_shortener.long_url,
             'short_url': url_shortener.short_url,
-            'title': url_shortener.title
+            'title': url_shortener.title,
+            'created_by': getattr(url_shortener.created_by, 'full_name', None),
+            'updated_by': getattr(url_shortener.updated_by, 'full_name', None),
+            'updated_at': url_shortener.updated_at.strftime('%Y-%m-%d')
+            if getattr(url_shortener, 'updated_at', None) else None,
         }
 
         return CustomResponse(response=result).get_success_response()

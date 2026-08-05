@@ -2,7 +2,8 @@ import uuid
 from io import BytesIO
 from tempfile import NamedTemporaryFile
 
-from django.db.models import F, Prefetch, Sum, Q
+from django.db.models import F, Prefetch, Sum, Q, OuterRef, Subquery, IntegerField
+from django.db.models.functions import Coalesce
 from django.http import FileResponse
 from openpyxl import load_workbook
 from rest_framework.views import APIView
@@ -35,12 +36,19 @@ from .serializers import (
     OrganizationVerifySerializer,
     UnverifiedOrganizationsSerializer,
 )
+from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 
 class InstitutionPostUpdateDeleteAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Organisation'],
+        description="Create Institution Post Update Delete.",
+        request=InstitutionCreateUpdateSerializer,
+        responses={200: InstitutionCreateUpdateSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -65,6 +73,11 @@ class InstitutionPostUpdateDeleteAPI(APIView):
         return CustomResponse(general_message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Organisation'],
+        description="Update Institution Post Update Delete.",
+        responses={200: InstitutionCreateUpdateSerializer},
+    )
     def put(self, request, org_code):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -97,7 +110,7 @@ class InstitutionPostUpdateDeleteAPI(APIView):
                 )
 
             if (
-                request.data.get("orgType") != OrganizationType.COMMUNITY.value
+                request.data.get("org_type") != OrganizationType.COMMUNITY.value
                 and old_type == OrganizationType.COMMUNITY.value
             ):
                 DiscordWebhooks.general_updates(
@@ -108,7 +121,7 @@ class InstitutionPostUpdateDeleteAPI(APIView):
 
             if (
                 old_type != OrganizationType.COMMUNITY.value
-                and request.data.get("orgType") == OrganizationType.COMMUNITY.value
+                and request.data.get("org_type") == OrganizationType.COMMUNITY.value
             ):
                 title = request.data.get("title") or old_title
                 DiscordWebhooks.general_updates(
@@ -122,6 +135,9 @@ class InstitutionPostUpdateDeleteAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Dashboard - Organisation'], description="Delete Institution Post Update Delete.",
+        responses={200: InstitutionCreateUpdateSerializer},
+    )
     def delete(self, request, org_code):
         if not (organisation := Organization.objects.filter(code=org_code).first()):
             return CustomResponse(
@@ -146,6 +162,11 @@ class InstitutionPostUpdateDeleteAPI(APIView):
 
 
 class InstitutionAPI(APIView):
+    @extend_schema(
+        tags=['Dashboard - Organisation'],
+        description="Retrieve Institution.",
+        responses={200: InstitutionSerializer},
+    )
     def get(self, request, org_type, district_id=None):
         if district_id:
             organisations = Organization.objects.filter(
@@ -153,6 +174,32 @@ class InstitutionAPI(APIView):
             )
         else:
             organisations = Organization.objects.filter(org_type=org_type)
+
+        params = request.query_params
+        zone_id = params.get("zone_id")
+        state_id = params.get("state_id")
+        country_id = params.get("country_id")
+        affiliation_id = params.get("affiliation_id")
+
+        if zone_id:
+            organisations = organisations.filter(district__zone_id=zone_id)
+        if state_id:
+            organisations = organisations.filter(district__zone__state_id=state_id)
+        if country_id:
+            organisations = organisations.filter(
+                district__zone__state__country_id=country_id
+            )
+        if affiliation_id:
+            organisations = organisations.filter(affiliation_id=affiliation_id)
+
+        karma_subquery = (
+            UserOrganizationLink.objects.filter(
+                org_id=OuterRef("id"), verified=True
+            )
+            .values("org_id")
+            .annotate(total_karma=Sum("user__wallet_user__karma"))
+            .values("total_karma")
+        )
 
         org_queryset = (
             organisations
@@ -166,7 +213,12 @@ class InstitutionAPI(APIView):
                 )
             )
             .annotate(user_count=Count("user_organization_link_org", filter=Q(user_organization_link_org__verified=True)))
-            .order_by("-user_count")  # Sort by highest user_count
+            .annotate(
+                total_karma=Coalesce(
+                    Subquery(karma_subquery, output_field=IntegerField()), 0
+                )
+            )
+            .order_by("-total_karma")  # Sort by highest karma
         )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
@@ -189,6 +241,8 @@ class InstitutionAPI(APIView):
                 "zone": "district__zone__name",
                 "state": "district__zone__state__name",
                 "country": "district__zone__state__country__name",
+                "karma": "total_karma",
+                "user_count": "user_count",
             },
         )
 
@@ -208,15 +262,20 @@ class InstitutionCSVAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Organisation'],
+        description="Retrieve Institution C S V.",
+        responses={200: InstitutionSerializer},
+    )
     def get(self, request, org_type):
         organizations = (
             Organization.objects.filter(org_type=org_type)
             .select_related(
                 "affiliation",
-                # "district__zone__state__country",
-                # "district__zone__state",
-                # "district__zone",
-                # "district",
+                "district__zone__state__country",
+                "district__zone__state",
+                "district__zone",
+                "district",
             )
             .prefetch_related(
                 Prefetch(
@@ -238,6 +297,9 @@ class InstitutionDetailsAPI(APIView):
         [
             RoleType.ADMIN.value,
         ]
+    )
+    @extend_schema(tags=['Dashboard - Organisation'], description="Retrieve Institution Details.",
+        responses={200: InstitutionSerializer},
     )
     def get(self, request, org_code):
         organization = (
@@ -265,6 +327,11 @@ class InstitutionDetailsAPI(APIView):
 
 
 class GetInstitutionsAPI(APIView):
+    @extend_schema(
+        tags=['Dashboard - Organisation'],
+        description="Retrieve Get Institutions.",
+        responses={200: InstitutionSerializer},
+    )
     def get(self, request, org_type, district_id=None):
         if district_id:
             organisations = Organization.objects.filter(
@@ -290,6 +357,11 @@ class AffiliationGetPostUpdateDeleteAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Organisation'],
+        description="Retrieve Affiliation Get Post Update Delete.",
+        responses={200: AffiliationSerializer},
+    )
     def get(self, request):
         affiliation = OrgAffiliation.objects.all()
         paginated_queryset = CommonUtils.get_paginated_queryset(
@@ -303,6 +375,12 @@ class AffiliationGetPostUpdateDeleteAPI(APIView):
         )
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Organisation'],
+        description="Create Affiliation Get Post Update Delete.",
+        request=AffiliationCreateUpdateSerializer,
+        responses={200: AffiliationSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -323,6 +401,11 @@ class AffiliationGetPostUpdateDeleteAPI(APIView):
         return CustomResponse(general_message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Organisation'],
+        description="Update Affiliation Get Post Update Delete.",
+        responses={200: AffiliationCreateUpdateSerializer},
+    )
     def put(self, request, affiliation_id):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -347,6 +430,9 @@ class AffiliationGetPostUpdateDeleteAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Dashboard - Organisation'], description="Delete Affiliation Get Post Update Delete.",
+        responses={200: AffiliationSerializer},
+    )
     def delete(self, request, affiliation_id):
         affiliation = OrgAffiliation.objects.filter(id=affiliation_id).first()
 
@@ -366,6 +452,11 @@ class DepartmentAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Organisation'],
+        description="Retrieve Department.",
+        responses={200: DepartmentSerializer},
+    )
     def get(self, request, dept_id=None):
         if dept_id:
             departments = Department.objects.filter(id=dept_id)
@@ -383,6 +474,12 @@ class DepartmentAPI(APIView):
         )
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Organisation'],
+        description="Create Department.",
+        request=DepartmentSerializer,
+        responses={200: DepartmentSerializer},
+    )
     def post(self, request):
         serializer = DepartmentSerializer(
             data=request.data, context={"request": request}
@@ -398,6 +495,11 @@ class DepartmentAPI(APIView):
         return CustomResponse(response=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Organisation'],
+        description="Update Department.",
+        responses={200: DepartmentSerializer},
+    )
     def put(self, request, department_id):
         department = Department.objects.get(id=department_id)
 
@@ -415,6 +517,9 @@ class DepartmentAPI(APIView):
         return CustomResponse(response=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Dashboard - Organisation'], description="Delete Department.",
+        responses={200: DepartmentSerializer},
+    )
     def delete(self, request, department_id):
         department = Department.objects.get(id=department_id)
 
@@ -426,6 +531,9 @@ class DepartmentAPI(APIView):
 
 class AffiliationListAPI(APIView):
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Dashboard - Organisation'], description="Retrieve Affiliation List.",
+        responses={200: AffiliationSerializer},
+    )
     def get(self, request):
         affiliation = OrgAffiliation.objects.all().values("id", "title")
 
@@ -437,6 +545,11 @@ class InstitutionPrefillAPI(APIView):
         [
             RoleType.ADMIN.value,
         ]
+    )
+    @extend_schema(
+        tags=['Dashboard - Organisation'],
+        description="Retrieve Institution Prefill.",
+        responses={200: InstitutionPrefillSerializer},
     )
     def get(self, request, org_code):
         organization = Organization.objects.filter(code=org_code).first()
@@ -450,6 +563,9 @@ class OrganizationMergerView(APIView):
     permission_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Dashboard - Organisation'], description="Retrieve Organization Merger.",
+        responses={200: OrganizationMergerSerializer},
+    )
     def get(self, request, organisation_id):
         try:
             destination = Organization.objects.get(pk=organisation_id)
@@ -467,6 +583,9 @@ class OrganizationMergerView(APIView):
             ).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Dashboard - Organisation'], description="Partially update Organization Merger.",
+        responses={200: OrganizationMergerSerializer},
+    )
     def patch(self, request, organisation_id):
         try:
             destination = Organization.objects.get(pk=organisation_id)
@@ -488,6 +607,12 @@ class OrganizationMergerView(APIView):
 
 
 class OrganizationKarmaTypeGetPostPatchDeleteAPI(APIView):
+    @extend_schema(
+        tags=['Dashboard - Organisation'],
+        description="Create Organization Karma Type Get Post Patch Delete.",
+        request=OrganizationKarmaTypeGetPostPatchDeleteSerializer,
+        responses={200: OrganizationKarmaTypeGetPostPatchDeleteSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -505,6 +630,12 @@ class OrganizationKarmaTypeGetPostPatchDeleteAPI(APIView):
 
 
 class OrganizationKarmaLogGetPostPatchDeleteAPI(APIView):
+    @extend_schema(
+        tags=['Dashboard - Organisation'],
+        description="Create Organization Karma Log Get Post Patch Delete.",
+        request=OrganizationKarmaLogGetPostPatchDeleteSerializer,
+        responses={200: OrganizationKarmaLogGetPostPatchDeleteSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -525,6 +656,9 @@ class OrganizationKarmaLogGetPostPatchDeleteAPI(APIView):
 class OrganisationBaseTemplateAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Organisation'], description="Retrieve Organisation Base Template.",
+        responses={200: OpenApiResponse(description="XLSX file download")},
+    )
     def get(self, request):
         wb = load_workbook("./excel-templates/organisation_base_template.xlsx")
         ws = wb["Data Definitions"]
@@ -559,6 +693,12 @@ class OrganisationImportAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Organisation'],
+        description="Create Organisation Import.",
+        request=OrganizationImportSerializer,
+        responses={200: OrganizationImportSerializer},
+    )
     def post(self, request):
         try:
             file_obj = request.FILES["organisation_list"]
@@ -707,6 +847,9 @@ class OrganisationImportAPI(APIView):
 
 
 class TransferAPI(APIView):
+    @extend_schema(tags=['Dashboard - Organisation'], description="Create Transfer.",
+        responses={200: OpenApiResponse(description="Organisation transfer success message")},
+    )
     def post(self, request):
         from_code = request.data.get("from_id")
         to_code = request.data.get("to_id")
@@ -729,6 +872,11 @@ class TransferAPI(APIView):
 class UnverifiedOrganizationsListAPI(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Organisation'],
+        description="Retrieve Unverified Organizations List.",
+        responses={200: UnverifiedOrganizationsSerializer},
+    )
     def get(self, request):
         unverified_orgs = (
             UnverifiedOrganization.objects.select_related("created_by", "department")
@@ -742,6 +890,12 @@ class UnverifiedOrganizationsListAPI(APIView):
 class VerifyOrganizationAPI(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Organisation'],
+        description="Create Verify Organization.",
+        request=OrganizationVerifySerializer,
+        responses={200: OrganizationVerifySerializer},
+    )
     def post(self, request, uorg_id):
         user_id = JWTUtils.fetch_user_id(request)
         unverifed_org = UnverifiedOrganization.objects.filter(id=uorg_id).first()

@@ -11,7 +11,8 @@ class DbConfig(AppConfig):
     name = "db"
 
     def ready(self) -> None:
-        # from db import organization
+        # Models are registered via db/models.py, which Django imports
+        # automatically during app population (before ready() runs).
         _ready = super().ready()
         self.check_system_user_exists()
         return _ready

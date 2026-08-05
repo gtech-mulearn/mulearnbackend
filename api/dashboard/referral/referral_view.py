@@ -11,6 +11,7 @@ from utils.types import RefferalType, TasksTypesHashtag
 from utils.utils import DateTimeUtils
 from utils.utils import send_template_mail
 from .referral_serializer import ReferralListSerializer
+from drf_spectacular.utils import extend_schema
 
 FROM_MAIL = config('FROM_MAIL')
 
@@ -18,6 +19,9 @@ FROM_MAIL = config('FROM_MAIL')
 class Referral(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Referral'], description="Create Referral.",
+        responses={200: ReferralListSerializer},
+    )
     def post(self, request):
         receiver_email = request.data.get("email")
         invite_type = request.data.get('invite_type')
@@ -68,6 +72,11 @@ class Referral(APIView):
 class ReferralListAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Referral'],
+        description="Retrieve Referral List.",
+        responses={200: ReferralListSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user_referral_link = UserReferralLink.objects.filter(

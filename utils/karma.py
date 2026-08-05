@@ -70,3 +70,31 @@ def add_karma(
         wallet.updated_at = DateTimeUtils.get_current_utc_time()
         wallet.save()
     return True
+
+
+def remove_karma(
+    user_id: str | list[str], hashtag: str, karma: int | None = None
+):
+    """Reverse karma awarded for a given hashtag (e.g. on report deletion)."""
+    task = TaskList.objects.filter(hashtag=hashtag).first()
+    if not task:
+        return False
+    if not karma:
+        karma = task.karma
+    user_ids = user_id if isinstance(user_id, list) else [user_id]
+    if User.objects.filter(id__in=user_ids).count() != len(user_ids):
+        return False
+    for uid in user_ids:
+        latest = (
+            KarmaActivityLog.objects.filter(user_id=uid, task=task)
+            .order_by("-created_at")
+            .first()
+        )
+        if latest:
+            latest.delete()
+    Wallet.objects.filter(user_id__in=user_ids).update(
+        karma=F("karma") - karma,
+        karma_last_updated_at=DateTimeUtils.get_current_utc_time(),
+        updated_at=DateTimeUtils.get_current_utc_time(),
+    )
+    return True

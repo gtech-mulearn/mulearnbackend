@@ -1,5 +1,7 @@
 from datetime import timedelta
 
+from db.user import UserMentor
+
 from django.db.models import Sum
 from rest_framework import serializers
 
@@ -80,13 +82,17 @@ class StudentLeaderboardSerializer(serializers.ModelSerializer):
     institution = serializers.SerializerMethodField()
     total_karma = serializers.IntegerField(source="wallet_user.karma", default=0)
     full_name = serializers.CharField()
+    profile_pic = serializers.SerializerMethodField()
 
     def get_institution(self, user):
         return user.colleges[0].org.title if user.colleges else None
 
+    def get_profile_pic(self, user):
+        return str(user.profile_pic) if user.profile_pic else None
+
     class Meta:
         model = User
-        fields = ["full_name", "total_karma", "institution"]
+        fields = ["muid", "full_name", "total_karma", "institution", "profile_pic"]
 
 class WadhwaniCollegeLeaderboardSerializer(serializers.Serializer):
     code = serializers.CharField()
@@ -98,3 +104,63 @@ class WadhwaniZoneLeaderboardSerializer(serializers.Serializer):
     zone_name = serializers.CharField()
     total_karma = serializers.IntegerField()
     students = serializers.IntegerField()
+
+
+class IGMentorLeaderboardSerializer(serializers.Serializer):
+    mentor_id = serializers.CharField(source='user.id')
+    mentor_name = serializers.CharField(source='user.full_name')
+    profile_pic = serializers.SerializerMethodField()
+    ig_name = serializers.SerializerMethodField()
+    total_karma = serializers.IntegerField()
+    completed_sessions = serializers.IntegerField()
+    rank = serializers.SerializerMethodField()
+
+    def get_profile_pic(self, obj):
+        return str(obj.user.profile_pic) if obj.user.profile_pic else None
+
+    def get_ig_name(self, obj):
+        ig = self.context.get('ig')
+        return ig.name if ig else None
+
+    def get_rank(self, obj):
+        return self.context.get('rankings', {}).get(obj.user_id, None)
+
+
+class CampusMentorLeaderboardSerializer(serializers.Serializer):
+    mentor_id = serializers.CharField(source='user.id')
+    mentor_name = serializers.CharField(source='user.full_name')
+    profile_pic = serializers.SerializerMethodField()
+    campus_name = serializers.SerializerMethodField()
+    total_karma = serializers.IntegerField()
+    completed_sessions = serializers.IntegerField()
+    rank = serializers.SerializerMethodField()
+
+    def get_profile_pic(self, obj):
+        return str(obj.user.profile_pic) if obj.user.profile_pic else None
+
+    def get_campus_name(self, obj):
+        campus = self.context.get('campus')
+        return campus.title if campus else None
+
+    def get_rank(self, obj):
+        return self.context.get('rankings', {}).get(obj.user_id, None)
+
+
+class CompanyMentorLeaderboardSerializer(serializers.Serializer):
+    mentor_id = serializers.CharField(source='user.id')
+    mentor_name = serializers.CharField(source='user.full_name')
+    profile_pic = serializers.SerializerMethodField()
+    company_name = serializers.SerializerMethodField()
+    total_karma = serializers.IntegerField()
+    completed_sessions = serializers.IntegerField()
+    rank = serializers.SerializerMethodField()
+
+    def get_profile_pic(self, obj):
+        return str(obj.user.profile_pic) if obj.user.profile_pic else None
+
+    def get_company_name(self, obj):
+        company = self.context.get('company')
+        return company.name if company else None
+
+    def get_rank(self, obj):
+        return self.context.get('rankings', {}).get(obj.user_id, None)

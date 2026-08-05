@@ -1,4 +1,4 @@
-from django.urls import path
+﻿from django.urls import path
 
 from . import learningcircle_views
 
@@ -48,4 +48,18 @@ urlpatterns = [
         "meeting/report/<str:meet_id>/",
         learningcircle_views.LearningCircleReportAPI.as_view(),
     ),
+    path(
+        "meeting/report/export/<str:meet_id>/",
+        learningcircle_views.LearningCircleReportExportAPI.as_view(),
+    ),
+    #  New Endpoints 
+    path("user-circles/", learningcircle_views.UserCircleListAPI.as_view()),
+    path("join/<str:circle_id>/", learningcircle_views.CircleJoinAPI.as_view()),
+    path("members/add/<str:circle_id>/", learningcircle_views.CircleMemberAddAPI.as_view()),
+    # Specific invite routes MUST come before the generic invite/<circle_id>/ to avoid swallowing
+    path("invite/status/", learningcircle_views.CircleInviteStatusAPI.as_view()),
+    path("invite/status/<str:link_id>/", learningcircle_views.CircleInviteStatusAPI.as_view()),
+    path("invite/sent/<str:circle_id>/", learningcircle_views.CircleSentInvitesAPI.as_view()),
+    path("invite/<str:circle_id>/", learningcircle_views.CircleInviteAPI.as_view()),
+    path("transfer-lead/<str:circle_id>/", learningcircle_views.CircleTransferLeadAPI.as_view()),
 ]

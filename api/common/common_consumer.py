@@ -12,8 +12,11 @@ from asgiref.sync import async_to_sync
 from db.learning_circle import LearningCircle
 from db.learning_circle import UserCircleLink
 from db.organization import Organization
-from db.task import InterestGroup, KarmaActivityLog
+from db.task import InterestGroup, KarmaActivityLog, UserIgLink
 from db.user import User, UserRoleLink
+from db.organization import UserOrganizationLink
+from db.mentor import MentorshipSession
+from django.core.cache import cache
 
 from utils.types import IntegrationType, OrganizationType
 
@@ -119,7 +122,50 @@ def db_signals(sender, instance, created=None, *args, **kwargs):
     if created or created == None:
         landing_stats.get_data(sender)
         data = landing_stats.data
-        async_to_sync(channel_layer.group_send)(
-            "landing_stats",
-            {"type": "send_data", "data": data}
-        )
+        try:
+            async_to_sync(channel_layer.group_send)(
+                "landing_stats",
+                {"type": "send_data", "data": data}
+            )
+        except Exception as e:
+            pass
+
+def invalidate_scope_cache(scope_type, scope_id):
+    if scope_id:
+        try:
+            cache.delete(f"mentor_dash_scope:{scope_type}:{scope_id}")
+        except Exception:
+            pass
+
+@receiver(post_save, sender=UserOrganizationLink)
+@receiver(post_delete, sender=UserOrganizationLink)
+def handle_org_link_cache(sender, instance, **kwargs):
+    if instance.org_id:
+        invalidate_scope_cache("CAMPUS_MENTOR", instance.org_id)
+        invalidate_scope_cache("COMPANY_MENTOR", instance.org_id)
+
+@receiver(post_save, sender=UserIgLink)
+@receiver(post_delete, sender=UserIgLink)
+def handle_ig_link_cache(sender, instance, **kwargs):
+    if instance.ig_id:
+        invalidate_scope_cache("IG_MENTOR", instance.ig_id)
+
+@receiver(post_save, sender=MentorshipSession)
+@receiver(post_delete, sender=MentorshipSession)
+def handle_session_cache(sender, instance, **kwargs):
+    if instance.entity_id:
+        if instance.session_type == MentorshipSession.SessionType.CAMPUS_SESSION:
+            invalidate_scope_cache("CAMPUS_MENTOR", instance.entity_id)
+        elif instance.session_type == MentorshipSession.SessionType.COMPANY_SESSION:
+            invalidate_scope_cache("COMPANY_MENTOR", instance.entity_id)
+        elif instance.session_type == MentorshipSession.SessionType.IG_SESSION:
+            invalidate_scope_cache("IG_MENTOR", instance.entity_id)
+
+@receiver(post_save, sender=KarmaActivityLog)
+@receiver(post_delete, sender=KarmaActivityLog)
+def handle_karma_cache(sender, instance, **kwargs):
+    if instance.task:
+        if instance.task.org_id:
+            invalidate_scope_cache("COMPANY_MENTOR", instance.task.org_id)
+        if instance.task.ig_id:
+            invalidate_scope_cache("IG_MENTOR", instance.task.ig_id)

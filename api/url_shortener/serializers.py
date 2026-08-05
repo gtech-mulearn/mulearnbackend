@@ -10,10 +10,22 @@ from utils.utils import DateTimeUtils
 
 
 class ShowShortenUrlsSerializer(ModelSerializer):
+    created_by = serializers.ReadOnlyField(source="created_by.full_name")
+    updated_by = serializers.ReadOnlyField(source="updated_by.full_name")
+
     class Meta:
         model = UrlShortener
 
-        fields = ["id", "title", "long_url", "short_url", "created_at"]
+        fields = [
+            "id",
+            "title",
+            "long_url",
+            "short_url",
+            "created_by",
+            "updated_by",
+            "created_at",
+            "updated_at",
+        ]
 
 
 class ShortenUrlsCreateUpdateSerializer(ModelSerializer):

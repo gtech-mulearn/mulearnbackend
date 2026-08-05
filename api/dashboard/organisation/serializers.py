@@ -31,6 +31,7 @@ class InstitutionSerializer(serializers.ModelSerializer):
     state = serializers.ReadOnlyField(source="district.zone.state.name")
     country = serializers.ReadOnlyField(source="district.zone.state.country.name")
     user_count = serializers.SerializerMethodField()
+    total_karma = serializers.SerializerMethodField()
 
     class Meta:
         model = Organization
@@ -44,10 +45,14 @@ class InstitutionSerializer(serializers.ModelSerializer):
             "state",
             "country",
             "user_count",
+            "total_karma",
         ]
 
     def get_user_count(self, obj):
-        return obj.user_organization_link_org.annotate(user_count=Count("user")).count()
+        return obj.user_organization_link_org.filter(verified=True).count()
+
+    def get_total_karma(self, obj):
+        return getattr(obj, "total_karma", 0) or 0
 
 
 # class InstitutionSerializer(serializers.ModelSerializer):
@@ -107,7 +112,7 @@ class DistrictSerializer(serializers.ModelSerializer):
 
 
 class InstitutionCreateUpdateSerializer(serializers.ModelSerializer):
-    district = serializers.CharField(required=False)
+    district = serializers.CharField(required=True)
 
     class Meta:
         model = Organization
@@ -127,12 +132,26 @@ class InstitutionCreateUpdateSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         user_id = self.context.get("user_id")
+        
+        old_org_type = instance.org_type
+        new_org_type = validated_data.get("org_type", old_org_type)
+
         instance.title = validated_data.get("title", instance.title)
         instance.code = validated_data.get("code", instance.code)
+        instance.org_type = new_org_type
         instance.affiliation = validated_data.get("affiliation", instance.affiliation)
         instance.district = validated_data.get("district", instance.district)
         instance.updated_by_id = user_id
         instance.save()
+
+        if old_org_type != new_org_type:
+            if new_org_type == OrganizationType.COLLEGE.value:
+                College.objects.get_or_create(
+                    org=instance, defaults={'created_by_id': user_id, 'updated_by_id': user_id}
+                )
+            elif old_org_type == OrganizationType.COLLEGE.value:
+                College.objects.filter(org=instance).delete()
+
         return instance
 
     def validate_org_type(self, organization):

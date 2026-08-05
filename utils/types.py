@@ -34,6 +34,7 @@ class RoleType(Enum):
     DISTRICT_CAMPUS_LEAD = "District Campus Lead"
     MENTOR = "Mentor"
     INTERN = "Intern"
+    INTERN_LEAD = "Intern Lead"
     CAMPUS_LEAD = "Campus Lead"
     BOT_DEV = "Bot Dev"
     PRE_MEMBER = "Pre Member"
@@ -44,6 +45,9 @@ class RoleType(Enum):
     IG_LEAD = "IG Lead"
     CAMPUS_ACTIVATION_TEAM = "Campus Activation Team"
     LEAD_ENABLER = "Lead Enabler"
+    MULEARNER = "Mulearner"
+    COMPANY = "Company"
+    COMIC_ADMIN = "Comic Admin"
 
     @classmethod
     def IG_CAMPUS_LEAD_ROLE(cls, ig_code: str):
@@ -98,6 +102,14 @@ class RefferalType(Enum):
 
 class IntegrationType(Enum):
     KKEM = "DWMS"
+
+
+class InterestGroupStatus(Enum):
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    REQUESTED = "requested"
+    CANCELLED = "cancelled"
+    REJECTED = "rejected"
 
 
 class TasksTypesHashtag(Enum):
@@ -192,6 +204,16 @@ class LearningCircleRecurrenceType(Enum):
         return [member.value for member in cls]
 
 
+class UnitType(Enum):
+    LEVEL = "level"
+    KARMA = "karma"
+    TASK = "task"
+
+    @classmethod
+    def get_all_values(cls):
+        return [member.value for member in cls]
+
+
 DEFAULT_HACKATHON_FORM_FIELDS = {
     "name": "system",
     "gender": "system",
@@ -203,3 +225,106 @@ DEFAULT_HACKATHON_FORM_FIELDS = {
     "linkedin": "input",
     "bio": "input",
 }
+
+
+class SocialPlatformType(Enum):
+    INSTAGRAM = "instagram"
+    LINKEDIN = "linkedin"
+    TWITTER = "twitter"
+    FACEBOOK = "facebook"
+    YOUTUBE = "youtube"
+    DISCORD = "discord"
+    GITHUB = "github"
+    WEBSITE = "website"
+    OTHER = "other"
+
+    @classmethod
+    def get_all_values(cls):
+        return [member.value for member in cls]
+
+class InternHashtag(Enum):
+    DAILY_LOG_KARMA = 0
+    DAILY_LOG_HASHTAG = "#intern-daily-log"
+    WEEKLY_REVIEW_KARMA = 0
+    WEEKLY_REVIEW_HASHTAG = "#intern-weekly-review"
+    TASK_VERIFIED_HASHTAG = "#intern-task-verified"
+    STREAK_7_KARMA = 7
+    STREAK_7_HASHTAG = "#intern-streak-7"
+    STREAK_14_KARMA = 14
+    STREAK_14_HASHTAG = "#intern-streak-14"
+    STREAK_30_KARMA = 30
+    STREAK_30_HASHTAG = "#intern-streak-30"
+    STREAK_60_KARMA = 60
+    STREAK_60_HASHTAG = "#intern-streak-60"
+    STREAK_90_KARMA = 90
+    STREAK_90_HASHTAG = "#intern-streak-90"
+
+class InternGuild(Enum):
+    FRONTEND = "Frontend Guild"
+    BACKEND = "Backend Guild"
+    DESIGN = "Design Guild"
+    MOBILE = "Mobile Guild"
+
+    @classmethod
+    def get_all_values(cls):
+        return [member.value for member in cls]
+
+class InternTaskCategory(Enum):
+    BACKEND_GUILD = ["Backend API", "Auth API", "Bot", "Database", "DevOps", "Documentation"]
+    FRONTEND_GUILD = ["UI Components", "API Integration", "Bug Fix", "Performance", "Accessibility", "Documentation"]
+    DESIGN_GUILD = ["Wireframes", "Prototyping", "Branding", "Research"]
+
+class InternTaskStatus(Enum):
+    NOT_STARTED = "NOT_STARTED"
+    IN_PROGRESS = "IN_PROGRESS"
+    COMPLETED = "COMPLETED"
+    WAITING_FOR_REVIEW = "WAITING_FOR_REVIEW"
+    ON_HOLD = "ON_HOLD"
+    OVERDUE = "OVERDUE"
+
+    @classmethod
+    def intern_editable(cls):
+        """Statuses an intern can set manually."""
+        return [cls.IN_PROGRESS.value, cls.COMPLETED.value, cls.ON_HOLD.value, cls.WAITING_FOR_REVIEW.value]
+
+    @classmethod
+    def get_all_values(cls):
+        return [member.value for member in cls]
+
+class InternTaskComplexity(Enum):
+    LOW = ("LOW", 1)
+    MEDIUM = ("MEDIUM", 2)
+    HIGH = ("HIGH", 3)
+    CRITICAL = ("CRITICAL", 5)
+
+class InternSubmissionStatus(Enum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+
+class InternLeaveType(Enum):
+    SICK = "SICK"
+    CASUAL = "CASUAL"
+    EMERGENCY = "EMERGENCY"
+    WFH = "WFH"
+
+class InternLeaveStatus(Enum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    CANCELLED = "CANCELLED"
+
+class InternGuildStatus(Enum):
+    ACTIVE = "ACTIVE"
+    AT_RISK = "AT_RISK"
+    ON_LEAVE = "ON_LEAVE"
+    INACTIVE = "INACTIVE"
+
+class InternLeaderboardWeights:
+    """Point-value multipliers for leaderboard scoring.
+    Tunable without code changes - only this class needs updating."""
+    KARMA_MULTIPLIER = 1           # karma value used directly
+    DAILY_STREAK_MULTIPLIER = 50   # each streak day = 50 points
+    WEEKLY_STREAK_MULTIPLIER = 200 # each streak week = 200 points
+    COMPLETED_TASKS_MULTIPLIER = 30  # each completed task = 30 points
+    COMPLEXITY_SCORE_MULTIPLIER = 20 # each complexity point = 20 points
