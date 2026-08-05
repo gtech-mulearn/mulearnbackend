@@ -77,6 +77,26 @@ class LearningCircleView(APIView):
         if ig_id:
             learning_circles = learning_circles.filter(ig_id=ig_id)
 
+        status = request.query_params.get("status")
+        if status:
+            if status == "joined":
+                joined_ids = UserCircleLink.objects.filter(
+                    user_id=user_id, accepted=True
+                ).values_list("circle_id", flat=True)
+                learning_circles = learning_circles.filter(id__in=joined_ids)
+            elif status == "pending":
+                pending_ids = UserCircleLink.objects.filter(
+                    user_id=user_id, accepted__isnull=True
+                ).values_list("circle_id", flat=True)
+                learning_circles = learning_circles.filter(id__in=pending_ids)
+            elif status == "not_joined":
+                member_ids = UserCircleLink.objects.filter(
+                    user_id=user_id,
+                ).filter(
+                    Q(accepted=True) | Q(accepted__isnull=True)
+                ).values_list("circle_id", flat=True)
+                learning_circles = learning_circles.exclude(id__in=member_ids)
+
         paginated_queryset = CommonUtils.get_paginated_queryset(
             learning_circles,
             request,
@@ -91,12 +111,20 @@ class LearningCircleView(APIView):
                 circle_id__in=page_circle_ids,
             ).values_list("circle_id", flat=True)
         )
+        pending_circle_ids = set(
+            UserCircleLink.objects.filter(
+                user_id=user_id,
+                accepted__isnull=True,
+                circle_id__in=page_circle_ids,
+            ).values_list("circle_id", flat=True)
+        )
         serializer = LearningCircleListMinSerializer(
             page,
             many=True,
             context={
                 "user_id": user_id,
                 "joined_circle_ids": joined_circle_ids,
+                "pending_circle_ids": pending_circle_ids,
             },
         )
         return CustomResponse().paginated_response(
