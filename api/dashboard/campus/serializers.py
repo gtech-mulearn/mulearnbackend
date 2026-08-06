@@ -270,7 +270,6 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
 
 
 class CampusStudentDetailsSerializer(serializers.Serializer):
-    user_id = serializers.CharField()
     full_name = serializers.SerializerMethodField()
     muid = serializers.CharField()
     karma = serializers.IntegerField()
@@ -279,8 +278,6 @@ class CampusStudentDetailsSerializer(serializers.Serializer):
     # is_active = serializers.CharField()
     join_date = serializers.CharField()
     last_karma_gained = serializers.CharField()
-    email = serializers.CharField()
-    mobile = serializers.CharField()
     graduation_year = serializers.CharField()
     department = serializers.CharField()
     is_alumni = serializers.BooleanField()
@@ -289,9 +286,6 @@ class CampusStudentDetailsSerializer(serializers.Serializer):
 
     class Meta:
         fields = (
-            "user_id",
-            "email",
-            "mobile",
             "full_name",
             "karma",
             "muid",
