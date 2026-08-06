@@ -118,7 +118,6 @@ class ZonalStudentLevelStatusSerializer(serializers.ModelSerializer):
 
 
 class ZonalStudentDetailsSerializer(serializers.Serializer):
-    user_id = serializers.CharField()
     full_name = serializers.SerializerMethodField()
     muid = serializers.CharField()
     karma = serializers.IntegerField()
@@ -126,7 +125,7 @@ class ZonalStudentDetailsSerializer(serializers.Serializer):
     level = serializers.CharField()
 
     class Meta:
-        fields = ["user_id", "full_name", "karma", "muid", "level", "rank"]
+        fields = ["full_name", "karma", "muid", "level", "rank"]
 
     def get_rank(self, obj):
         ranks = self.context.get("ranks")
@@ -142,17 +141,11 @@ class ZonalCollegeDetailsSerializer(serializers.Serializer):
     code = serializers.CharField()
     level = serializers.CharField()
     lead = serializers.SerializerMethodField()
-    lead_number = serializers.SerializerMethodField()
 
     def get_lead(self, obj):
         leads = self.context.get("leads")
         college_lead = [lead for lead in leads if lead.college == obj["id"]]
         return college_lead[0].full_name if college_lead else None
 
-    def get_lead_number(self, obj):
-        leads = self.context.get("leads")
-        college_lead = [lead for lead in leads if lead.college == obj["id"]]
-        return college_lead[0].mobile if college_lead else None
-
     class Meta:
-        fields = ["id", "title", "code", "level", "lead", "lead_number"]
+        fields = ["id", "title", "code", "level", "lead"]
