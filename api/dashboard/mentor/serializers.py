@@ -3,6 +3,7 @@ from datetime import timedelta
 from rest_framework import serializers
 import re
 from db.user import Socials, UserMentor, UserRoleLink, Role, MentorScopeGrant, MentorApplication, UserSettings, User
+from utils.validators import validate_safe_text, enforce_max_length
 
 
 class MentorScopeGrantSerializer(serializers.ModelSerializer):
@@ -35,8 +36,18 @@ class PersonaSwitchSerializer(serializers.Serializer):
     # Optional: when persona == "mentor" and the caller holds more than one
     # active scope grant, these pick which one to switch into. If omitted,
     # falls back to the most-recently-granted scope (previous behavior).
-    scope_type = serializers.CharField(required=False, allow_null=True)
-    scope_id = serializers.CharField(required=False, allow_null=True)
+    scope_type = serializers.CharField(required=False, allow_null=True, max_length=50)
+    scope_id = serializers.CharField(required=False, allow_null=True, max_length=100)
+
+    def validate_scope_type(self, value):
+        if value:
+            validate_safe_text(value)
+        return value
+
+    def validate_scope_id(self, value):
+        if value:
+            validate_safe_text(value)
+        return value
 
 from db.task import InterestGroup, UserIgLink
 from utils.types import RoleType, OrganizationType
@@ -55,8 +66,8 @@ class MentorRegisterSerializer(serializers.ModelSerializer):
     # to_representation() read path would raise AttributeError trying to
     # access instance.about/.expertise/.hours. to_representation() below
     # fills the read side in manually from the UserMentor profile instead.
-    about = serializers.CharField(required=False, allow_blank=True, allow_null=True, write_only=True)
-    expertise = serializers.CharField(required=False, allow_blank=True, allow_null=True, write_only=True)
+    about = serializers.CharField(required=False, allow_blank=True, allow_null=True, write_only=True, max_length=1000)
+    expertise = serializers.CharField(required=False, allow_blank=True, allow_null=True, write_only=True, max_length=5000)
     hours = serializers.IntegerField(required=False, allow_null=True, min_value=0, write_only=True)
 
     linkedin = serializers.CharField(required=False, allow_blank=True, write_only=True, max_length=255)
@@ -97,10 +108,26 @@ class MentorRegisterSerializer(serializers.ModelSerializer):
         data["hours"] = user_mentor.hours if user_mentor else None
         return data
 
+    def validate_about(self, value):
+        if value:
+            validate_safe_text(value)
+        return value
+
+    def validate_expertise(self, value):
+        if value:
+            validate_safe_text(value)
+        return value
+
+    def validate_reason(self, value):
+        if value:
+            validate_safe_text(value)
+        return value
+
     def validate_preferred_ig_ids(self, value):
         if not value or not isinstance(value, list) or len(value) == 0:
             raise serializers.ValidationError("At least one preferred IG ID must be provided.")
         for ig_id in value:
+            validate_safe_text(str(ig_id))
             if not InterestGroup.objects.filter(id=ig_id).exists():
                 raise serializers.ValidationError(f"Invalid IG ID: {ig_id}")
         return value
@@ -263,9 +290,9 @@ class MentorUpdateSerializer(serializers.ModelSerializer):
     # write_only: MentorApplication has no such attributes — see the same
     # note on MentorRegisterSerializer above. to_representation() below
     # fills the read side in from the UserMentor profile instead.
-    about = serializers.CharField(required=False, allow_blank=True, write_only=True)
-    expertise = serializers.CharField(required=False, allow_blank=True, write_only=True)
-    hours = serializers.IntegerField(required=False, write_only=True)
+    about = serializers.CharField(required=False, allow_blank=True, write_only=True, max_length=1000)
+    expertise = serializers.CharField(required=False, allow_blank=True, write_only=True, max_length=5000)
+    hours = serializers.IntegerField(required=False, allow_null=True, min_value=0, write_only=True)
 
     linkedin = serializers.CharField(required=False, allow_blank=True, write_only=True, max_length=255)
     mentor_tier = serializers.ChoiceField(choices=[
@@ -303,11 +330,27 @@ class MentorUpdateSerializer(serializers.ModelSerializer):
         data["hours"] = user_mentor.hours if user_mentor else None
         return data
 
+    def validate_about(self, value):
+        if value:
+            validate_safe_text(value)
+        return value
+
+    def validate_expertise(self, value):
+        if value:
+            validate_safe_text(value)
+        return value
+
+    def validate_reason(self, value):
+        if value:
+            validate_safe_text(value)
+        return value
+
     def validate_preferred_ig_ids(self, value):
         if value:
             if not isinstance(value, list) or len(value) == 0:
                 raise serializers.ValidationError("At least one preferred IG ID must be provided.")
             for ig_id in value:
+                validate_safe_text(str(ig_id))
                 if not InterestGroup.objects.filter(id=ig_id).exists():
                     raise serializers.ValidationError(f"Invalid IG ID: {ig_id}")
         return value
@@ -532,6 +575,24 @@ class MentorProfileUpdateSerializer(serializers.ModelSerializer):
             "linkedin",
         ]
 
+    def validate_about(self, value):
+        if value:
+            validate_safe_text(value)
+        return value
+
+    def validate_expertise(self, value):
+        if value:
+            validate_safe_text(value)
+            enforce_max_length(value, 5000)
+        return value
+
+    def validate_linkedin(self, value):
+        if value:
+            linkedin_pattern = r'^(https?://)?(www\.)?linkedin\.com/in/[\w\d\-._~:/?#\[\]@!$&\'()*+,;=]+/?$'
+            if not re.match(linkedin_pattern, value):
+                raise serializers.ValidationError("Invalid LinkedIn profile URL format. It should be like https://www.linkedin.com/in/your-profile-name.")
+        return value
+
     def update(self, instance, validated_data):
         user_id = self.context.get("user_id")
         instance.updated_by_id = user_id
@@ -547,7 +608,12 @@ class MentorProfileUpdateSerializer(serializers.ModelSerializer):
 
 class MentorVerifySerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=[MentorApplication.Status.APPROVED, MentorApplication.Status.REJECTED])
-    verification_note = serializers.CharField(required=False, allow_blank=True)
+    verification_note = serializers.CharField(required=False, allow_blank=True, max_length=500)
+
+    def validate_verification_note(self, value):
+        if value:
+            validate_safe_text(value)
+        return value
 
     def validate(self, attrs):
         if attrs.get("status") == MentorApplication.Status.REJECTED and not attrs.get("verification_note"):
@@ -812,6 +878,26 @@ class SessionCreateSerializer(serializers.ModelSerializer):
         """
         return getattr(obj, '_recurrence_truncated', False)
 
+    def validate_title(self, value):
+        validate_safe_text(value)
+        return value
+
+    def validate_description(self, value):
+        if value:
+            validate_safe_text(value)
+            enforce_max_length(value, 5000)
+        return value
+
+    def validate_venue(self, value):
+        if value:
+            validate_safe_text(value)
+        return value
+
+    def validate_meeting_link(self, value):
+        if value:
+            validate_safe_text(value)
+        return value
+
     def validate(self, attrs):
         user_id = self.context.get("user_id")
         session_type = attrs.get('session_type')
@@ -954,6 +1040,26 @@ class SessionUpdateSerializer(serializers.ModelSerializer):
             "venue",
             "max_participants"
         ]
+
+    def validate_title(self, value):
+        validate_safe_text(value)
+        return value
+
+    def validate_description(self, value):
+        if value:
+            validate_safe_text(value)
+            enforce_max_length(value, 5000)
+        return value
+
+    def validate_venue(self, value):
+        if value:
+            validate_safe_text(value)
+        return value
+
+    def validate_meeting_link(self, value):
+        if value:
+            validate_safe_text(value)
+        return value
 
     def validate(self, attrs):
         # Allow partial updates by fetching from instance if not in data
@@ -1173,13 +1279,20 @@ class AvailabilitySlotCreateUpdateSerializer(serializers.ModelSerializer):
             "valid_to"
         ]
 
+    def validate_timezone(self, value):
+        if value:
+            import pytz
+            if value not in pytz.all_timezones_set:
+                raise serializers.ValidationError("Enter a valid IANA timezone name (e.g. Asia/Kolkata).")
+        return value
+
     def validate(self, attrs):
         start_time = attrs.get('start_time', self.instance.start_time if self.instance else None)
         end_time = attrs.get('end_time', self.instance.end_time if self.instance else None)
         weekday = attrs.get('weekday', self.instance.weekday if self.instance else None)
         valid_from = attrs.get('valid_from', self.instance.valid_from if self.instance else None)
         valid_to = attrs.get('valid_to', self.instance.valid_to if self.instance else None)
-        
+
         if start_time and end_time and start_time >= end_time:
             raise serializers.ValidationError("Start time must be before end time.")
             
@@ -1270,7 +1383,11 @@ class ParticipantJoinSerializer(serializers.Serializer):
         return link
 
 class MentorAddParticipantSerializer(serializers.Serializer):
-    muid = serializers.CharField(required=True)
+    muid = serializers.CharField(required=True, max_length=100)
+
+    def validate_muid(self, value):
+        validate_safe_text(value)
+        return value
 
     def create(self, validated_data):
         mentor_id = self.context.get("user_id")
@@ -1393,6 +1510,11 @@ class ParticipantUpdateSerializer(serializers.ModelSerializer):
             "contributed_minutes"
         ]
 
+    def validate_progress_note(self, value):
+        if value:
+            validate_safe_text(value)
+        return value
+
     def validate(self, data):
         contributed_minutes = data.get('contributed_minutes')
         if contributed_minutes is not None and contributed_minutes <= 0:
@@ -1403,6 +1525,12 @@ class ParticipantFeedbackSerializer(serializers.ModelSerializer):
     class Meta:
         model = MentorshipSessionUserLink
         fields = ["feedback", "rating"]
+
+    def validate_feedback(self, value):
+        if value:
+            validate_safe_text(value)
+            enforce_max_length(value, 5000)
+        return value
 
     def validate(self, attrs):
         # Ensure at least one of feedback or rating is being submitted.
@@ -1458,9 +1586,36 @@ class AdminAssignMentorSerializer(serializers.Serializer):
         default=list,
         help_text="List of InterestGroup UUIDs — required for IG_MENTOR tier."
     )
-    about        = serializers.CharField(required=False, allow_blank=True, default=None)
-    expertise    = serializers.CharField(required=False, allow_blank=True, default=None)
+    about        = serializers.CharField(required=False, allow_blank=True, default=None, max_length=1000)
+    expertise    = serializers.CharField(required=False, allow_blank=True, default=None, max_length=5000)
     hours        = serializers.IntegerField(required=False, min_value=0, default=0)
+
+    def validate_user_muids(self, value):
+        for muid in value:
+            validate_safe_text(muid)
+            enforce_max_length(muid, 100)
+        return value
+
+    def validate_org_id(self, value):
+        if value:
+            validate_safe_text(value)
+        return value
+
+    def validate_ig_ids(self, value):
+        for ig_id in value:
+            validate_safe_text(ig_id)
+            enforce_max_length(ig_id, 36)
+        return value
+
+    def validate_about(self, value):
+        if value:
+            validate_safe_text(value)
+        return value
+
+    def validate_expertise(self, value):
+        if value:
+            validate_safe_text(value)
+        return value
 
     def validate(self, attrs):
         from db.user import User
@@ -1651,6 +1806,10 @@ class AdminAssignMentorSerializer(serializers.Serializer):
 class MentorDeactivationSerializer(serializers.Serializer):
     reason = serializers.CharField(required=True, max_length=500)
 
+    def validate_reason(self, value):
+        validate_safe_text(value)
+        return value
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Student session-request serializers
@@ -1686,6 +1845,26 @@ class StudentSessionRequestSerializer(serializers.ModelSerializer):
             "venue",
             "max_participants",
         ]
+
+    def validate_title(self, value):
+        validate_safe_text(value)
+        return value
+
+    def validate_description(self, value):
+        if value:
+            validate_safe_text(value)
+            enforce_max_length(value, 5000)
+        return value
+
+    def validate_venue(self, value):
+        if value:
+            validate_safe_text(value)
+        return value
+
+    def validate_meeting_link(self, value):
+        if value:
+            validate_safe_text(value)
+        return value
 
     def validate(self, attrs):
         from db.task import UserIgLink
@@ -1861,8 +2040,18 @@ class MentorStudentRequestVerifySerializer(serializers.Serializer):
     mode         = serializers.ChoiceField(
         choices=MentorshipSession.Mode.choices, required=False, allow_null=True
     )
-    meeting_link = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    venue        = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    meeting_link = serializers.CharField(required=False, allow_blank=True, allow_null=True, max_length=500)
+    venue        = serializers.CharField(required=False, allow_blank=True, allow_null=True, max_length=255)
+
+    def validate_meeting_link(self, value):
+        if value:
+            validate_safe_text(value)
+        return value
+
+    def validate_venue(self, value):
+        if value:
+            validate_safe_text(value)
+        return value
 
     def validate(self, attrs):
         from django.utils import timezone

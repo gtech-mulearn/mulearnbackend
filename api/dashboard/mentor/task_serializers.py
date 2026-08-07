@@ -4,6 +4,7 @@ from rest_framework import serializers
 
 from db.task import TaskList, InterestGroup, UserIgLink
 from db.skill import Skill, TaskSkillLink
+from utils.validators import validate_safe_text, enforce_max_length
 
 
 class MentorTaskCreateSerializer(serializers.ModelSerializer):
@@ -33,6 +34,7 @@ class MentorTaskCreateSerializer(serializers.ModelSerializer):
 
     def validate_hashtag(self, value):
         """Global hashtag uniqueness — same rule as admin."""
+        validate_safe_text(value)
         qs = TaskList.objects.filter(hashtag=value)
         if self.instance:
             qs = qs.exclude(pk=self.instance.pk)
@@ -40,6 +42,16 @@ class MentorTaskCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "A task with this hashtag already exists."
             )
+        return value
+
+    def validate_title(self, value):
+        validate_safe_text(value)
+        return value
+
+    def validate_description(self, value):
+        if value:
+            validate_safe_text(value)
+            enforce_max_length(value, 5000)
         return value
 
     def validate_ig(self, value):
@@ -79,6 +91,7 @@ class MentorTaskUpdateSerializer(serializers.ModelSerializer):
 
     def validate_hashtag(self, value):
         """Exclude current instance from uniqueness check on edit."""
+        validate_safe_text(value)
         qs = TaskList.objects.filter(hashtag=value)
         if self.instance:
             qs = qs.exclude(pk=self.instance.pk)
@@ -86,6 +99,16 @@ class MentorTaskUpdateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "A task with this hashtag already exists."
             )
+        return value
+
+    def validate_title(self, value):
+        validate_safe_text(value)
+        return value
+
+    def validate_description(self, value):
+        if value:
+            validate_safe_text(value)
+            enforce_max_length(value, 5000)
         return value
 
     def validate_ig(self, value):
