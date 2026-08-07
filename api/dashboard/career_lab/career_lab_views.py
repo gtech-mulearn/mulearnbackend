@@ -121,7 +121,7 @@ class HiringAPI(APIView):
     )
     @role_required(CAREER_LAB_ADMIN_ROLES)
     def get(self, request):
-        queryset = _apply_filters(Hiring.objects.all().order_by("-created_at"), request)
+        queryset = _apply_filters(Hiring.objects.all().order_by("-posted_date"), request)
         paginated_queryset = CommonUtils.get_paginated_queryset(
             queryset, request,
             search_fields=SEARCH_FIELDS,
