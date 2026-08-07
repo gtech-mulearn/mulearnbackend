@@ -843,7 +843,6 @@ class LearningCircleReportExportAPI(APIView):
             [
                 "MuID",
                 "Full Name",
-                "Email",
                 "Report Submitted",
                 "LC Approved",
                 "Report",
@@ -856,7 +855,6 @@ class LearningCircleReportExportAPI(APIView):
                 [
                     clean(user.muid),
                     clean(user.full_name),
-                    clean(user.email),
                     "Yes" if attendee.is_report_submitted else "No",
                     "Yes" if attendee.is_lc_approved else "No",
                     clean(attendee.report_text),
