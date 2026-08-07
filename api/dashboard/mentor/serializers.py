@@ -429,6 +429,16 @@ class MentorApplicationListSerializer(serializers.ModelSerializer):
             "updated_at"
         ]
 
+class MentorApplicationProfileSerializer(MentorApplicationListSerializer):
+    """
+    Same as MentorApplicationListSerializer but for the mentor-facing profile
+    views (/mentor/profile/, /mentor/public/profile/<id>/) where the org name
+    is more useful than its id. Kept separate so the admin-facing endpoints
+    (mentor list/detail, change-requests) are unaffected.
+    """
+    org = serializers.CharField(source='org.title', read_only=True, default=None)
+
+
 class MentorDetailSerializer(serializers.ModelSerializer):
     """
     This serializer is now for the central UserMentor profile.
@@ -436,7 +446,7 @@ class MentorDetailSerializer(serializers.ModelSerializer):
     """
     user_full_name = serializers.CharField(source='user.full_name', read_only=True)
     muid = serializers.CharField(source='user.muid', read_only=True)
-    applications = MentorApplicationListSerializer(many=True, read_only=True, source='user.mentor_applications')
+    applications = MentorApplicationProfileSerializer(many=True, read_only=True, source='user.mentor_applications')
     avg_rating = serializers.SerializerMethodField()
     rating_count = serializers.SerializerMethodField()
 
