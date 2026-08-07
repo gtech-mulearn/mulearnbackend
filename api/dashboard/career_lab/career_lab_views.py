@@ -16,6 +16,10 @@ from . import career_lab_serializers
 
 CAREER_LAB_ADMIN_ROLES = [RoleType.ADMIN.value, RoleType.ASSOCIATE.value]
 
+# Columns present in the exported CSV that are system-managed and must be
+# ignored on re-import so an exported file can be re-imported unchanged.
+SYSTEM_GENERATED_FIELDS = {"id", "created_by", "created_at", "updated_by", "updated_at"}
+
 SEARCH_FIELDS = ["role", "organization", "title", "location"]
 SORT_FIELDS = {
     "lastdate": "lastdate",
@@ -226,6 +230,9 @@ class HiringCSVAPI(APIView):
             "Bulk import hiring postings from a CSV file. "
             "Expected columns: posted_date, role, organization, title, location, lastdate, "
             "applylink, jdlink, duration, remuneration, vacancies, extracontent. "
+            "System-generated columns from an exported CSV (id, created_by, created_at, "
+            "updated_by, updated_at) are ignored if present, so an exported file can be "
+            "re-imported unchanged. "
             "Import is create-only — existing rows are never updated."
         ),
     )
@@ -246,7 +253,11 @@ class HiringCSVAPI(APIView):
         created_count = 0
         row_errors = []
         for row_number, row in enumerate(reader, start=2):
-            cleaned_row = {key: (value if value not in ("", None) else None) for key, value in row.items()}
+            cleaned_row = {
+                key: (value if value not in ("", None) else None)
+                for key, value in row.items()
+                if key not in SYSTEM_GENERATED_FIELDS
+            }
             serializer = career_lab_serializers.HiringCSVRowSerializer(
                 data=cleaned_row, context={"user_id": user_id}
             )
