@@ -393,6 +393,42 @@ class LearningCircleRSVPAPI(APIView):
             general_message="You have successfully RSVP'd for the Circle Meeting"
         ).get_success_response()
 
+    @extend_schema(
+        tags=['Dashboard - Learningcircle'],
+        description="Remove Learning Circle RSVP. Allowed until 30 minutes before the meeting starts.",
+        responses={200: OpenApiResponse(description="RSVP removed successfully. No response body.")},
+    )
+    def delete(self, request, meet_id: str):
+        user_id = JWTUtils.fetch_user_id(request)
+        circle_meeting, error = _get_meeting_or_response(meet_id)
+        if error:
+            return error
+        if not _is_member_or_creator(circle_meeting.circle_id, user_id):
+            return CustomResponse(
+                general_message="Only circle members can modify RSVP for this meeting"
+            ).get_failure_response()
+        attendee = CircleMeetingAttendees.objects.filter(
+            meet_id=circle_meeting, user_id_id=user_id
+        ).first()
+        if not attendee:
+            return CustomResponse(
+                general_message="You have not RSVP'd for this meeting"
+            ).get_failure_response()
+        if attendee.is_joined:
+            return CustomResponse(
+                general_message="Cannot remove RSVP after joining the meeting"
+            ).get_failure_response()
+        now = DateTimeUtils.get_current_utc_time()
+        cutoff_time = circle_meeting.meet_time - timedelta(minutes=30)
+        if now >= cutoff_time:
+            return CustomResponse(
+                general_message="Cannot remove RSVP within 30 minutes of the meeting start time"
+            ).get_failure_response()
+        attendee.delete()
+        return CustomResponse(
+            general_message="Your RSVP has been successfully removed"
+        ).get_success_response()
+
 
 class LearningCircleJoinAPI(APIView):
     permission_classes = [CustomizePermission]
