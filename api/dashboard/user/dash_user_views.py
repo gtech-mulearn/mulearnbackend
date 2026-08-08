@@ -272,7 +272,7 @@ class UserVerificationAPI(APIView):
             "user__user_organization_link_user__org__district",
             "user__user_organization_link_user__department",
             "user__user_ig_link_user__ig",
-            "user__user_mentor_user",
+            "user__mentor_profile",
             "user__company_profile",
         ).filter(
             verified=False
@@ -376,7 +376,7 @@ class UserVerificationCSV(APIView):
             "user__user_organization_link_user__org__district",
             "user__user_organization_link_user__department",
             "user__user_ig_link_user__ig",
-            "user__user_mentor_user",
+            "user__mentor_profile",
             "user__company_profile",
         ).filter(
             verified=False

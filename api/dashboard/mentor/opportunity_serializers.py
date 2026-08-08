@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from db.mentor import IgOpportunity
 from utils.utils import DateTimeUtils
+from utils.validators import validate_safe_text, enforce_max_length
 
 
 class IgOpportunityListSerializer(serializers.ModelSerializer):
@@ -27,6 +28,27 @@ class IgOpportunityCreateSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id"]
 
+    def validate_title(self, value):
+        validate_safe_text(value)
+        return value
+
+    def validate_description(self, value):
+        if value:
+            validate_safe_text(value)
+            enforce_max_length(value, 5000)
+        return value
+
+    def validate_eligibility(self, value):
+        if value:
+            validate_safe_text(value)
+            enforce_max_length(value, 3000)
+        return value
+
+    def validate_application_url(self, value):
+        if value:
+            validate_safe_text(value)
+        return value
+
     def validate(self, data):
         if not data.get("ig") and not data.get("org"):
             raise serializers.ValidationError("Either ig or org must be set.")
@@ -52,6 +74,27 @@ class IgOpportunityUpdateSerializer(serializers.ModelSerializer):
             "title", "description", "eligibility", "application_url",
             "starts_at", "ends_at",
         ]
+
+    def validate_title(self, value):
+        validate_safe_text(value)
+        return value
+
+    def validate_description(self, value):
+        if value:
+            validate_safe_text(value)
+            enforce_max_length(value, 5000)
+        return value
+
+    def validate_eligibility(self, value):
+        if value:
+            validate_safe_text(value)
+            enforce_max_length(value, 3000)
+        return value
+
+    def validate_application_url(self, value):
+        if value:
+            validate_safe_text(value)
+        return value
 
     def update(self, instance, validated_data):
         user_id = self.context["user_id"]
