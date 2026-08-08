@@ -61,7 +61,10 @@ class RuleEvaluator:
             "achievement"
         )
 
+        rule_achievement_ids = set()
         for rule in active_rules:
+            rule_achievement_ids.add(str(rule.achievement_id))
+
             # Skip if already claimed
             if str(rule.achievement_id) in claimed_ids:
                 continue
@@ -69,6 +72,10 @@ class RuleEvaluator:
             result = self.evaluate_rule(rule)
             if result.eligible:
                 results.append(result)
+
+        results.extend(
+            self._get_manually_granted_results(claimed_ids, rule_achievement_ids)
+        )
 
         return results
 
@@ -93,13 +100,50 @@ class RuleEvaluator:
             "achievement"
         )
 
+        rule_achievement_ids = set()
         for rule in active_rules:
+            rule_achievement_ids.add(str(rule.achievement_id))
             result = self.evaluate_rule(rule)
             # Mark if already claimed without overriding the rule-based eligibility
             if str(rule.achievement_id) in claimed_ids:
                 result.claimed = True
                 result.reason = "Already claimed"
             results.append(result)
+
+        results.extend(
+            self._get_manually_granted_results(claimed_ids, rule_achievement_ids)
+        )
+
+        return results
+
+    def _get_manually_granted_results(
+        self, claimed_ids: set, rule_achievement_ids: set
+    ) -> List[EligibilityResult]:
+        """
+        Achievements with a pending admin-granted eligibility (e.g. from
+        bulk-issue of VC achievements), not already covered by a rule.
+        """
+        from db.achievement import AchievementEligibilityGrant
+
+        grants = AchievementEligibilityGrant.objects.filter(
+            user_id=self.user_id, status="pending"
+        ).select_related("achievement")
+
+        results = []
+        for grant in grants:
+            achievement_id = str(grant.achievement_id)
+            if achievement_id in claimed_ids or achievement_id in rule_achievement_ids:
+                continue
+
+            results.append(
+                EligibilityResult(
+                    eligible=True,
+                    achievement_id=achievement_id,
+                    achievement_name=grant.achievement.name,
+                    rule_version=0,
+                    reason="Manually granted",
+                )
+            )
 
         return results
 
