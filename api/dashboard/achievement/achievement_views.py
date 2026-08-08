@@ -1108,40 +1108,64 @@ class AchievementIssueBulkAPIView(APIView):
             ach_idx = headers.index('achievement_id')
             
             success_count = 0
+            eligibility_granted_count = 0
             failed_rows = []
-            
-            from mu_celery.achievement_tasks import manual_issue_achievement
 
-            for i, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
+            from mu_celery.achievement_tasks import manual_issue_achievement, grant_achievement_eligibility
+
+            rows = list(sheet.iter_rows(min_row=2, values_only=True))
+            achievement_ids = {str(row[ach_idx]) for row in rows if row[ach_idx]}
+            achievements_by_id = {
+                achievement.id: achievement
+                for achievement in Achievement.objects.filter(id__in=achievement_ids)
+            }
+
+            for i, row in enumerate(rows, start=2):
                 muid = row[muid_idx]
                 achievement_id = row[ach_idx]
-                
+
                 if not muid or not achievement_id:
                     continue
-                     
+
                 try:
+                    achievement = achievements_by_id.get(str(achievement_id))
+                    if not achievement:
+                        failed_rows.append({"row": i, "muid": muid, "reason": "Achievement not found"})
+                        continue
+
                     user = User.objects.filter(muid=muid).first()
                     if not user:
                         failed_rows.append({"row": i, "muid": muid, "reason": "User not found"})
                         continue
 
-                    result = manual_issue_achievement(
-                        user_id=str(user.id),
-                        achievement_id=str(achievement_id),
-                        performed_by=user_id
-                    )
-                    
-                    if result['success']:
-                        success_count += 1
+                    if achievement.has_vc:
+                        result = grant_achievement_eligibility(
+                            user_id=str(user.id),
+                            achievement_id=str(achievement_id),
+                            granted_by=user_id,
+                        )
+                        if result['success']:
+                            eligibility_granted_count += 1
+                        else:
+                            failed_rows.append({"row": i, "muid": muid, "reason": result['message']})
                     else:
-                        failed_rows.append({"row": i, "muid": muid, "reason": result['message']})
-                        
+                        result = manual_issue_achievement(
+                            user_id=str(user.id),
+                            achievement_id=str(achievement_id),
+                            performed_by=user_id
+                        )
+                        if result['success']:
+                            success_count += 1
+                        else:
+                            failed_rows.append({"row": i, "muid": muid, "reason": result['message']})
+
                 except Exception as e:
                     failed_rows.append({"row": i, "muid": muid, "reason": str(e)})
 
             return CustomResponse(
                 response={
                     "success_count": success_count,
+                    "eligibility_granted_count": eligibility_granted_count,
                     "failed_count": len(failed_rows),
                     "failed_rows": failed_rows
                 },
