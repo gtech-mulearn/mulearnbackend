@@ -353,18 +353,25 @@ class UserVerificationSerializer(serializers.ModelSerializer):
             # UserMentor is now a OneToOneField — the reverse accessor is a
             # single object (or raises DoesNotExist), not a related manager.
             try:
-                mentor = obj.user.user_mentor_user
+                mentor = obj.user.mentor_profile
             except Exception:
                 mentor = None
             if mentor:
                 from api.dashboard.mentor.dash_mentor_helper import get_mentor_scopes
+                from db.user import MentorApplication
+
                 scopes = get_mentor_scopes(obj.user_id)
+                # "reason" lives on MentorApplication, not UserMentor — pull it
+                # from the user's most recent application.
+                latest_application = MentorApplication.objects.filter(
+                    user_id=obj.user_id
+                ).order_by('-created_at').first()
                 return {
                     "type": "mentor",
                     "tiers": sorted({scope_type for scope_type, _ in scopes}),
                     "about": mentor.about,
                     "expertise": mentor.expertise,
-                    "reason": mentor.reason,
+                    "reason": latest_application.reason if latest_application else None,
                     "hours_available": mentor.hours,
                     "is_active": mentor.is_active,
                 }
