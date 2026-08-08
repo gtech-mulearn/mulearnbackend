@@ -70,7 +70,7 @@ class JobCreateSerializer(serializers.ModelSerializer):
         validated_data['created_by_id'] = user_id
         validated_data['updated_by_id'] = user_id
 
-        job = CompanyJob.objects.create(company=company, created_by_id=user_id, **validated_data)
+        job = CompanyJob.objects.create(company=company, **validated_data)
 
         for rule_data in rules_data:
             CompanyJobRule.objects.create(job=job, **rule_data)
