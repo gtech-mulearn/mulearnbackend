@@ -178,7 +178,8 @@ def claim_achievement(user_id: str, achievement_id: str) -> dict:
     )
 
     if not rule:
-        return {"success": False, "message": "No active rule for this achievement"}
+        # No rule - fall back to an admin-granted eligibility (e.g. from bulk-issue)
+        return _claim_via_eligibility_grant(user_id, achievement_id)
 
     # Evaluate eligibility
     evaluator = RuleEvaluator(user_id)
@@ -209,6 +210,102 @@ def claim_achievement(user_id: str, achievement_id: str) -> dict:
         }
     else:
         return {"success": False, "message": "Failed to claim achievement"}
+
+
+def _claim_via_eligibility_grant(user_id: str, achievement_id: str) -> dict:
+    """
+    Claim an achievement that has no active rule, using a pending
+    admin-granted eligibility (created by bulk-issue for VC achievements).
+    """
+    from db.achievement import Achievement, AchievementEligibilityGrant
+
+    grant = AchievementEligibilityGrant.objects.filter(
+        user_id=user_id, achievement_id=achievement_id, status="pending"
+    ).first()
+
+    if not grant:
+        return {"success": False, "message": "No active rule for this achievement"}
+
+    success = _issue_achievement(
+        user_id=user_id,
+        achievement_id=achievement_id,
+        rule_version=0,
+        source="manual_grant_claim",
+    )
+
+    if not success:
+        return {"success": False, "message": "Failed to claim achievement"}
+
+    grant.status = "claimed"
+    grant.save(update_fields=["status", "updated_at"])
+
+    achievement = Achievement.objects.get(id=achievement_id)
+    return {
+        "success": True,
+        "message": "Achievement claimed successfully!",
+        "vc_pending": achievement.has_vc,
+        "achievement_name": achievement.name,
+    }
+
+
+def grant_achievement_eligibility(
+    user_id: str,
+    achievement_id: str,
+    granted_by: str,
+) -> dict:
+    """
+    Grant a user eligibility to claim an achievement (admin operation, e.g.
+    bulk-issue of VC achievements) without issuing it directly. The user
+    claims it themselves later - picking their DID and issuing the VC.
+    """
+    from db.achievement import Achievement, AchievementEligibilityGrant, UserAchievementsLog
+
+    if UserAchievementsLog.objects.filter(
+        user_id=user_id, achievement_id=achievement_id
+    ).exists():
+        return {"success": False, "message": "Achievement already issued"}
+
+    try:
+        with transaction.atomic():
+            existing = (
+                AchievementEligibilityGrant.objects.select_for_update()
+                .filter(user_id=user_id, achievement_id=achievement_id)
+                .first()
+            )
+
+            if existing:
+                if existing.status == "pending":
+                    return {"success": False, "message": "Already eligible"}
+
+                # revoked (or claimed but the issued log was separately
+                # deleted) - re-grant by resetting the existing row instead
+                # of inserting a new one (unique_together blocks that).
+                existing.status = "pending"
+                existing.granted_by_id = granted_by
+                existing.source = "bulk_issue"
+                existing.updated_at = datetime.now()
+                existing.save(
+                    update_fields=["status", "granted_by", "source", "updated_at"]
+                )
+            else:
+                AchievementEligibilityGrant.objects.create(
+                    id=str(uuid.uuid4()),
+                    user_id=user_id,
+                    achievement_id=achievement_id,
+                    status="pending",
+                    granted_by_id=granted_by,
+                    source="bulk_issue",
+                    created_at=datetime.now(),
+                    updated_at=datetime.now(),
+                )
+    except IntegrityError:
+        return {"success": False, "message": "Already eligible"}
+
+    achievement = Achievement.objects.get(id=achievement_id)
+    return {
+        "success": True,
+        "message": f"Eligibility granted for '{achievement.name}'",
+    }
 
 
 def _issue_achievement(
@@ -391,14 +488,23 @@ def revoke_achievement(
     """
     Revoke an achievement (admin operation).
     """
-    from db.achievement import UserAchievementsLog, AchievementAuditLog
+    from db.achievement import UserAchievementsLog, AchievementAuditLog, AchievementEligibilityGrant
 
     achievement_log = UserAchievementsLog.objects.filter(
         user_id=user_id, achievement_id=achievement_id
     ).first()
 
     if not achievement_log:
-        return {"success": False, "message": "Achievement not found for user"}
+        grant = AchievementEligibilityGrant.objects.filter(
+            user_id=user_id, achievement_id=achievement_id, status="pending"
+        ).first()
+
+        if not grant:
+            return {"success": False, "message": "Achievement not found for user"}
+
+        grant.status = "revoked"
+        grant.save(update_fields=["status", "updated_at"])
+        return {"success": True, "message": "Eligibility grant revoked successfully"}
 
     # Delete the achievement log
     achievement_log.delete()

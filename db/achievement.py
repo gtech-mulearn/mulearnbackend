@@ -74,6 +74,48 @@ class UserAchievementsLog(models.Model):
         unique_together = [["user_id", "achievement_id"]]
 
 
+class AchievementEligibilityGrant(models.Model):
+    """
+    Admin-granted eligibility for an achievement (e.g. from bulk-issue of
+    VC achievements). Lets a user claim the achievement themselves - picking
+    their DID and issuing the VC - instead of it being force-issued.
+    """
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("claimed", "Claimed"),
+        ("revoked", "Revoked"),
+    ]
+
+    id = models.CharField(primary_key=True, default=uuid.uuid4, max_length=36)
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="achievement_eligibility_grants",
+        db_column="user_id",
+    )
+    achievement = models.ForeignKey(
+        Achievement,
+        on_delete=models.CASCADE,
+        related_name="eligibility_grants",
+        db_column="achievement_id",
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+    granted_by = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="achievement_eligibility_grants_given",
+        db_column="granted_by",
+    )
+    source = models.CharField(max_length=30, default="bulk_issue")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "achievement_eligibility_grant"
+        managed = False
+        unique_together = [["user", "achievement"]]
+
+
 # ============================================================================
 # NEW MODELS FOR ACHIEVEMENT SYSTEM
 # ============================================================================
