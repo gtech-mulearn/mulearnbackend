@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(python -m py_compile api/dashboard/user/dash_user_views.py api/dashboard/user/dash_user_serializer.py)",
-      "Bash(./venv/Scripts/python.exe -c ' *)"
-    ]
-  }
-}
