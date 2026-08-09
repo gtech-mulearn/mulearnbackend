@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "db",
     "drf_spectacular",
+    "mu_events.apps.MuEventsConfig",
 ]
 
 MIDDLEWARE = [
@@ -174,6 +175,11 @@ CACHES = {
 
 CELERY_BROKER_URL = f"redis://{REDIS_HOST}:{REDIS_PORT}/2"
 CELERY_RESULT_BACKEND = f"redis://{REDIS_HOST}:{REDIS_PORT}/2"
+
+# μCoin integration (mu_events app). Both default to empty, which makes the
+# dispatcher a clean no-op until the deployment is configured.
+MUCOIN_INGEST_URL = decouple_config("MUCOIN_INGEST_URL", default="")
+MUCOIN_WEBHOOK_SECRET = decouple_config("MUCOIN_WEBHOOK_SECRET", default="")
 
 # Use the Redis cache as the default cache
 CACHES["default"] = CACHES["redis"]
@@ -345,5 +351,9 @@ CELERY_BEAT_SCHEDULE = {
     'transition-event-statuses': {
         'task': 'mu_celery.event_cron.transition_event_statuses_task',
         'schedule': crontab(hour=0, minute=35),
+    },
+    'dispatch-mucoin-events': {
+        'task': 'mu_celery.mucoin_events.dispatch_mucoin_events',
+        'schedule': crontab(minute='*'),
     },
 }

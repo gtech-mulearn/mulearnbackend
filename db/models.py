@@ -27,6 +27,7 @@ from db import (  # noqa: F401
     launchpad,
     learning_circle,
     mentor,
+    mu_events,
     notification,
     organization,
     projects,
