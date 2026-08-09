@@ -277,14 +277,14 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     def get_interest_groups(self, obj):
         
-        # Get all IGs where user has a level entry (has interacted with this IG)
-        user_ig_levels = UserIgLvlLink.objects.filter(user=obj).select_related('ig', 'level')
-        
         # Get user's currently selected IGs
         selected_ig_ids = set(
             UserIgLink.objects.filter(user=obj, is_active=True, assignment_type=UserIgLink.AssignmentType.LEARNER).values_list('ig_id', flat=True)
         )
-        
+
+        # Get level entries only for IGs the user currently has selected
+        user_ig_levels = UserIgLvlLink.objects.filter(user=obj, ig_id__in=selected_ig_ids).select_related('ig', 'level')
+
         interest_groups = []
         for ig_level_link in user_ig_levels:
             # Calculate IG-specific karma

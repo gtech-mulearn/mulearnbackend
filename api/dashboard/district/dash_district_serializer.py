@@ -128,7 +128,6 @@ class DistrictStudentLevelStatusSerializer(serializers.ModelSerializer):
 
 
 class DistrictStudentDetailsSerializer(serializers.Serializer):
-    user_id = serializers.CharField()
     full_name = serializers.SerializerMethodField()
     muid = serializers.CharField()
     karma = serializers.IntegerField()
@@ -137,7 +136,6 @@ class DistrictStudentDetailsSerializer(serializers.Serializer):
 
     class Meta:
         fields = (
-            "user_id",
             "full_name",
             "karma",
             "muid",
@@ -159,7 +157,6 @@ class DistrictCollegeDetailsSerializer(serializers.Serializer):
     code = serializers.CharField()
     level = serializers.CharField()
     lead = serializers.SerializerMethodField()
-    lead_number = serializers.SerializerMethodField()
 
     class Meta:
         fields = (
@@ -168,15 +165,9 @@ class DistrictCollegeDetailsSerializer(serializers.Serializer):
             'level',
             'code',
             'lead',
-            'lead_number',
         )
 
     def get_lead(self, obj):
         leads = self.context.get("leads")
         college_lead = [lead for lead in leads if lead.college == obj["id"]]
         return college_lead[0].full_name if college_lead else None
-
-    def get_lead_number(self, obj):
-        leads = self.context.get("leads")
-        college_lead = [lead for lead in leads if lead.college == obj["id"]]
-        return college_lead[0].mobile if college_lead else None
