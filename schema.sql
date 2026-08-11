@@ -2048,7 +2048,7 @@ CREATE TABLE `user_mentor` (
   `user_id` varchar(36) NOT NULL,
   `about` varchar(1000) DEFAULT NULL,
   `reason` varchar(1000) DEFAULT NULL,
-  `hours` int NOT NULL,
+  `hours` varchar(20) DEFAULT NULL,
   `updated_by` varchar(36) NOT NULL,
   `updated_at` datetime DEFAULT NULL,
   `created_by` varchar(36) NOT NULL,

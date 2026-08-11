@@ -79,7 +79,7 @@ class MentorPersonalAnalyticsAPI(APIView):
             "sessions": session_counts,
             "karma_earned": karma_earned,
             "hours_contributed": round(contributed_minutes / 60, 2),
-            "profile_hours": mentor_profile.hours if mentor_profile else 0,
+            "profile_hours": mentor_profile.hours if mentor_profile else None,
             "rating": {
                 "average": rating_aggregate["average"],
                 "count": rating_aggregate["count"] or 0,
@@ -109,7 +109,6 @@ class MentorProfileCompletionAPI(APIView):
         checklist = {
             "about": bool(mentor_profile and mentor_profile.about),
             "expertise": bool(mentor_profile and mentor_profile.expertise),
-            "hours": bool(mentor_profile and mentor_profile.hours),
             "linkedin": bool(socials and socials.linkedin),
         }
 

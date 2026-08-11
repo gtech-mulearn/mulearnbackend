@@ -68,7 +68,9 @@ class MentorRegisterSerializer(serializers.ModelSerializer):
     # fills the read side in manually from the UserMentor profile instead.
     about = serializers.CharField(required=False, allow_blank=True, allow_null=True, write_only=True, max_length=1000)
     expertise = serializers.CharField(required=False, allow_blank=True, allow_null=True, write_only=True, max_length=5000)
-    hours = serializers.IntegerField(required=False, allow_null=True, min_value=0, write_only=True)
+    hours = serializers.ChoiceField(
+        choices=UserMentor.HoursCommitment.choices, required=False, allow_null=True, write_only=True
+    )
 
     linkedin = serializers.CharField(required=False, allow_blank=True, write_only=True, max_length=255)
     mentor_tier = serializers.ChoiceField(choices=[
@@ -292,7 +294,9 @@ class MentorUpdateSerializer(serializers.ModelSerializer):
     # fills the read side in from the UserMentor profile instead.
     about = serializers.CharField(required=False, allow_blank=True, write_only=True, max_length=1000)
     expertise = serializers.CharField(required=False, allow_blank=True, write_only=True, max_length=5000)
-    hours = serializers.IntegerField(required=False, allow_null=True, min_value=0, write_only=True)
+    hours = serializers.ChoiceField(
+        choices=UserMentor.HoursCommitment.choices, required=False, allow_null=True, write_only=True
+    )
 
     linkedin = serializers.CharField(required=False, allow_blank=True, write_only=True, max_length=255)
     mentor_tier = serializers.ChoiceField(choices=[
@@ -1588,7 +1592,9 @@ class AdminAssignMentorSerializer(serializers.Serializer):
     )
     about        = serializers.CharField(required=False, allow_blank=True, default=None, max_length=1000)
     expertise    = serializers.CharField(required=False, allow_blank=True, default=None, max_length=5000)
-    hours        = serializers.IntegerField(required=False, min_value=0, default=0)
+    hours        = serializers.ChoiceField(
+        choices=UserMentor.HoursCommitment.choices, required=False, allow_null=True, default=None
+    )
 
     def validate_user_muids(self, value):
         for muid in value:
@@ -1705,7 +1711,7 @@ class AdminAssignMentorSerializer(serializers.Serializer):
                 profile_data = {
                     "about": validated_data.get("about"),
                     "expertise": validated_data.get("expertise"),
-                    "hours": validated_data.get("hours", 0),
+                    "hours": validated_data.get("hours"),
                 }
                 UserMentor.objects.get_or_create(
                     user=user,
