@@ -152,7 +152,7 @@ class MentorSerializer(serializers.ModelSerializer):
     user = serializers.CharField(required=False)
     about = serializers.CharField(required=False)
     reason = serializers.CharField(required=False)
-    hours = serializers.IntegerField(required=False)
+    hours = serializers.ChoiceField(choices=UserMentor.HoursCommitment.choices, required=False, allow_null=True)
 
     def create(self, validated_data):
         about = validated_data.get("about", None)
@@ -167,7 +167,7 @@ class MentorSerializer(serializers.ModelSerializer):
             defaults={
                 "about": about,
                 "reason": reason,
-                "hours": hours or 0,
+                "hours": hours,
                 "created_by": validated_data["user"],
                 "created_at": DateTimeUtils.get_current_utc_time(),
                 "updated_by": validated_data["user"],

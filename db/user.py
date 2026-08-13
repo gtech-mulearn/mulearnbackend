@@ -144,6 +144,13 @@ class UserEndgoals(models.Model):
         
 
 class UserMentor(models.Model):
+    class HoursCommitment(models.TextChoices):
+        RANGE_0_1 = '0-1', '0-1 hours'
+        RANGE_1_2 = '1-2', '1-2 hours'
+        RANGE_2_5 = '2-5', '2-5 hours'
+        RANGE_5_10 = '5-10', '5-10 hours'
+        RANGE_10_PLUS = '10+', '10+ hours'
+
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     user = models.OneToOneField(
         User,
@@ -155,7 +162,10 @@ class UserMentor(models.Model):
 
     expertise = models.TextField(blank=True, null=True)
 
-    hours = models.PositiveIntegerField(default=0)
+    # Weekly time-commitment bucket the mentor self-selects (e.g. "0-1
+    # hours") rather than a raw number — optional, never required for
+    # registration or profile completion.
+    hours = models.CharField(max_length=20, choices=HoursCommitment.choices, blank=True, null=True)
 
     is_active = models.BooleanField(default=True)
 

@@ -677,7 +677,7 @@ class CompanyMentorApplySerializer(serializers.Serializer):
     about = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     expertise = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     reason = serializers.CharField(required=False, allow_blank=True)
-    hours = serializers.IntegerField(required=False, allow_null=True, min_value=0)
+    hours = serializers.ChoiceField(choices=UserMentor.HoursCommitment.choices, required=False, allow_null=True)
 
     def validate(self, data):
         user_id = self.context.get("user_id")
@@ -743,7 +743,7 @@ class CompanyMentorApplySerializer(serializers.Serializer):
                 defaults={
                     "about": about,
                     "expertise": expertise,
-                    "hours": hours or 0,
+                    "hours": hours,
                     "created_by_id": user_id,
                     "updated_by_id": user_id,
                 },
