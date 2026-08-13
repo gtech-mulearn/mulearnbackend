@@ -129,6 +129,7 @@ def get_karma_breakdown(user_id):
 class UserProfileSerializer(serializers.ModelSerializer):
     joined = serializers.DateTimeField(source="created_at")
     level = serializers.CharField(source="user_lvl_link_user.level.name", default=None)
+    grit = serializers.IntegerField(source="user_lvl_link_user.grit", default=None)
     is_public = serializers.BooleanField(
         source="user_settings_user.is_public", default=None
     )
@@ -162,6 +163,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "rank",
             "karma_distribution",
             "level",
+            "grit",
             "profile_pic",
             "cover_pic",
             "interest_groups",
