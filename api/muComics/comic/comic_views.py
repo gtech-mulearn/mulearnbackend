@@ -3,12 +3,13 @@ Comic CRUD views.
 
 Endpoints:
   GET    /muComics/comics/                      → list (paginated, search, filter, sort)
-  POST   /muComics/comics/                      → create
+  POST   /muComics/comics/                      → create (admin only)
   GET    /muComics/comics/<comic_id>/            → detail
   PATCH  /muComics/comics/<comic_id>/            → partial update (creator or editor)
   DELETE /muComics/comics/<comic_id>/            → soft delete (creator only)
   POST   /muComics/comics/<comic_id>/publish/    → draft → published (creator only)
   POST   /muComics/comics/<comic_id>/archive/    → published/draft → archived (creator only)
+  POST   /muComics/comics/<comic_id>/unarchive/  → archived → draft (creator only)
 """
 
 from django.utils import timezone
@@ -76,7 +77,7 @@ def can_edit_comic(user_id, comic):
 class ComicListCreateView(APIView):
     """
     GET  /muComics/comics/  → paginated list with search, status filter, sort
-    POST /muComics/comics/  → create a new comic (any authenticated user)
+    POST /muComics/comics/  → create a new comic (admin only)
     """
     authentication_classes = [CustomizePermission]
 
@@ -110,7 +111,7 @@ class ComicListCreateView(APIView):
                 ).distinct()
 
         paginated = CommonUtils.get_paginated_queryset(
-            queryset.select_related('created_by').prefetch_related('genre_links__genre'),
+            queryset.select_related('created_by').prefetch_related('genre_links__genre', 'contributor_links__user'),
             request,
             search_fields=['title'],
             sort_fields={
@@ -130,12 +131,18 @@ class ComicListCreateView(APIView):
 
     @extend_schema(
         tags=['muComics'],
-        description="Create a new comic. Any authenticated user may create a comic. Returns the full comic detail on success.",
+        description="Create a new comic. Only admins may create. The creator is specified via creator_muid. Returns the full comic detail on success.",
         request=ComicWriteSerializer,
         responses={200: ComicDetailSerializer},
     )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
+
+        # Only admins can create comics
+        if RoleType.ADMIN.value not in JWTUtils.fetch_role(request):
+            return CustomResponse(
+                general_message='Only admins can create comics.'
+            ).get_unauthorized_response()
 
         serializer = ComicWriteSerializer(
             data=request.data,
@@ -395,6 +402,63 @@ class ComicArchiveView(APIView):
         return CustomResponse(
             general_message=f'Comic "{comic.title}" archived successfully.',
             response={'id': comic.id, 'status': Comic.Status.ARCHIVED},
+        ).get_success_response()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# UNARCHIVE
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ComicUnarchiveView(APIView):
+    """
+    POST /muComics/comics/<comic_id>/unarchive/
+    Transitions an archived comic back to draft (creator only).
+
+    Workflow:
+        archived  → draft  ✅
+        draft     → ❌  (not archived)
+        published → ❌  (not archived)
+    """
+    authentication_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['muComics'],
+        description="Unarchive an archived comic (archived → draft). Only the creator may unarchive. Non-archived comics are rejected.",
+        responses={200: inline_serializer(
+            name='ComicUnarchiveResponse',
+            fields={
+                'id':     s.CharField(),
+                'status': s.CharField(),
+            },
+        )},
+    )
+    def post(self, request, comic_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        comic   = _get_active_comics().filter(id=comic_id).first()
+
+        if not comic:
+            return CustomResponse(general_message='Comic not found.').get_failure_response()
+
+        # Only creator can unarchive
+        if comic.created_by_id != user_id:
+            return CustomResponse(
+                general_message='Only the comic creator can unarchive this comic.'
+            ).get_unauthorized_response()
+
+        if comic.status != Comic.Status.ARCHIVED:
+            return CustomResponse(
+                general_message='Only archived comics can be unarchived.'
+            ).get_failure_response()
+
+        now = timezone.now()
+        comic.status        = Comic.Status.DRAFT
+        comic.updated_by_id = user_id
+        comic.updated_at    = now
+        comic.save(update_fields=['status', 'updated_by', 'updated_at'])
+
+        return CustomResponse(
+            general_message=f'Comic "{comic.title}" unarchived successfully.',
+            response={'id': comic.id, 'status': Comic.Status.DRAFT},
         ).get_success_response()
 
 
