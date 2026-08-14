@@ -324,7 +324,10 @@ class UserRoleCreateSerializer(serializers.ModelSerializer):
 
                 # 4. Side-effects (IG links + org link)
                 if ig_ids:
-                    reconcile_mentor_ig_links(application.user, ig_ids, admin_user_id)
+                    reconcile_mentor_ig_links(
+                        application.user, ig_ids, admin_user_id,
+                        exclude_application_id=application.id,
+                    )
                     reconcile_mentor_ig_grants(application, admin_user_id)
 
                 if mentor_tier in (

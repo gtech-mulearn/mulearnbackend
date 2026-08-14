@@ -12,6 +12,40 @@ from utils.utils import DateTimeUtils
 
 CACHE_TTL = 15 * 60  # 15 minutes
 
+# Maximum number of distinct Interest Groups a mentor may actively mentor at
+# once, counted across ALL of their approved applications combined (an
+# IG_MENTOR app and a COMPANY_MENTOR app can each carry their own
+# preferred_ig_ids — this caps the union, not any single application's list).
+MAX_PREFERRED_IGS = 5
+
+
+def get_effective_ig_ids(user, preferred_ig_ids, exclude_application_id=None):
+    """
+    The full set of IG ids `user` would actively mentor if `preferred_ig_ids`
+    were in effect for one application, unioned with every OTHER currently
+    APPROVED application this user holds. `exclude_application_id` excludes
+    that one application's own DB row from the "other approved" side of the
+    union — needed because callers pass its in-progress preferred_ig_ids
+    explicitly rather than relying on a DB read (the caller's own row may not
+    be saved/committed as APPROVED yet, or may still hold its old value).
+
+    This is the single source of truth for a mentor's active IG footprint:
+    reconcile_mentor_ig_links applies it, release_mentor_ig_links and the
+    max-IG-limit checks validate against it — so a mentor's IG access is
+    additive across tiers/applications and never depends on approval order.
+    """
+    desired = {str(i) for i in (preferred_ig_ids or []) if i}
+
+    other_approved = MentorApplication.objects.filter(
+        user=user, status=MentorApplication.Status.APPROVED,
+    )
+    if exclude_application_id:
+        other_approved = other_approved.exclude(id=exclude_application_id)
+    for app in other_approved:
+        desired.update(str(i) for i in (app.preferred_ig_ids or []) if i)
+
+    return desired
+
 
 def get_mentor_company(application):
     """
@@ -195,11 +229,19 @@ def reconcile_mentor_ig_grants(application, actor_user_id):
 
 
 @transaction.atomic
-def reconcile_mentor_ig_links(user, preferred_ig_ids, actor_user_id):
+def reconcile_mentor_ig_links(user, preferred_ig_ids, actor_user_id, exclude_application_id=None):
     """
     Make the user's ACTIVE MENTOR UserIgLink set exactly equal the (valid)
-    preferred_ig_ids: adds/reactivates links for newly chosen IGs and
-    deactivates links for removed IGs.
+    union of `preferred_ig_ids` (the application currently being reconciled)
+    and every OTHER APPROVED application's preferred_ig_ids — see
+    get_effective_ig_ids. Adds/reactivates links for newly chosen IGs and
+    deactivates links for IGs no APPROVED application wants anymore.
+
+    Using the union (rather than just this application's own list) is
+    what makes a mentor's active IGs additive across tiers: approving or
+    editing one application's IG list can no longer clobber the IGs another
+    still-APPROVED application legitimately grants, regardless of which was
+    approved first.
 
     Only ever touches assignment_type=MENTOR rows — LEARNER/LEAD/MODERATOR
     links for the same IG are never modified. Used both for first-time admin
@@ -207,7 +249,7 @@ def reconcile_mentor_ig_links(user, preferred_ig_ids, actor_user_id):
 
     Returns (added_ig_ids, removed_ig_ids) as sets of str.
     """
-    desired = {str(i) for i in (preferred_ig_ids or []) if i}
+    desired = get_effective_ig_ids(user, preferred_ig_ids, exclude_application_id)
     if desired:
         desired &= {
             str(x)
@@ -255,6 +297,33 @@ def reconcile_mentor_ig_links(user, preferred_ig_ids, actor_user_id):
         ).update(is_active=False, unassigned_at=now)
 
     return to_add, to_remove
+
+
+def release_mentor_ig_links(user, ig_ids, exclude_application_id, actor_user_id):
+    """
+    Deactivate MENTOR UserIgLink rows for `ig_ids`, but only the ones no
+    OTHER currently-APPROVED application (excluding `exclude_application_id`,
+    the one being rejected/revoked) still claims. Used wherever a single
+    application/grant is revoked directly (outside reconcile_mentor_ig_links'
+    approve-time reconciliation) so revoking one application never removes
+    IG access another still-APPROVED application legitimately grants.
+
+    Returns the set of ig_ids actually deactivated.
+    """
+    still_claimed = get_effective_ig_ids(user, [], exclude_application_id=exclude_application_id)
+    safe_to_release = {str(i) for i in ig_ids if i} - still_claimed
+
+    if safe_to_release:
+        now = DateTimeUtils.get_current_utc_time()
+        UserIgLink.objects.filter(
+            user=user,
+            assignment_type=UserIgLink.AssignmentType.MENTOR,
+            ig_id__in=safe_to_release,
+            is_active=True,
+        ).update(is_active=False, unassigned_at=now)
+
+    return safe_to_release
+
 
 def get_mentor_overview(user_id):
         """
