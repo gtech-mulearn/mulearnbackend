@@ -46,6 +46,7 @@ urlpatterns = [
     path('admin/assign/<str:user_muid>/',       mentor_views.AdminAssignMentorAPI.as_view(), name='admin-revoke-mentor'),
     path('admin/deactivate/<str:user_mentor_id>/', admin_views.MentorDeactivationAPI.as_view(), name='mentor-deactivate'),
     path('admin/reactivate/<str:user_mentor_id>/', admin_views.MentorReactivationAPI.as_view(), name='mentor-reactivate'),
+    path('<str:mentor_id>/preferred-igs/',        mentor_views.MentorPreferredIgAPI.as_view(), name='mentor-preferred-igs'),
     path('<str:mentor_id>/grants/',              mentor_views.MentorScopeGrantListAPI.as_view(), name='mentor-grant-list'),
     path('<str:mentor_id>/grants/<str:grant_id>/', mentor_views.MentorScopeGrantRevokeAPI.as_view(), name='mentor-grant-revoke'),
     path('change-company/', mentor_views.MentorChangeCompanyAPI.as_view(), name='mentor-change-company'),

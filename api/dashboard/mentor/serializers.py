@@ -126,8 +126,14 @@ class MentorRegisterSerializer(serializers.ModelSerializer):
         return value
 
     def validate_preferred_ig_ids(self, value):
+        from .dash_mentor_helper import MAX_PREFERRED_IGS
+
         if not value or not isinstance(value, list) or len(value) == 0:
             raise serializers.ValidationError("At least one preferred IG ID must be provided.")
+        if len(value) > MAX_PREFERRED_IGS:
+            raise serializers.ValidationError(
+                f"You can select at most {MAX_PREFERRED_IGS} Interest Groups."
+            )
         for ig_id in value:
             validate_safe_text(str(ig_id))
             if not InterestGroup.objects.filter(id=ig_id).exists():
@@ -350,9 +356,15 @@ class MentorUpdateSerializer(serializers.ModelSerializer):
         return value
 
     def validate_preferred_ig_ids(self, value):
+        from .dash_mentor_helper import MAX_PREFERRED_IGS
+
         if value:
             if not isinstance(value, list) or len(value) == 0:
                 raise serializers.ValidationError("At least one preferred IG ID must be provided.")
+            if len(value) > MAX_PREFERRED_IGS:
+                raise serializers.ValidationError(
+                    f"You can select at most {MAX_PREFERRED_IGS} Interest Groups."
+                )
             for ig_id in value:
                 validate_safe_text(str(ig_id))
                 if not InterestGroup.objects.filter(id=ig_id).exists():
@@ -451,6 +463,35 @@ class MentorUpdateSerializer(serializers.ModelSerializer):
         instance.save()
 
         return instance
+
+class MentorIgPreferenceSerializer(serializers.Serializer):
+    """
+    Validates a self-service request to change the preferred Interest Groups
+    on one of the caller's already-APPROVED applications. Validation-only —
+    it does NOT mutate the application or reconcile UserIgLink/MentorScopeGrant
+    directly. MentorPreferredIgAPI.patch instead creates a new PENDING
+    "change request" application (mirroring MentorChangeCompanyAPI) so the
+    IG change goes through the same verifier who'd review it normally (IG
+    lead/admin for IG_MENTOR, the company owner for COMPANY_MENTOR); nothing
+    about the mentor's active IG access changes until that's approved.
+    """
+    preferred_ig_ids = serializers.ListField(child=serializers.CharField())
+
+    def validate_preferred_ig_ids(self, value):
+        from .dash_mentor_helper import MAX_PREFERRED_IGS
+
+        if not value or not isinstance(value, list) or len(value) == 0:
+            raise serializers.ValidationError("At least one preferred IG ID must be provided.")
+        if len(value) > MAX_PREFERRED_IGS:
+            raise serializers.ValidationError(
+                f"You can select at most {MAX_PREFERRED_IGS} Interest Groups."
+            )
+        for ig_id in value:
+            validate_safe_text(str(ig_id))
+            if not InterestGroup.objects.filter(id=ig_id).exists():
+                raise serializers.ValidationError(f"Invalid IG ID: {ig_id}")
+        return value
+
 
 class MentorApplicationListSerializer(serializers.ModelSerializer):
     user_full_name = serializers.CharField(source='user.full_name', read_only=True)
@@ -622,6 +663,20 @@ class MentorVerifySerializer(serializers.Serializer):
     def validate(self, attrs):
         if attrs.get("status") == MentorApplication.Status.REJECTED and not attrs.get("verification_note"):
             raise serializers.ValidationError("Verification note is required when rejecting.")
+
+        if attrs.get("status") == MentorApplication.Status.APPROVED and self.instance.preferred_ig_ids:
+            from .dash_mentor_helper import get_effective_ig_ids, MAX_PREFERRED_IGS
+
+            effective = get_effective_ig_ids(
+                self.instance.user, self.instance.preferred_ig_ids,
+                exclude_application_id=self.instance.id,
+            )
+            if len(effective) > MAX_PREFERRED_IGS:
+                raise serializers.ValidationError(
+                    f"Approving this application would give the mentor {len(effective)} active "
+                    f"Interest Groups, exceeding the maximum of {MAX_PREFERRED_IGS}."
+                )
+
         return attrs
 
     def update(self, instance, validated_data):
@@ -726,7 +781,8 @@ class MentorVerifySerializer(serializers.Serializer):
                     from .dash_mentor_helper import reconcile_mentor_ig_links, reconcile_mentor_ig_grants
 
                     reconcile_mentor_ig_links(
-                        instance.user, instance.preferred_ig_ids, user_id
+                        instance.user, instance.preferred_ig_ids, user_id,
+                        exclude_application_id=instance.id,
                     )
                     reconcile_mentor_ig_grants(
                         instance, user_id
@@ -1680,6 +1736,32 @@ class AdminAssignMentorSerializer(serializers.Serializer):
                         f"The following IG IDs are invalid: {', '.join(invalid_igs)}"
                     )
 
+        # Assigning ig_ids must not push any resolved user past the global
+        # active-IG cap once unioned with whatever they already hold via
+        # other APPROVED applications (see get_effective_ig_ids).
+        ig_ids = attrs.get("ig_ids") or []
+        if ig_ids and not errors.get("ig_ids"):
+            from .dash_mentor_helper import get_effective_ig_ids, MAX_PREFERRED_IGS
+
+            over_limit_muids = []
+            for muid, user in resolved_users.items():
+                existing_app = MentorApplication.objects.filter(
+                    user=user, mentor_tier=tier, org=attrs.get("_org"),
+                    status=MentorApplication.Status.APPROVED,
+                ).first()
+                effective = get_effective_ig_ids(
+                    user, ig_ids,
+                    exclude_application_id=existing_app.id if existing_app else None,
+                )
+                if len(effective) > MAX_PREFERRED_IGS:
+                    over_limit_muids.append(muid)
+
+            if over_limit_muids:
+                errors["ig_ids"] = (
+                    f"Assigning these Interest Groups would exceed the maximum of "
+                    f"{MAX_PREFERRED_IGS} active Interest Groups for: {', '.join(over_limit_muids)}"
+                )
+
         if errors:
             raise serializers.ValidationError(errors)
 
@@ -1795,7 +1877,9 @@ class AdminAssignMentorSerializer(serializers.Serializer):
                 # 5. Side-effects (IG links + org link)
                 if ig_ids:
                     from .dash_mentor_helper import reconcile_mentor_ig_links, reconcile_mentor_ig_grants
-                    reconcile_mentor_ig_links(user, ig_ids, admin_id)
+                    reconcile_mentor_ig_links(
+                        user, ig_ids, admin_id, exclude_application_id=application.id
+                    )
                     reconcile_mentor_ig_grants(application, admin_id)
 
                 if tier in (MentorApplication.MentorTier.CAMPUS_MENTOR, MentorApplication.MentorTier.COMPANY_MENTOR) and org:
