@@ -265,11 +265,12 @@ class LearningCircleListMinSerializer(serializers.ModelSerializer):
     total_members = serializers.IntegerField(read_only=True)
     is_joined = serializers.SerializerMethodField()
     is_creator = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
     # attendees = serializers.SerializerMethodField()
     class Meta:
         model = LearningCircle
         # The 'attendees' field is removed as 'total_members' is used instead.
-        fields = ["id", "ig", "title", "org", "total_members", "is_joined", "is_creator"]
+        fields = ["id", "ig", "title", "org", "total_members", "is_joined", "is_creator", "status"]
 
     def get_is_joined(self, obj):
         user_id = self.context.get("user_id")
@@ -289,6 +290,18 @@ class LearningCircleListMinSerializer(serializers.ModelSerializer):
         if not user_id:
             return False
         return obj.created_by_id == user_id
+
+    def get_status(self, obj):
+        user_id = self.context.get("user_id")
+        if not user_id:
+            return "not_joined"
+        joined_ids = self.context.get("joined_circle_ids")
+        if joined_ids is not None and obj.id in joined_ids:
+            return "joined"
+        pending_ids = self.context.get("pending_circle_ids")
+        if pending_ids is not None and obj.id in pending_ids:
+            return "pending"
+        return "not_joined"
 
 
 class CircleMeetingLogCreateEditSerializer(serializers.ModelSerializer):
@@ -679,6 +692,7 @@ class CircleMeetupMinSerializer(serializers.ModelSerializer):
     is_ended = serializers.SerializerMethodField()
     is_joined = serializers.SerializerMethodField()
     is_rsvp = serializers.SerializerMethodField()
+    can_remove_rsvp = serializers.SerializerMethodField()
     attendees_count = serializers.SerializerMethodField()
     created_by = serializers.CharField(source="created_by.full_name", read_only=True)
     created_by_id = serializers.CharField(source="created_by.id", read_only=True)
@@ -707,6 +721,22 @@ class CircleMeetupMinSerializer(serializers.ModelSerializer):
             ).exists()
         return False
 
+    def get_can_remove_rsvp(self, obj):
+        user_id = self.context.get("user_id")
+        if not user_id:
+            return False
+        attendee = obj.circle_meeting_attendance_meet_id.filter(
+            user_id=user_id
+        ).first()
+        if not attendee or attendee.is_joined:
+            return False
+        aware_time = _aware_meet_time(obj.meet_time)
+        if aware_time is None:
+            return False
+        now = DateTimeUtils.get_current_utc_time()
+        cutoff_time = aware_time - timedelta(minutes=30)
+        return now < cutoff_time
+
     def get_attendees_count(self, obj):
         return obj.circle_meeting_attendance_meet_id.count()
 
@@ -725,6 +755,7 @@ class CircleMeetupMinSerializer(serializers.ModelSerializer):
             "recurrence",
             "meet_place",
             "is_rsvp",
+            "can_remove_rsvp",
             "circle_id",
             "coord_x",
             "coord_y",

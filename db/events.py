@@ -361,7 +361,7 @@ class MediaContent(models.Model):
     # ── Office Hours specific ─────────────────────────────────────────────────
     performer        = models.CharField(max_length=200, blank=True, null=True)
     designation      = models.CharField(max_length=200, blank=True, null=True)
-    interest_groups  = models.JSONField(blank=True, null=True)   # list of IG slugs
+    interest_groups  = models.JSONField(blank=True, null=True)   # list of ig_media_content_link ids for this record
     poster_thumbnail = models.CharField(max_length=512, blank=True, null=True)
 
     # ── SMT & Inspiration Station specific ────────────────────────────────────
@@ -391,3 +391,26 @@ class MediaContent(models.Model):
         indexes = [
             models.Index(fields=['content_type', 'date']),
         ]
+
+
+class IgMediaContentLink(models.Model):
+    """
+    Links a MediaContent record (e.g. an Office Hours session) to an
+    InterestGroup. MediaContent.interest_groups stores the ids of these
+    link rows rather than IG ids/codes directly.
+    """
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    media_content = models.ForeignKey(
+        MediaContent, on_delete=models.CASCADE,
+        db_column='media_content_id', related_name='ig_links'
+    )
+    interest_group = models.ForeignKey(
+        InterestGroup, on_delete=models.CASCADE,
+        db_column='ig_id', related_name='media_content_links'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        managed = False
+        db_table = 'ig_media_content_link'
+        unique_together = [('media_content', 'interest_group')]

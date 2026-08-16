@@ -77,6 +77,26 @@ class LearningCircleView(APIView):
         if ig_id:
             learning_circles = learning_circles.filter(ig_id=ig_id)
 
+        status = request.query_params.get("status")
+        if status:
+            if status == "joined":
+                joined_ids = UserCircleLink.objects.filter(
+                    user_id=user_id, accepted=True
+                ).values_list("circle_id", flat=True)
+                learning_circles = learning_circles.filter(id__in=joined_ids)
+            elif status == "pending":
+                pending_ids = UserCircleLink.objects.filter(
+                    user_id=user_id, accepted__isnull=True
+                ).values_list("circle_id", flat=True)
+                learning_circles = learning_circles.filter(id__in=pending_ids)
+            elif status == "not_joined":
+                member_ids = UserCircleLink.objects.filter(
+                    user_id=user_id,
+                ).filter(
+                    Q(accepted=True) | Q(accepted__isnull=True)
+                ).values_list("circle_id", flat=True)
+                learning_circles = learning_circles.exclude(id__in=member_ids)
+
         paginated_queryset = CommonUtils.get_paginated_queryset(
             learning_circles,
             request,
@@ -91,12 +111,20 @@ class LearningCircleView(APIView):
                 circle_id__in=page_circle_ids,
             ).values_list("circle_id", flat=True)
         )
+        pending_circle_ids = set(
+            UserCircleLink.objects.filter(
+                user_id=user_id,
+                accepted__isnull=True,
+                circle_id__in=page_circle_ids,
+            ).values_list("circle_id", flat=True)
+        )
         serializer = LearningCircleListMinSerializer(
             page,
             many=True,
             context={
                 "user_id": user_id,
                 "joined_circle_ids": joined_circle_ids,
+                "pending_circle_ids": pending_circle_ids,
             },
         )
         return CustomResponse().paginated_response(
@@ -363,6 +391,42 @@ class LearningCircleRSVPAPI(APIView):
         )
         return CustomResponse(
             general_message="You have successfully RSVP'd for the Circle Meeting"
+        ).get_success_response()
+
+    @extend_schema(
+        tags=['Dashboard - Learningcircle'],
+        description="Remove Learning Circle RSVP. Allowed until 30 minutes before the meeting starts.",
+        responses={200: OpenApiResponse(description="RSVP removed successfully. No response body.")},
+    )
+    def delete(self, request, meet_id: str):
+        user_id = JWTUtils.fetch_user_id(request)
+        circle_meeting, error = _get_meeting_or_response(meet_id)
+        if error:
+            return error
+        if not _is_member_or_creator(circle_meeting.circle_id, user_id):
+            return CustomResponse(
+                general_message="Only circle members can modify RSVP for this meeting"
+            ).get_failure_response()
+        attendee = CircleMeetingAttendees.objects.filter(
+            meet_id=circle_meeting, user_id_id=user_id
+        ).first()
+        if not attendee:
+            return CustomResponse(
+                general_message="You have not RSVP'd for this meeting"
+            ).get_failure_response()
+        if attendee.is_joined:
+            return CustomResponse(
+                general_message="Cannot remove RSVP after joining the meeting"
+            ).get_failure_response()
+        now = DateTimeUtils.get_current_utc_time()
+        cutoff_time = circle_meeting.meet_time - timedelta(minutes=30)
+        if now >= cutoff_time:
+            return CustomResponse(
+                general_message="Cannot remove RSVP within 30 minutes of the meeting start time"
+            ).get_failure_response()
+        attendee.delete()
+        return CustomResponse(
+            general_message="Your RSVP has been successfully removed"
         ).get_success_response()
 
 
@@ -815,7 +879,6 @@ class LearningCircleReportExportAPI(APIView):
             [
                 "MuID",
                 "Full Name",
-                "Email",
                 "Report Submitted",
                 "LC Approved",
                 "Report",
@@ -828,7 +891,6 @@ class LearningCircleReportExportAPI(APIView):
                 [
                     clean(user.muid),
                     clean(user.full_name),
-                    clean(user.email),
                     "Yes" if attendee.is_report_submitted else "No",
                     "Yes" if attendee.is_lc_approved else "No",
                     clean(attendee.report_text),
@@ -1022,8 +1084,12 @@ class LearningCircleMemberDetailsView(APIView):
             # Sort by karma (highest first)
             member_details = sorted(member_details, key=lambda x: x['ig_karma'], reverse=True)
 
-            # Build owner details from the circle's created_by FK
-            owner = circle.created_by
+            # Build owner details from the current leader, falling back to circle creator
+            leader_id = next(iter(leaders), None)
+            if leader_id and leader_id in users:
+                owner = users[leader_id]
+            else:
+                owner = circle.created_by
             owner_details = {
                 'id': owner.id,
                 'full_name': owner.full_name,
@@ -1235,11 +1301,11 @@ class CircleJoinAPI(APIView):
 
         try:
             link = UserCircleLink.objects.get(
-                id=link_id, circle=circle, is_invited=False, accepted__isnull=True
+                id=link_id, circle=circle, accepted__isnull=True
             )
         except UserCircleLink.DoesNotExist:
             return CustomResponse(
-                general_message="Pending join request not found"
+                general_message="Pending request not found"
             ).get_failure_response()
 
         action = request.data.get("action")

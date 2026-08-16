@@ -17,7 +17,8 @@ import uuid
 from django.utils import timezone
 from rest_framework.views import APIView
 
-from db.events import MediaContent
+from db.events import MediaContent, IgMediaContentLink
+from db.task import InterestGroup
 from utils.permission import CustomizePermission, JWTUtils, RoleRequired
 from utils.response import CustomResponse
 from utils.types import RoleType
@@ -69,21 +70,51 @@ def _apply_common_filters(qs, request, *, has_zone: bool = False):
     """Apply shared query-param filters to a MediaContent queryset."""
     params = request.query_params
     from datetime import date
+    from django.db.models import Q
 
-    if status := params.get('status'):
-        status = status.lower()
-        if status == 'upcoming':
-            qs = qs.filter(date__gt=date.today())
-        elif status == 'ongoing':
-            qs = qs.filter(date=date.today())
-        elif status == 'completed':
-            qs = qs.filter(date__lt=date.today())
+    # Accepts repeated params (?status=a&status=b) and/or comma-separated
+    # values (?status=a,b) — both are normalized into one status list.
+    raw_statuses = params.getlist('status')
+    statuses = {
+        s.strip().lower()
+        for raw in raw_statuses
+        for s in raw.split(',')
+        if s.strip()
+    }
+
+    if statuses:
+        status_q = Q()
+        if 'upcoming' in statuses:
+            status_q |= Q(date__gt=date.today())
+        if 'ongoing' in statuses:
+            status_q |= Q(date=date.today())
+        if 'completed' in statuses:
+            status_q |= Q(date__lt=date.today())
+        if status_q:
+            qs = qs.filter(status_q)
 
     if has_zone:
         if zone := params.get('zone'):
             qs = qs.filter(zone=zone)
 
     return qs
+
+
+def _sync_ig_links(record, ig_ids):
+    """Replace all IgMediaContentLink rows for `record` with one per id in
+    `ig_ids`, and return the new link ids (to store on record.interest_groups).
+    """
+    record.ig_links.all().delete()
+    ig_ids = ig_ids or []
+    links = IgMediaContentLink.objects.bulk_create([
+        IgMediaContentLink(
+            id=str(uuid.uuid4()),
+            media_content=record,
+            interest_group_id=ig_id,
+        )
+        for ig_id in ig_ids
+    ])
+    return [link.id for link in links]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -143,12 +174,17 @@ class OfficeHoursListCreateAPI(PublicGetMixin, APIView):
             ).get_failure_response()
 
         data = serializer.validated_data
+        ig_ids = data.pop('interest_groups', None)
         record = MediaContent.objects.create(
             id=str(uuid.uuid4()),
             created_by_id=user_id,
             updated_by_id=user_id,
             **data,
         )
+
+        link_ids = _sync_ig_links(record, ig_ids)
+        record.interest_groups = link_ids
+        record.save(update_fields=['interest_groups'])
 
         for field, (raw_url, subdir) in pending_urls.items():
             fetch_and_attach_poster.delay(record.id, raw_url, subdir, field)
@@ -216,6 +252,10 @@ class OfficeHoursDetailAPI(PublicGetMixin, APIView):
         user_id = JWTUtils.fetch_user_id(request)
         data = serializer.validated_data
         data.pop('content_type', None)  # never allow overriding the discriminator
+
+        if 'interest_groups' in data:
+            ig_ids = data.pop('interest_groups')
+            data['interest_groups'] = _sync_ig_links(record, ig_ids)
 
         old_poster = record.poster_thumbnail
         for attr, value in data.items():
@@ -709,11 +749,25 @@ class MediaContentBulkImportAPI(APIView):
                 if 'topic' in row_data and not row_data.get('title'):
                     row_data['title'] = row_data.pop('topic')
                 if 'interest_groups' in row_data:
-                    row_data['interest_groups'] = [
+                    # CSV supplies human-readable IG names; resolve to ids
+                    # (the write serializer expects interest_group ids).
+                    names = [
                         ig.strip()
                         for ig in str(row_data['interest_groups']).split(',')
                         if ig.strip()
                     ]
+                    ig_by_name = dict(
+                        InterestGroup.objects.filter(name__in=names).values_list('name', 'id')
+                    )
+                    unknown_names = [n for n in names if n not in ig_by_name]
+                    if unknown_names:
+                        failed_rows.append({
+                            "row": row_num,
+                            "title": row.get('title') or row.get('topic', ''),
+                            "reason": f"Unknown interest group name(s): {', '.join(unknown_names)}.",
+                        })
+                        continue
+                    row_data['interest_groups'] = [ig_by_name[n] for n in names]
                 serializer = OfficeHoursWriteSerializer(data=row_data)
 
             elif content_type == MediaContent.ContentType.SALT_MANGO_TREE:
@@ -745,12 +799,16 @@ class MediaContentBulkImportAPI(APIView):
 
             if serializer.is_valid():
                 data = serializer.validated_data
-                MediaContent.objects.create(
+                ig_ids = data.pop('interest_groups', None)
+                record = MediaContent.objects.create(
                     id=str(uuid.uuid4()),
                     created_by_id=user_id,
                     updated_by_id=user_id,
                     **data,
                 )
+                if content_type == MediaContent.ContentType.OFFICE_HOURS:
+                    record.interest_groups = _sync_ig_links(record, ig_ids)
+                    record.save(update_fields=['interest_groups'])
                 success_count += 1
             else:
                 failed_rows.append({

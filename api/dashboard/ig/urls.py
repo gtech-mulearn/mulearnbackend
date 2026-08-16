@@ -14,6 +14,8 @@ urlpatterns = [
     path('<str:pk>/cover-image/', dash_ig_view.InterestGroupImageAPI.as_view(), {'image_type': 'cover'}),
     path('<str:pk>/icon-image/', dash_ig_view.InterestGroupImageAPI.as_view(), {'image_type': 'icon'}),
     path('<str:pk>/', dash_ig_view.InterestGroupAPI.as_view()),  # for edit and delete
+    path('<str:pk>/activate/', dash_ig_view.InterestGroupActivateAPIView.as_view()),
+    path('<str:pk>/deactivate/', dash_ig_view.InterestGroupDeactivateAPIView.as_view()),
     path('get/<str:pk>/', dash_ig_view.InterestGroupGetAPI.as_view()),  # for edit and delete
     path('<str:pk>/join/', dash_ig_view.InterestGroupMembershipAPI.as_view()),
     path('<str:pk>/leave/', dash_ig_view.InterestGroupMembershipAPI.as_view()),
