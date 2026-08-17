@@ -23,6 +23,12 @@ import string, random
 from django.utils.timezone import now
 from PIL import Image
 
+# Upper bound for the client-supplied `perPage` query parameter. Applies to
+# every paginated endpoint; callers that genuinely need the full set pass
+# is_pagination=False and are unaffected.
+MAX_PAGE_SIZE = 1000
+
+
 def check_alumni_status(graduation_year):
     """
     Returns True if graduation_year is a valid 4-digit year and is in the past.
@@ -68,6 +74,11 @@ class CommonUtils:
             per_page = int(request.query_params.get("perPage", 10))
         except ValueError:
             per_page = 10
+
+        # Without a ceiling, ?perPage=999999 turns any paginated endpoint into a
+        # single-request denial of service. The largest value the frontend sends
+        # is 1000; bulk exports bypass pagination entirely via is_pagination=False.
+        per_page = max(1, min(per_page, MAX_PAGE_SIZE))
         search_query = request.query_params.get("search")
         sort_by = request.query_params.get("sortBy")
 
