@@ -30,8 +30,13 @@ class InstitutionSerializer(serializers.ModelSerializer):
     zone = serializers.ReadOnlyField(source="district.zone.name")
     state = serializers.ReadOnlyField(source="district.zone.state.name")
     country = serializers.ReadOnlyField(source="district.zone.state.country.name")
-    user_count = serializers.SerializerMethodField()
-    total_karma = serializers.SerializerMethodField()
+    # Read straight off the denormalised columns maintained by
+    # mu_celery.org_aggregates_cron. Both keep their existing JSON keys - the
+    # campus search page renders user_count as "N Members" and sorts on both -
+    # but they are now plain column reads instead of a per-row COUNT query and a
+    # correlated subquery.
+    user_count = serializers.IntegerField(source="cached_member_count", read_only=True)
+    total_karma = serializers.IntegerField(source="cached_total_karma", read_only=True)
 
     class Meta:
         model = Organization
@@ -47,12 +52,6 @@ class InstitutionSerializer(serializers.ModelSerializer):
             "user_count",
             "total_karma",
         ]
-
-    def get_user_count(self, obj):
-        return obj.user_organization_link_org.filter(verified=True).count()
-
-    def get_total_karma(self, obj):
-        return getattr(obj, "total_karma", 0) or 0
 
 
 # class InstitutionSerializer(serializers.ModelSerializer):
