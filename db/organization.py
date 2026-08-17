@@ -99,6 +99,19 @@ class Organization(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='created_by',
                                    related_name='organization_created_by')
     created_at = models.DateTimeField(auto_now_add=True)
+    # Denormalised aggregates over verified members, refreshed off the request
+    # path by mu_celery.org_aggregates_cron.refresh_org_aggregates. Computing
+    # these per-request needed a correlated subquery per row, which could not be
+    # reduced by pagination because the list is sorted by them.
+    #
+    # The `cached_` prefix is deliberate on two counts: it marks the values as
+    # eventually consistent, and it avoids the name `total_karma`, which is
+    # already used as an annotation alias on Organization querysets across the
+    # leaderboard views for several *different* karma computations (guild
+    # students, monthly ranges, Wadhwani tasks). A model field of that name
+    # would make every one of those annotate() calls raise ValueError.
+    cached_total_karma = models.IntegerField(default=0)
+    cached_member_count = models.IntegerField(default=0)
 
     class Meta:
         managed = False
