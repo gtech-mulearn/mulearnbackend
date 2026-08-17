@@ -154,7 +154,13 @@ DATABASES = {
         "PASSWORD": decouple_config("DATABASE_PASSWORD"),
         "HOST": decouple_config("DATABASE_HOST"),
         "PORT": decouple_config("DATABASE_PORT"),
-        "CONN_MAX_AGE": 600,
+        # Must stay 0 under ASGI. Django's ASGIHandler wraps every request in a
+        # ThreadSensitiveContext, so asgiref gives each request its own thread,
+        # and DB connections are thread-local. A non-zero CONN_MAX_AGE tells
+        # close_old_connections() to keep the connection "for reuse" by a thread
+        # that is about to be destroyed, so it leaks until GC finalises it.
+        # With unbounded request concurrency that exhausts max_connections.
+        "CONN_MAX_AGE": 0,
     }
 }
 
@@ -325,5 +331,12 @@ CELERY_BEAT_SCHEDULE = {
     'update-alumni-status-cron': {
         'task': 'mu_celery.alumni_cron.update_alumni_status_cron',
         'schedule': crontab(hour=0, minute=15),
+    },
+    # Keeps organization.total_karma / .member_count fresh for the campus search
+    # sort. Every 15 minutes: these drive ranking, not correctness, so some lag
+    # is acceptable, but a daily refresh would visibly stale the leaderboard.
+    'refresh-org-aggregates-cron': {
+        'task': 'mu_celery.org_aggregates_cron.refresh_org_aggregates',
+        'schedule': crontab(minute='*/15'),
     },
 }
