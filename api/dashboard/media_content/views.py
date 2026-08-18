@@ -154,7 +154,13 @@ class OfficeHoursListCreateAPI(PublicGetMixin, APIView):
 
 
     @extend_schema(tags=['Media Content - Office Hours'])
-    @RoleRequired([RoleType.ADMIN.value, RoleType.ASSOCIATE.value, RoleType.IG_LEAD.value])
+    @RoleRequired([
+        RoleType.ADMIN.value,
+        RoleType.ASSOCIATE.value,
+        RoleType.IG_LEAD.value,
+        RoleType.ZONAL_CAMPUS_LEAD.value,
+        RoleType.DISTRICT_CAMPUS_LEAD.value,
+    ])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -226,7 +232,13 @@ class OfficeHoursDetailAPI(PublicGetMixin, APIView):
 
 
     @extend_schema(tags=['Media Content - Office Hours'])
-    @RoleRequired([RoleType.ADMIN.value, RoleType.ASSOCIATE.value, RoleType.IG_LEAD.value])
+    @RoleRequired([
+        RoleType.ADMIN.value,
+        RoleType.ASSOCIATE.value,
+        RoleType.IG_LEAD.value,
+        RoleType.ZONAL_CAMPUS_LEAD.value,
+        RoleType.DISTRICT_CAMPUS_LEAD.value,
+    ])
     def patch(self, request, record_id):
         record = self._get_record(record_id)
         if not record:
@@ -285,7 +297,13 @@ class OfficeHoursDetailAPI(PublicGetMixin, APIView):
 
 
     @extend_schema(tags=['Media Content - Office Hours'])
-    @RoleRequired([RoleType.ADMIN.value, RoleType.ASSOCIATE.value, RoleType.IG_LEAD.value])
+    @RoleRequired([
+        RoleType.ADMIN.value,
+        RoleType.ASSOCIATE.value,
+        RoleType.IG_LEAD.value,
+        RoleType.ZONAL_CAMPUS_LEAD.value,
+        RoleType.DISTRICT_CAMPUS_LEAD.value,
+    ])
     def delete(self, request, record_id):
         record = self._get_record(record_id)
         if not record:
@@ -335,7 +353,13 @@ class SaltMangoTreeListCreateAPI(PublicGetMixin, APIView):
         )
 
     @extend_schema(tags=['Media Content - Salt Mango Tree'])
-    @RoleRequired([RoleType.ADMIN.value, RoleType.ASSOCIATE.value, RoleType.IG_LEAD.value])
+    @RoleRequired([
+        RoleType.ADMIN.value,
+        RoleType.ASSOCIATE.value,
+        RoleType.IG_LEAD.value,
+        RoleType.ZONAL_CAMPUS_LEAD.value,
+        RoleType.DISTRICT_CAMPUS_LEAD.value,
+    ])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         serializer = SaltMangoTreeWriteSerializer(data=request.data)
@@ -388,7 +412,13 @@ class SaltMangoTreeDetailAPI(PublicGetMixin, APIView):
         ).get_success_response()
 
     @extend_schema(tags=['Media Content - Salt Mango Tree'])
-    @RoleRequired([RoleType.ADMIN.value, RoleType.ASSOCIATE.value, RoleType.IG_LEAD.value])
+    @RoleRequired([
+        RoleType.ADMIN.value,
+        RoleType.ASSOCIATE.value,
+        RoleType.IG_LEAD.value,
+        RoleType.ZONAL_CAMPUS_LEAD.value,
+        RoleType.DISTRICT_CAMPUS_LEAD.value,
+    ])
     def patch(self, request, record_id):
         record = self._get_record(record_id)
         if not record:
@@ -418,7 +448,13 @@ class SaltMangoTreeDetailAPI(PublicGetMixin, APIView):
         ).get_success_response()
 
     @extend_schema(tags=['Media Content - Salt Mango Tree'])
-    @RoleRequired([RoleType.ADMIN.value, RoleType.ASSOCIATE.value, RoleType.IG_LEAD.value])
+    @RoleRequired([
+        RoleType.ADMIN.value,
+        RoleType.ASSOCIATE.value,
+        RoleType.IG_LEAD.value,
+        RoleType.ZONAL_CAMPUS_LEAD.value,
+        RoleType.DISTRICT_CAMPUS_LEAD.value,
+    ])
     def delete(self, request, record_id):
         record = self._get_record(record_id)
         if not record:
@@ -468,7 +504,13 @@ class InspirationStationListCreateAPI(PublicGetMixin, APIView):
         )
 
     @extend_schema(tags=['Media Content - Inspiration Station'])
-    @RoleRequired([RoleType.ADMIN.value, RoleType.ASSOCIATE.value, RoleType.IG_LEAD.value])
+    @RoleRequired([
+        RoleType.ADMIN.value,
+        RoleType.ASSOCIATE.value,
+        RoleType.IG_LEAD.value,
+        RoleType.ZONAL_CAMPUS_LEAD.value,
+        RoleType.DISTRICT_CAMPUS_LEAD.value,
+    ])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         serializer = InspirationStationWriteSerializer(data=request.data)
@@ -521,7 +563,13 @@ class InspirationStationDetailAPI(PublicGetMixin, APIView):
         ).get_success_response()
 
     @extend_schema(tags=['Media Content - Inspiration Station'])
-    @RoleRequired([RoleType.ADMIN.value, RoleType.ASSOCIATE.value, RoleType.IG_LEAD.value])
+    @RoleRequired([
+        RoleType.ADMIN.value,
+        RoleType.ASSOCIATE.value,
+        RoleType.IG_LEAD.value,
+        RoleType.ZONAL_CAMPUS_LEAD.value,
+        RoleType.DISTRICT_CAMPUS_LEAD.value,
+    ])
     def patch(self, request, record_id):
         record = self._get_record(record_id)
         if not record:
@@ -551,7 +599,13 @@ class InspirationStationDetailAPI(PublicGetMixin, APIView):
         ).get_success_response()
 
     @extend_schema(tags=['Media Content - Inspiration Station'])
-    @RoleRequired([RoleType.ADMIN.value, RoleType.ASSOCIATE.value, RoleType.IG_LEAD.value])
+    @RoleRequired([
+        RoleType.ADMIN.value,
+        RoleType.ASSOCIATE.value,
+        RoleType.IG_LEAD.value,
+        RoleType.ZONAL_CAMPUS_LEAD.value,
+        RoleType.DISTRICT_CAMPUS_LEAD.value,
+    ])
     def delete(self, request, record_id):
         record = self._get_record(record_id)
         if not record:
@@ -601,7 +655,13 @@ class GrabYourSuperpowersListCreateAPI(PublicGetMixin, APIView):
         )
 
     @extend_schema(tags=['Media Content - Grab Your Superpowers'])
-    @RoleRequired([RoleType.ADMIN.value, RoleType.ASSOCIATE.value, RoleType.IG_LEAD.value])
+    @RoleRequired([
+        RoleType.ADMIN.value,
+        RoleType.ASSOCIATE.value,
+        RoleType.IG_LEAD.value,
+        RoleType.ZONAL_CAMPUS_LEAD.value,
+        RoleType.DISTRICT_CAMPUS_LEAD.value,
+    ])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         serializer = GrabYourSuperpowersWriteSerializer(data=request.data)
@@ -654,7 +714,13 @@ class GrabYourSuperpowersDetailAPI(PublicGetMixin, APIView):
         ).get_success_response()
 
     @extend_schema(tags=['Media Content - Grab Your Superpowers'])
-    @RoleRequired([RoleType.ADMIN.value, RoleType.ASSOCIATE.value, RoleType.IG_LEAD.value])
+    @RoleRequired([
+        RoleType.ADMIN.value,
+        RoleType.ASSOCIATE.value,
+        RoleType.IG_LEAD.value,
+        RoleType.ZONAL_CAMPUS_LEAD.value,
+        RoleType.DISTRICT_CAMPUS_LEAD.value,
+    ])
     def patch(self, request, record_id):
         record = self._get_record(record_id)
         if not record:
@@ -684,7 +750,13 @@ class GrabYourSuperpowersDetailAPI(PublicGetMixin, APIView):
         ).get_success_response()
 
     @extend_schema(tags=['Media Content - Grab Your Superpowers'])
-    @RoleRequired([RoleType.ADMIN.value, RoleType.ASSOCIATE.value, RoleType.IG_LEAD.value])
+    @RoleRequired([
+        RoleType.ADMIN.value,
+        RoleType.ASSOCIATE.value,
+        RoleType.IG_LEAD.value,
+        RoleType.ZONAL_CAMPUS_LEAD.value,
+        RoleType.DISTRICT_CAMPUS_LEAD.value,
+    ])
     def delete(self, request, record_id):
         record = self._get_record(record_id)
         if not record:
@@ -705,7 +777,13 @@ class MediaContentBulkImportAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @extend_schema(tags=['Media Content - Import'])
-    @RoleRequired([RoleType.ADMIN.value, RoleType.ASSOCIATE.value, RoleType.IG_LEAD.value])
+    @RoleRequired([
+        RoleType.ADMIN.value,
+        RoleType.ASSOCIATE.value,
+        RoleType.IG_LEAD.value,
+        RoleType.ZONAL_CAMPUS_LEAD.value,
+        RoleType.DISTRICT_CAMPUS_LEAD.value,
+    ])
     def post(self, request):
         file = request.data.get('file')
         if not file:
@@ -831,7 +909,13 @@ class MediaContentBulkExportAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @extend_schema(tags=['Media Content - Export'])
-    @RoleRequired([RoleType.ADMIN.value, RoleType.ASSOCIATE.value, RoleType.IG_LEAD.value])
+    @RoleRequired([
+        RoleType.ADMIN.value,
+        RoleType.ASSOCIATE.value,
+        RoleType.IG_LEAD.value,
+        RoleType.ZONAL_CAMPUS_LEAD.value,
+        RoleType.DISTRICT_CAMPUS_LEAD.value,
+    ])
     def get(self, request, content_type):
         if content_type == MediaContent.ContentType.OFFICE_HOURS:
             queryset = MediaContent.objects.filter(
