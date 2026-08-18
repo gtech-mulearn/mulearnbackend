@@ -839,6 +839,173 @@ class MentorChangeCompanyAPI(APIView):
             response=serializer.data
         ).get_success_response()
 
+class MentorPreferredIgAPI(APIView):
+    """
+    GET/PATCH /mentor/<mentor_id>/preferred-igs/ — self-service request to
+    add/remove the Interest Groups a mentor mentors under one of their own
+    APPROVED applications. Registration (MentorRegistrationAPI) only accepts
+    preferred_ig_ids while PENDING/REJECTED; MentorRegistrationAPI.patch
+    explicitly refuses to touch an APPROVED application at all. This is the
+    endpoint that fills that gap — but rather than mutating the approved
+    application's IGs in place, PATCH creates a new PENDING "change request"
+    application (mirroring MentorChangeCompanyAPI) so the change goes
+    through the same verifier who'd review it normally: an IG lead/admin for
+    IG_MENTOR, the company owner for COMPANY_MENTOR, admins for CAMPUS_MENTOR.
+    The mentor's current IG access is untouched until that's approved.
+    """
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Get the preferred Interest Groups for one of the caller's approved mentor applications.",
+        responses={200: serializers.MentorApplicationProfileSerializer},
+    )
+    @role_required([RoleType.MENTOR.value])
+    def get(self, request, mentor_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        application = MentorApplication.objects.filter(
+            id=mentor_id, user_id=user_id, status=MentorApplication.Status.APPROVED
+        ).first()
+
+        if not application:
+            return CustomResponse(
+                general_message="No approved mentor application found with this ID for your account."
+            ).get_failure_response(status_code=404)
+
+        serializer = serializers.MentorApplicationProfileSerializer(application)
+        return CustomResponse(response=serializer.data).get_success_response()
+
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description=(
+            "Request a change to the preferred Interest Groups for one of the caller's "
+            "approved mentor applications. Creates a new PENDING application (preserving "
+            "the tier and org) for review by the appropriate verifier — the mentor's "
+            "current IG access is unaffected until it's approved."
+        ),
+        request=serializers.MentorIgPreferenceSerializer,
+        responses={200: serializers.MentorRegisterSerializer},
+    )
+    @role_required([RoleType.MENTOR.value])
+    def patch(self, request, mentor_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        application = MentorApplication.objects.filter(
+            id=mentor_id, user_id=user_id, status=MentorApplication.Status.APPROVED
+        ).first()
+
+        if not application:
+            return CustomResponse(
+                general_message="No approved mentor application found with this ID for your account."
+            ).get_failure_response(status_code=404)
+
+        serializer = serializers.MentorIgPreferenceSerializer(data=request.data)
+        if not serializer.is_valid():
+            return CustomResponse(message=serializer.errors).get_failure_response()
+
+        new_ig_ids = serializer.validated_data["preferred_ig_ids"]
+
+        if set(new_ig_ids) == set(application.preferred_ig_ids or []):
+            return CustomResponse(
+                general_message="No change — these are already the active Interest Groups for this application."
+            ).get_failure_response()
+
+        if MentorApplication.objects.filter(
+            user_id=user_id, mentor_tier=application.mentor_tier,
+            status=MentorApplication.Status.PENDING,
+        ).exists():
+            return CustomResponse(
+                general_message="You already have a pending change request for this mentor tier."
+            ).get_failure_response()
+
+        from .dash_mentor_helper import get_effective_ig_ids, MAX_PREFERRED_IGS
+        effective = get_effective_ig_ids(
+            application.user, new_ig_ids, exclude_application_id=application.id
+        )
+        if len(effective) > MAX_PREFERRED_IGS:
+            return CustomResponse(
+                general_message=(
+                    f"This change would give you {len(effective)} active Interest Groups, "
+                    f"exceeding the maximum of {MAX_PREFERRED_IGS}."
+                )
+            ).get_failure_response()
+
+        now = DateTimeUtils.get_current_utc_time()
+        new_application = MentorApplication.objects.create(
+            user_id=user_id,
+            org=application.org,
+            mentor_tier=application.mentor_tier,
+            status=MentorApplication.Status.PENDING,
+            preferred_ig_ids=new_ig_ids,
+            reason=f"Interest Group preference change requested (supersedes application {application.id}).",
+            nomination_expires_at=now + timedelta(days=NOMINATION_EXPIRY_DAYS),
+            created_by_id=user_id,
+            updated_by_id=user_id,
+            created_at=now,
+            updated_at=now,
+        )
+
+        # Notify whoever verifies this tier — same routing as initial registration.
+        try:
+            from api.notification.notifications_utils import NotificationUtils
+            from db.user import User, UserRoleLink
+            from django.conf import settings
+
+            requester = User.every.filter(id=user_id).first()
+
+            if application.mentor_tier == MentorApplication.MentorTier.COMPANY_MENTOR:
+                from db.company import Company
+                try:
+                    company = Company.objects.get(org=application.org, status="verified")
+                    NotificationUtils.insert_notification(
+                        user=company.company_user,
+                        title="Mentor Interest Group Change Request",
+                        description=f"{requester.full_name} has requested to change their Interest Groups as a mentor for your company.",
+                        button="View Application",
+                        url=f"{settings.FR_DOMAIN_NAME}/dashboard/company/mentor/list/",
+                        created_by=requester,
+                    )
+                except Company.DoesNotExist:
+                    pass
+            elif application.mentor_tier == MentorApplication.MentorTier.IG_MENTOR:
+                from db.task import InterestGroup
+                from .dash_mentor_helper import notify_ig_leads
+                for ig in InterestGroup.objects.filter(id__in=new_ig_ids):
+                    notify_ig_leads(ig, requester, new_application)
+
+                admin_roles = UserRoleLink.objects.filter(role__title=RoleType.ADMIN.value, is_active=True).select_related('user')
+                for admin_link in admin_roles:
+                    NotificationUtils.insert_notification(
+                        user=admin_link.user,
+                        title="IG Mentor Preference Change Request",
+                        description=f"{requester.full_name} has requested to change their Interest Groups.",
+                        button="View Application",
+                        url=f"{settings.FR_DOMAIN_NAME}/dashboard/mentor/list/",
+                        created_by=requester,
+                    )
+            else:  # CAMPUS_MENTOR — admin-reviewed, same as initial registration
+                admin_roles = UserRoleLink.objects.filter(role__title=RoleType.ADMIN.value, is_active=True).select_related('user')
+                for admin_link in admin_roles:
+                    NotificationUtils.insert_notification(
+                        user=admin_link.user,
+                        title="Mentor Interest Group Change Request",
+                        description=f"{requester.full_name} has requested to change their Interest Groups.",
+                        button="View Application",
+                        url=f"{settings.FR_DOMAIN_NAME}/dashboard/mentor/list/",
+                        created_by=requester,
+                    )
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception(
+                "Failed to notify verifier for IG preference change application %s", new_application.id
+            )
+
+        response_serializer = serializers.MentorRegisterSerializer(new_application)
+        return CustomResponse(
+            general_message="Interest Group change request submitted successfully. It is pending approval.",
+            response=response_serializer.data
+        ).get_success_response()
+
+
 class MentorOverviewAPI(APIView):
     permission_classes = [CustomizePermission]
 
@@ -974,7 +1141,6 @@ class AdminAssignMentorAPI(APIView):
     )
     def delete(self, request, user_muid):
         from db.user import User, UserRoleLink, Role
-        from db.task import UserIgLink
         from db.user import MentorScopeGrant
         from utils.types import RoleType as _RoleType
         from django.db import transaction
@@ -1019,14 +1185,15 @@ class AdminAssignMentorAPI(APIView):
                 app.updated_at = now
                 app.save(update_fields=["status", "updated_by_id", "updated_at"])
 
-                # Deactivate IG links for IG_MENTOR
-                if app.mentor_tier == MentorApplication.MentorTier.IG_MENTOR:
-                    if app.preferred_ig_ids:
-                        UserIgLink.objects.filter(
-                            user=user,
-                            ig_id__in=app.preferred_ig_ids,
-                            assignment_type=UserIgLink.AssignmentType.MENTOR,
-                        ).update(is_active=False)
+                # Release IG links this application held — but only the ones no
+                # OTHER still-APPROVED application (e.g. a COMPANY_MENTOR app
+                # that separately lists the same IG) is still relying on.
+                if app.mentor_tier == MentorApplication.MentorTier.IG_MENTOR and app.preferred_ig_ids:
+                    from .dash_mentor_helper import release_mentor_ig_links
+                    release_mentor_ig_links(
+                        user, app.preferred_ig_ids,
+                        exclude_application_id=app.id, actor_user_id=admin_id,
+                    )
 
                 # Deactivate matching scope grants. NOTE: revoking mentor
                 MentorScopeGrant.objects.filter(
@@ -1151,13 +1318,13 @@ class MentorScopeGrantRevokeAPI(APIView):
             ).values_list('scope_id', flat=True)
 
             if ig_scope_ids_to_deactivate:
-                from db.task import UserIgLink
-                UserIgLink.objects.filter(
-                    user=application.user, 
-                    ig_id__in=list(ig_scope_ids_to_deactivate), 
-                    assignment_type=UserIgLink.AssignmentType.MENTOR,
-                    is_active=True
-                ).update(is_active=False)
+                # Only release IGs no OTHER still-APPROVED application (e.g. a
+                # separate COMPANY_MENTOR app listing the same IG) still relies on.
+                from .dash_mentor_helper import release_mentor_ig_links
+                release_mentor_ig_links(
+                    application.user, list(ig_scope_ids_to_deactivate),
+                    exclude_application_id=application.id, actor_user_id=actor_id,
+                )
 
             # 4. Deactivate all grants for this application.
             all_active_grants.update(is_active=False, revoked_by_id=actor_id, revoked_at=now)

@@ -402,7 +402,6 @@ class UserRole(APIView):
             # ── Mentor cleanup ──────────────────────────────────────────────
             if role_title == RoleType.MENTOR.value:
                 from db.user import MentorApplication, MentorScopeGrant
-                from db.task import UserIgLink
 
                 applications = MentorApplication.objects.filter(
                     user=user, status=MentorApplication.Status.APPROVED
@@ -413,11 +412,15 @@ class UserRole(APIView):
                     app.updated_at = now
                     app.save(update_fields=["status", "updated_by_id", "updated_at"])
 
-                    if app.mentor_tier == MentorApplication.MentorTier.IG_MENTOR:
-                        UserIgLink.objects.filter(
-                            user=user, ig_id__in=ig_scope_ids,
-                            assignment_type=UserIgLink.AssignmentType.MENTOR,
-                        ).update(is_active=False)
+                    if app.mentor_tier == MentorApplication.MentorTier.IG_MENTOR and app.preferred_ig_ids:
+                        # Only release IGs no OTHER still-APPROVED application
+                        # (e.g. a separate COMPANY_MENTOR app listing the same
+                        # IG) still relies on.
+                        from api.dashboard.mentor.dash_mentor_helper import release_mentor_ig_links
+                        release_mentor_ig_links(
+                            user, app.preferred_ig_ids,
+                            exclude_application_id=app.id, actor_user_id=admin_id,
+                        )
 
                     MentorScopeGrant.objects.filter(
                         application=app, is_active=True
