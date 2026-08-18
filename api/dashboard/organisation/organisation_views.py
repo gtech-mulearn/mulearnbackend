@@ -2,8 +2,7 @@ import uuid
 from io import BytesIO
 from tempfile import NamedTemporaryFile
 
-from django.db.models import F, Prefetch, Sum, Q, OuterRef, Subquery, IntegerField
-from django.db.models.functions import Coalesce
+from django.db.models import F, Sum
 from django.http import FileResponse
 from openpyxl import load_workbook
 from rest_framework.views import APIView
@@ -15,7 +14,6 @@ from db.organization import (
     UserOrganizationLink,
     District,
 )
-from django.db.models import Count
 from db.user import User
 
 from utils.permission import CustomizePermission, JWTUtils, role_required
@@ -192,33 +190,20 @@ class InstitutionAPI(APIView):
         if affiliation_id:
             organisations = organisations.filter(affiliation_id=affiliation_id)
 
-        karma_subquery = (
-            UserOrganizationLink.objects.filter(
-                org_id=OuterRef("id"), verified=True
-            )
-            .values("org_id")
-            .annotate(total_karma=Sum("user__wallet_user__karma"))
-            .values("total_karma")
-        )
-
+        # cached_total_karma / cached_member_count are denormalised onto
+        # `organization` and refreshed by mu_celery.org_aggregates_cron. They must
+        # NOT be annotated here: the campus search page sorts by them, so ordering
+        # applies
+        # across the whole result set before LIMIT, which meant a correlated
+        # subquery ran for every organisation on every request - and Django's
+        # Paginator ran the entire annotated query a second time for `count`.
+        # Any annotation carrying an aggregate or subquery forces that count
+        # into a `SELECT COUNT(*) FROM (...)` wrapper, so keeping the queryset
+        # annotation-free is what makes the count a plain indexed COUNT(*).
         org_queryset = (
             organisations
-            .select_related("affiliation")
-            .prefetch_related(
-                Prefetch(
-                    "user_organization_link_org",
-                    queryset=UserOrganizationLink.objects.filter(
-                        verified=True
-                    ).select_related("user"),
-                )
-            )
-            .annotate(user_count=Count("user_organization_link_org", filter=Q(user_organization_link_org__verified=True)))
-            .annotate(
-                total_karma=Coalesce(
-                    Subquery(karma_subquery, output_field=IntegerField()), 0
-                )
-            )
-            .order_by("-total_karma")  # Sort by highest karma
+            .select_related("affiliation", "district__zone__state__country")
+            .order_by("-cached_total_karma")  # Sort by highest karma
         )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
@@ -241,8 +226,8 @@ class InstitutionAPI(APIView):
                 "zone": "district__zone__name",
                 "state": "district__zone__state__name",
                 "country": "district__zone__state__country__name",
-                "karma": "total_karma",
-                "user_count": "user_count",
+                "karma": "cached_total_karma",
+                "user_count": "cached_member_count",
             },
         )
 
@@ -277,15 +262,11 @@ class InstitutionCSVAPI(APIView):
                 "district__zone",
                 "district",
             )
-            .prefetch_related(
-                Prefetch(
-                    "user_organization_link_org",
-                    queryset=UserOrganizationLink.objects.filter(
-                        verified=True
-                    ).select_related("user"),
-                )
-            )
         )
+        # No prefetch of user_organization_link_org: it existed only to feed the
+        # old InstitutionSerializer.get_user_count, which now reads the
+        # denormalised cached_member_count column. On a full export this was
+        # loading every verified link and user for every organisation.
 
         serializer = InstitutionSerializer(organizations, many=True).data
 
