@@ -33,8 +33,14 @@ class MentorTaskCreateSerializer(serializers.ModelSerializer):
         }
 
     def validate_hashtag(self, value):
-        """Global hashtag uniqueness — same rule as admin."""
-        validate_safe_text(value)
+        """Must start with '#' (same convention as admin/company task creation);
+        global hashtag uniqueness — same rule as admin. Not run through
+        validate_safe_text: its SQL-injection heuristic bans a bare '#',
+        which every valid hashtag necessarily starts with.
+        """
+        value = value.strip()
+        if not value.startswith('#'):
+            raise serializers.ValidationError("hashtag must start with '#'")
         qs = TaskList.objects.filter(hashtag=value)
         if self.instance:
             qs = qs.exclude(pk=self.instance.pk)
@@ -90,8 +96,10 @@ class MentorTaskUpdateSerializer(serializers.ModelSerializer):
         )
 
     def validate_hashtag(self, value):
-        """Exclude current instance from uniqueness check on edit."""
-        validate_safe_text(value)
+        """Must start with '#'; exclude current instance from uniqueness check on edit."""
+        value = value.strip()
+        if not value.startswith('#'):
+            raise serializers.ValidationError("hashtag must start with '#'")
         qs = TaskList.objects.filter(hashtag=value)
         if self.instance:
             qs = qs.exclude(pk=self.instance.pk)
