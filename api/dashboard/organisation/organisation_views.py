@@ -2,7 +2,7 @@ import uuid
 from io import BytesIO
 from tempfile import NamedTemporaryFile
 
-from django.db.models import F, Sum
+from django.db.models import F
 from django.http import FileResponse
 from openpyxl import load_workbook
 from rest_framework.views import APIView
@@ -283,25 +283,27 @@ class InstitutionDetailsAPI(APIView):
         responses={200: InstitutionSerializer},
     )
     def get(self, request, org_code):
-        organization = (
-            Organization.objects.filter(code=org_code)
-            .values(
-                "id",
-                "title",
-                "code",
-                affiliation_uuid=F("affiliation__id"),
-                affiliation_name=F("affiliation__title"),
-                district_uuid=F("district__id"),
-                district_name=F("district__name"),
-                zone_uuid=F("district__zone__id"),
-                zone_name=F("district__zone__name"),
-                state_uuid=F("district__zone__state__id"),
-                state_name=F("district__zone__state__name"),
-                country_uuid=F("district__zone__state__country__id"),
-                country_name=F("district__zone__state__country__name"),
-            )
-            .annotate(karma=Sum("user_organization_link_org__user__wallet_user__karma"))
-            .order_by("-karma")
+        # karma/user_count read straight off the denormalised columns maintained by
+        # mu_celery.org_aggregates_cron (verified members only) - matches what
+        # InstitutionAPI shows on the org list page for the same organisation,
+        # instead of a separately-computed, unfiltered-by-verified live Sum that
+        # could show a different total here than on the list page.
+        organization = Organization.objects.filter(code=org_code).values(
+            "id",
+            "title",
+            "code",
+            affiliation_uuid=F("affiliation__id"),
+            affiliation_name=F("affiliation__title"),
+            district_uuid=F("district__id"),
+            district_name=F("district__name"),
+            zone_uuid=F("district__zone__id"),
+            zone_name=F("district__zone__name"),
+            state_uuid=F("district__zone__state__id"),
+            state_name=F("district__zone__state__name"),
+            country_uuid=F("district__zone__state__country__id"),
+            country_name=F("district__zone__state__country__name"),
+            karma=F("cached_total_karma"),
+            user_count=F("cached_member_count"),
         )
 
         return CustomResponse(response=organization).get_success_response()
@@ -533,7 +535,11 @@ class InstitutionPrefillAPI(APIView):
         responses={200: InstitutionPrefillSerializer},
     )
     def get(self, request, org_code):
-        organization = Organization.objects.filter(code=org_code).first()
+        organization = (
+            Organization.objects.filter(code=org_code)
+            .select_related("affiliation", "district__zone__state__country")
+            .first()
+        )
 
         serializer = InstitutionPrefillSerializer(organization, many=False).data
 
@@ -710,8 +716,8 @@ class OrganisationImportAPI(APIView):
 
         title_excel = set()
         code_excel = set()
-        title_db = Organization.objects.values_list("title", flat=True)
-        code_db = Organization.objects.values_list("code", flat=True)
+        title_db = set(Organization.objects.values_list("title", flat=True))
+        code_db = set(Organization.objects.values_list("code", flat=True))
 
         affiliations_to_fetch = set()
         districts_to_fetch = set()
@@ -864,8 +870,24 @@ class UnverifiedOrganizationsListAPI(APIView):
             .filter(verified__isnull=True)
             .order_by("-created_at")
         )
-        seializer = UnverifiedOrganizationsSerializer(unverified_orgs, many=True)
-        return CustomResponse(response=seializer.data).get_success_response()
+
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            unverified_orgs,
+            request,
+            ["title", "created_by__full_name", "department__title"],
+            {
+                "title": "title",
+                "created_by": "created_by__full_name",
+                "department": "department__title",
+                "created_at": "created_at",
+            },
+        )
+        seializer = UnverifiedOrganizationsSerializer(
+            paginated_queryset.get("queryset"), many=True
+        )
+        return CustomResponse().paginated_response(
+            data=seializer.data, pagination=paginated_queryset.get("pagination")
+        )
 
 
 class VerifyOrganizationAPI(APIView):
