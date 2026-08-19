@@ -246,13 +246,15 @@ class InstitutionPrefillSerializer(serializers.ModelSerializer):
     district_name = serializers.CharField(source="district.name", allow_null=True)
     zone_id = serializers.CharField(source="district.zone.id", allow_null=True)
     zone_name = serializers.CharField(source="district.zone.name", allow_null=True)
-    state_id = serializers.CharField(source="district.state.id", allow_null=True)
-    state_name = serializers.CharField(source="district.state.name", allow_null=True)
+    state_id = serializers.CharField(source="district.zone.state.id", allow_null=True)
+    state_name = serializers.CharField(
+        source="district.zone.state.name", allow_null=True
+    )
     country_id = serializers.CharField(
-        source="district.state.country.id", allow_null=True
+        source="district.zone.state.country.id", allow_null=True
     )
     country_name = serializers.CharField(
-        source="district.state.country.name", allow_null=True
+        source="district.zone.state.country.name", allow_null=True
     )
 
     class Meta:

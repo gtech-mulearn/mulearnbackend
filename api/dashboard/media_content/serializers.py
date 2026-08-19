@@ -71,10 +71,15 @@ class OfficeHoursReadSerializer(serializers.ModelSerializer):
         link_ids = obj.interest_groups or []
         if not link_ids:
             return []
-        links = IgMediaContentLink.objects.filter(
-            id__in=link_ids
-        ).select_related('interest_group')
-        names_by_id = {link.id: link.interest_group.name for link in links}
+        # In a list response the view batches all links for the page into
+        # context['ig_names_map'] in one query; fall back to a per-object
+        # query here only for single-record responses (detail/create/update).
+        names_by_id = self.context.get('ig_names_map')
+        if names_by_id is None:
+            links = IgMediaContentLink.objects.filter(
+                id__in=link_ids
+            ).select_related('interest_group')
+            names_by_id = {link.id: link.interest_group.name for link in links}
         return [names_by_id[link_id] for link_id in link_ids if link_id in names_by_id]
 
 
@@ -203,12 +208,25 @@ class OfficeHoursWriteSerializer(serializers.Serializer):
 
     def validate_interest_groups(self, value):
         """`value` is a list of interest_group ids. Every id must resolve to
-        an existing InterestGroup."""
+        an existing InterestGroup.
+
+        Bulk import pre-resolves every id referenced across the whole CSV in
+        one query and passes the trusted set via context['known_ig_ids'], so
+        this only falls back to a DB query for ids it doesn't already know
+        about — avoiding a query per CSV row.
+        """
         if not value:
             return value
-        found_ids = set(
-            InterestGroup.objects.filter(id__in=value).values_list('id', flat=True)
-        )
+        known_ids = self.context.get('known_ig_ids')
+        if known_ids is not None:
+            unresolved = [ig_id for ig_id in value if ig_id not in known_ids]
+            found_ids = known_ids if not unresolved else known_ids | set(
+                InterestGroup.objects.filter(id__in=unresolved).values_list('id', flat=True)
+            )
+        else:
+            found_ids = set(
+                InterestGroup.objects.filter(id__in=value).values_list('id', flat=True)
+            )
         unknown_ids = [ig_id for ig_id in value if ig_id not in found_ids]
         if unknown_ids:
             raise serializers.ValidationError(

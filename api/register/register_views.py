@@ -22,6 +22,7 @@ from rest_framework import serializers as s
 DISCORD_CLIENT_ID = config("DISCORD_CLIENT_ID")
 DISCORD_CLIENT_SECRET = config("DISCORD_CLIENT_SECRET")
 FR_DOMAIN_NAME = config("FR_DOMAIN_NAME")
+DISCORD_TIMEOUT = (3, 10)  # (connect seconds, read seconds)
 
 
 class ConnectDiscordAPI(APIView):
@@ -49,11 +50,17 @@ class ConnectDiscordAPI(APIView):
             "redirect_uri": redirect_uri,
         }
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
-        token_response = requests.post(
-            token_url,
-            data=data,
-            headers=headers,
-        )
+        try:
+            token_response = requests.post(
+                token_url,
+                data=data,
+                headers=headers,
+                timeout=DISCORD_TIMEOUT,
+            )
+        except requests.RequestException:
+            return CustomResponse(
+                general_message="Discord is temporarily unavailable. Please try again."
+            ).get_failure_response()
         if token_response.status_code != 200:
             # Discord can return a non-JSON error body (e.g. a gateway error page) —
             # check the status before parsing, otherwise .json() can raise and turn
@@ -303,20 +310,20 @@ class LearningCircleUserViewAPI(APIView):
     def post(self, request):
         muid = request.headers.get("muid")
 
-        user = User.objects.filter(muid=muid).first()
+        user = User.objects.filter(muid=muid).values(
+            "id", "muid", "full_name", "email", "mobile"
+        ).first()
 
         if user is None:
             return CustomResponse(general_message="Invalid muid").get_failure_response()
 
-        data = serializers.LearningCircleUserSerializer(user).data
-
         return CustomResponse(
             response={
-                "id": data["id"],
-                "muid": data["muid"],
-                "name": data["full_name"],
-                "email": data["email"],
-                "phone": data["mobile"],
+                "id": user["id"],
+                "muid": user["muid"],
+                "name": user["full_name"],
+                "email": user["email"],
+                "phone": user["mobile"],
             }
         ).get_success_response()
 
@@ -437,7 +444,7 @@ class CountryAPI(APIView):
         responses={200: serializers.CountrySerializer},
     )
     def get(self, request):
-        countries = Country.objects.all()
+        countries = Country.objects.values("id", "name")
 
         serializer = serializers.CountrySerializer(countries, many=True)
 
@@ -455,12 +462,17 @@ class StateAPI(APIView):
         responses={200: serializers.StateSerializer},
     )
     def post(self, request):
-        state = State.objects.filter(country_id=request.data.get("country"))
-        serializer = serializers.StateSerializer(state, many=True)
+        country_id = request.data.get("country")
+        cache_key = f"register_states_{country_id}"
+        data = cache.get(cache_key)
+        if data is None:
+            state = State.objects.filter(country_id=country_id).values("id", "name")
+            data = serializers.StateSerializer(state, many=True).data
+            cache.set(cache_key, data, 60 * 10)
 
         return CustomResponse(
             response={
-                "states": serializer.data,
+                "states": data,
             }
         ).get_success_response()
 
@@ -472,13 +484,19 @@ class DistrictAPI(APIView):
         responses={200: serializers.DistrictSerializer},
     )
     def post(self, request):
-        district = District.objects.filter(zone__state_id=request.data.get("state"))
-
-        serializer = serializers.DistrictSerializer(district, many=True)
+        state_id = request.data.get("state")
+        cache_key = f"register_districts_{state_id}"
+        data = cache.get(cache_key)
+        if data is None:
+            district = District.objects.filter(zone__state_id=state_id).values(
+                "id", "name"
+            )
+            data = serializers.DistrictSerializer(district, many=True).data
+            cache.set(cache_key, data, 60 * 10)
 
         return CustomResponse(
             response={
-                "districts": serializer.data,
+                "districts": data,
             }
         ).get_success_response()
 
@@ -523,14 +541,17 @@ class CollegeAPI(APIView):
         else:
             org_queryset = org_queryset[:self.DISTRICT_MAX_RESULTS]
 
-        department_queryset = Department.objects.all()
+        department_serializer_data = cache.get("register_college_departments")
+        if department_serializer_data is None:
+            department_serializer_data = serializers.OrgSerializer(
+                Department.objects.values("id", "title"), many=True
+            ).data
+            cache.set(
+                "register_college_departments", department_serializer_data, 60 * 10
+            )
 
         college_serializer_data = serializers.OrgSerializer(
-            org_queryset, many=True
-        ).data
-
-        department_serializer_data = serializers.OrgSerializer(
-            department_queryset, many=True
+            org_queryset.values("id", "title"), many=True
         ).data
 
         return CustomResponse(
@@ -548,14 +569,19 @@ class SchoolAPI(APIView):
         responses={200: serializers.OrgSerializer},
     )
     def post(self, request):
-        org_queryset = Organization.objects.filter(
-            Q(org_type=OrganizationType.SCHOOL.value),
-            Q(district_id=request.data.get("district")),
-        ).order_by("title")
+        district_id = request.data.get("district")
+        cache_key = f"register_schools_{district_id}"
+        college_serializer_data = cache.get(cache_key)
+        if college_serializer_data is None:
+            org_queryset = Organization.objects.filter(
+                Q(org_type=OrganizationType.SCHOOL.value),
+                Q(district_id=district_id),
+            ).order_by("title").values("id", "title")
 
-        college_serializer_data = serializers.OrgSerializer(
-            org_queryset, many=True
-        ).data
+            college_serializer_data = serializers.OrgSerializer(
+                org_queryset, many=True
+            ).data
+            cache.set(cache_key, college_serializer_data, 60 * 10)
 
         return CustomResponse(
             response={
@@ -574,7 +600,7 @@ class CommunityAPI(APIView):
     def get(self, request):
         community_queryset = Organization.objects.filter(
             org_type=OrganizationType.COMMUNITY.value
-        ).order_by("title")
+        ).order_by("title").values("id", "title")
 
         community_serializer_data = serializers.OrgSerializer(
             community_queryset, many=True
@@ -595,7 +621,9 @@ class AreaOfInterestAPI(APIView):
     def get(self, request):
         # Only "active" IGs should be offered as an interest during registration —
         # requested/rejected/cancelled ones aren't real, selectable groups yet.
-        aoi_queryset = InterestGroup.objects.filter(status="active")
+        aoi_queryset = InterestGroup.objects.filter(status="active").values(
+            "id", "name"
+        )
 
         aoi_serializer_data = serializers.AreaOfInterestAPISerializer(
             aoi_queryset, many=True
@@ -616,7 +644,7 @@ class UserEmailVerificationAPI(APIView):
         # User.every (not User.objects/ActiveUserManager) — a suspended user's email
         # still occupies the unique constraint, so it must count as "exists" here too,
         # otherwise registration proceeds and fails later with a DB IntegrityError.
-        if user := User.every.filter(email=user_email).first():
+        if User.every.filter(email=user_email).exists():
             return CustomResponse(
                 general_message="This email already exists", response={"value": True}
             ).get_success_response()
@@ -634,7 +662,7 @@ class UserCountryAPI(APIView):
         responses={200: serializers.UserCountrySerializer},
     )
     def get(self, request):
-        country = Country.objects.all()
+        country = Country.objects.values("name")
 
         if country is None:
             return CustomResponse(
@@ -658,14 +686,16 @@ class UserStateAPI(APIView):
         # "No country data available" regardless of what the client sent.
         country_name = request.query_params.get("country")
 
-        country_object = Country.objects.filter(name=country_name).first()
+        country_id = Country.objects.filter(
+            name=country_name
+        ).values_list("id", flat=True).first()
 
-        if country_object is None:
+        if country_id is None:
             return CustomResponse(
                 general_message="No country data available"
             ).get_success_response()
 
-        state_object = State.objects.filter(country_id=country_object).all()
+        state_object = State.objects.filter(country_id=country_id).values("name")
 
         if len(state_object) == 0:
             return CustomResponse(
@@ -687,14 +717,16 @@ class UserZoneAPI(APIView):
         # Same GET/query-param fix as UserStateAPI — request.data is empty on GET.
         state_name = request.query_params.get("state")
 
-        state_object = State.objects.filter(name=state_name).first()
+        state_id = State.objects.filter(
+            name=state_name
+        ).values_list("id", flat=True).first()
 
-        if state_object is None:
+        if state_id is None:
             return CustomResponse(
                 general_message="No state data available"
             ).get_success_response()
 
-        zone_object = Zone.objects.filter(state_id=state_object).all()
+        zone_object = Zone.objects.filter(state_id=state_id).values("name")
 
         if len(zone_object) == 0:
             return CustomResponse(
