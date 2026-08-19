@@ -134,28 +134,26 @@ class ImportVoucherLogAPI(APIView):
             if voucher_serializer.is_valid():
                 voucher_serializer.save()
             else:
-                code_error_dict = {}
-                for error in voucher_serializer.errors:
-                    code_error = error.get('code')
-                    error_msg = error.get('error')
-
-                    code = str(code_error[0])
-                    error_value = str(error_msg[0])
-                    code_error_dict[code] = error_value
-
-                for row in valid_rows:
-                    code = row['code']
-                    error_row = {}
-                    if code in code_error_dict:
-                        error_row['muid'] = row['muid']
-                        error_row['karma'] = row['karma']
-                        error_row['week'] = row['week']
-                        error_row['month'] = row['month']
-                        error_row['hashtag'] = row['hashtag']
-                        error_row['description'] = row['description']
-                        error_row['event'] = row['event']
-                        error_row['error'] = code_error_dict[code]
-                        error_rows.append(error_row)
+                for row, error in zip(valid_rows, voucher_serializer.errors):
+                    if not error:
+                        continue
+                    if 'code' in error and 'error' in error:
+                        error_value = str(error['error'][0])
+                    else:
+                        # Standard DRF field-level errors, e.g.
+                        # {'karma': ['A valid integer is required.']}
+                        field, messages = next(iter(error.items()))
+                        error_value = f"{field}: {messages[0]}"
+                    error_rows.append({
+                        'muid': row['muid'],
+                        'karma': row['karma'],
+                        'week': row['week'],
+                        'month': row['month'],
+                        'hashtag': row['hashtag'],
+                        'description': row['description'],
+                        'event': row['event'],
+                        'error': error_value,
+                    })
 
                 return CustomResponse(
                     general_message='Fix the errors and try again ',
