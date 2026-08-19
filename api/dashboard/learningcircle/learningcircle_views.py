@@ -232,7 +232,9 @@ class LearningCircleMeetingInfoAPI(APIView):
     )
     def get(self, request, meet_id: str):
         user_id = JWTUtils.fetch_user_id(request)
-        meet = CircleMeetingLog.objects.filter(id=meet_id).first()
+        meet = CircleMeetingLog.objects.filter(id=meet_id).select_related(
+            "circle_id__ig", "created_by"
+        ).first()
         if not meet:
             return CustomResponse(
                 general_message="Meeting not found"
@@ -256,12 +258,21 @@ class LearningCircleMeetingListView(APIView):
             return CustomResponse(
                 general_message="Learning Circle not found"
             ).get_failure_response()
-        circle_meetings = CircleMeetingLog.objects.filter(circle_id=learning_circle)
-        serializer = CircleMeetupMinSerializer(circle_meetings, many=True)
-        return CustomResponse(
-            general_message="Circle Meetings fetched successfully",
-            response=serializer.data,
-        ).get_success_response()
+        circle_meetings = (
+            CircleMeetingLog.objects.filter(circle_id=learning_circle)
+            .select_related("circle_id__ig", "circle_id__org", "created_by")
+            .prefetch_related("circle_meeting_attendance_meet_id")
+            .order_by("-meet_time")
+        )
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            circle_meetings, request, search_fields=["title"]
+        )
+        serializer = CircleMeetupMinSerializer(
+            paginated_queryset.get("queryset"), many=True
+        )
+        return CustomResponse().paginated_response(
+            data=serializer.data, pagination=paginated_queryset.get("pagination")
+        )
 
 
 class LearningCircleMeetingView(APIView):
@@ -720,10 +731,14 @@ class LearningCircleReportAPI(APIView):
             return CustomResponse(
                 general_message="Please provide the report"
             ).get_failure_response()
+        attendee_map = {
+            attendee.user_id_id: attendee
+            for attendee in CircleMeetingAttendees.objects.filter(
+                meet_id=circle_meeting, user_id_id__in=attendees.keys()
+            )
+        }
         for attendee_id, approved in attendees.items():
-            attendee = CircleMeetingAttendees.objects.filter(
-                meet_id=circle_meeting, user_id_id=attendee_id
-            ).first()
+            attendee = attendee_map.get(attendee_id)
             if not attendee or not attendee.is_joined:
                 return CustomResponse(
                     general_message="Attendee has not joined the Circle Meeting"
@@ -733,15 +748,15 @@ class LearningCircleReportAPI(APIView):
                     general_message="Attendee has not submitted the report"
                 ).get_failure_response()
         karma_user_ids = []
+        to_update = []
+        for attendee_id, approved in attendees.items():
+            attendee = attendee_map[attendee_id]
+            attendee.is_lc_approved = approved
+            to_update.append(attendee)
+            if approved:
+                karma_user_ids.append(attendee_id)
         with transaction.atomic():
-            for attendee_id, approved in attendees.items():
-                attendee = CircleMeetingAttendees.objects.filter(
-                    meet_id=circle_meeting, user_id_id=attendee_id
-                ).first()
-                attendee.is_lc_approved = approved
-                attendee.save()
-                if approved:
-                    karma_user_ids.append(attendee_id)
+            CircleMeetingAttendees.objects.bulk_update(to_update, ["is_lc_approved"])
             circle_meeting.is_report_submitted = True
             circle_meeting.report_text = report
             circle_meeting.save()
@@ -782,18 +797,17 @@ class LearningCircleReportAPI(APIView):
         karma_user_ids = list(
             attendees.filter(is_lc_approved=True).values_list("user_id_id", flat=True)
         )
-        for attendee in attendees:
-            attendee.is_lc_approved = False
-            attendee.save()
-        circle_meeting.is_report_submitted = False
-        circle_meeting.report_text = None
-        circle_meeting.save()
-        if karma_user_ids:
-            remove_karma(
-                karma_user_ids,
-                Lc.LC_REPORT_HASHTAG.value,
-                Lc.LC_REPORT_KARMA.value,
-            )
+        with transaction.atomic():
+            attendees.update(is_lc_approved=False)
+            circle_meeting.is_report_submitted = False
+            circle_meeting.report_text = None
+            circle_meeting.save()
+            if karma_user_ids:
+                remove_karma(
+                    karma_user_ids,
+                    Lc.LC_REPORT_HASHTAG.value,
+                    Lc.LC_REPORT_KARMA.value,
+                )
         return CustomResponse(
             general_message="The report has been deleted successfully"
         ).get_success_response()
@@ -824,7 +838,9 @@ class LearningCircleReportExportAPI(APIView):
                 general_message="You do not have permission to export the report"
             ).get_failure_response()
 
-        attendees = (
+        # Materialized once: .count() below and the row-by-row CSV write further
+        # down would otherwise each re-execute the same SELECT.
+        attendees = list(
             CircleMeetingAttendees.objects.filter(
                 meet_id=circle_meeting, is_joined=True
             )
@@ -871,7 +887,7 @@ class LearningCircleReportExportAPI(APIView):
         writer.writerow(
             ["LC Approved", "Yes" if circle_meeting.is_approved else "No"]
         )
-        writer.writerow(["Total Attendees", attendees.count()])
+        writer.writerow(["Total Attendees", len(attendees)])
         writer.writerow([])
         writer.writerow(["Minutes of Meeting"])
         writer.writerow([clean(circle_meeting.report_text)])
@@ -919,7 +935,9 @@ class LearningCircleMeetingPublicListView(APIView):
         request_data = request.query_params
         ig_id = request_data.get("ig_id", None)
         queryset = (
-            CircleMeetingLog.objects.select_related("circle_id__ig")
+            CircleMeetingLog.objects.select_related(
+                "circle_id__ig", "circle_id__org", "created_by"
+            )
             .all()
             .order_by("-meet_time")
         )
@@ -994,20 +1012,25 @@ class LearningCircleMeetingListAPI(APIView):
             filter = Q(id__in=user_meetups)
         else:
             filter = Q()
-        meetings = CircleMeetingLog.objects.filter(filter).order_by("meet_time")
+        meetings = (
+            CircleMeetingLog.objects.filter(filter)
+            .select_related("circle_id__ig", "circle_id__org", "created_by")
+            .prefetch_related("circle_meeting_attendance_meet_id")
+            .order_by("meet_time")
+        )
         if category and category != "all" and isinstance(category, list):
-            meetings = meetings.select_related("circle_id__ig").filter(
-                circle_id__ig__category__in=category
-            )
+            meetings = meetings.filter(circle_id__ig__category__in=category)
 
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            meetings, request, search_fields=["title"]
+        )
         serializer = CircleMeetupMinSerializer(
-            meetings, many=True, context={"user_id": user_id}
+            paginated_queryset.get("queryset"), many=True, context={"user_id": user_id}
         )
 
-        return CustomResponse(
-            general_message="Meetings fetched successfully",
-            response=serializer.data,
-        ).get_success_response()
+        return CustomResponse().paginated_response(
+            data=serializer.data, pagination=paginated_queryset.get("pagination")
+        )
 
 
 
@@ -1053,11 +1076,14 @@ class LearningCircleMemberDetailsView(APIView):
             ).select_related('user')
             
             leaders = set(link.user_id for link in member_links if link.lead)
-            
+
             member_ids = [link.user_id for link in member_links]
-            
-            users = {user.id: user for user in User.objects.filter(id__in=member_ids)}
-    
+
+            # member_links.select_related('user') already hydrated each user --
+            # User.objects.filter(id__in=member_ids) here would just re-fetch the
+            # same rows a second time.
+            users = {link.user_id: link.user for link in member_links}
+
             karma_data = KarmaActivityLog.objects.filter(
                 user_id__in=member_ids,
                 task__ig=circle.ig
@@ -1164,13 +1190,26 @@ class UserCircleListAPI(APIView):
         links = (
             UserCircleLink.objects.filter(user_id=user_id, accepted=True)
             .select_related('circle__ig', 'circle__org')
+            .order_by('-accepted_at')
         )
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            links, request, search_fields=["circle__title"]
+        )
+        page = paginated_queryset.get("queryset")
+        circle_ids = [link.circle_id for link in page]
+        total_members_map = {
+            row["circle"]: row["count"]
+            for row in UserCircleLink.objects.filter(
+                circle_id__in=circle_ids, accepted=True
+            ).values("circle").annotate(count=Count("id"))
+        }
         from .learningcircle_serializer import UserCircleListSerializer
-        serializer = UserCircleListSerializer(links, many=True)
-        return CustomResponse(
-            general_message="User circles fetched successfully",
-            response=serializer.data,
-        ).get_success_response()
+        serializer = UserCircleListSerializer(
+            page, many=True, context={"total_members_map": total_members_map}
+        )
+        return CustomResponse().paginated_response(
+            data=serializer.data, pagination=paginated_queryset.get("pagination")
+        )
 
 
 class CircleJoinAPI(APIView):
@@ -1390,20 +1429,23 @@ class CircleMemberAddAPI(APIView):
                 general_message="User is already a member of this circle"
             ).get_failure_response()
 
-        # Remove any pending invite if exists to avoid duplicate
-        UserCircleLink.objects.filter(
-            circle=circle, user_id=target_user_id, accepted__isnull=True
-        ).delete()
+        with transaction.atomic():
+            # Remove any pending invite if exists to avoid duplicate. Atomic with
+            # the create below so a failure after the delete can't leave the
+            # target with neither a pending invite nor a membership.
+            UserCircleLink.objects.filter(
+                circle=circle, user_id=target_user_id, accepted__isnull=True
+            ).delete()
 
-        UserCircleLink.objects.create(
-            id=str(uuid.uuid4()),
-            user_id=target_user_id,
-            circle=circle,
-            lead=False,
-            is_invited=False,
-            accepted=True,
-            accepted_at=DateTimeUtils.get_current_utc_time(),
-        )
+            UserCircleLink.objects.create(
+                id=str(uuid.uuid4()),
+                user_id=target_user_id,
+                circle=circle,
+                lead=False,
+                is_invited=False,
+                accepted=True,
+                accepted_at=DateTimeUtils.get_current_utc_time(),
+            )
         return CustomResponse(general_message="Member added successfully").get_success_response()
 
 
