@@ -1,6 +1,8 @@
 from django.core.files.storage import FileSystemStorage
 from django.db.models import Sum, F, Value, Count, Q, Prefetch, Subquery, OuterRef, IntegerField
 from django.db.models.functions import Concat, Coalesce
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
 from rest_framework.views import APIView
 from decouple import config as decouple_config
 from . import serializers
@@ -30,12 +32,13 @@ class StudentsLeaderboard(APIView):
             )
             .distinct()
             .select_related("wallet_user")
+            .only("muid", "full_name", "wallet_user__karma")
             .prefetch_related(
                 Prefetch(
                     "user_organization_link_user",
                     queryset=UserOrganizationLink.objects.filter(
                         org__org_type=OrganizationType.COLLEGE.value
-                    ).select_related("org"),
+                    ).select_related("org").only("user_id", "org__title"),
                     to_attr="colleges",
                 )
             )
@@ -66,14 +69,8 @@ class StudentsMonthlyLeaderboard(APIView):
     )
     def get(self, request):
         start_date, end_date = DateTimeUtils.get_start_and_end_of_previous_month()
-        print("REquest reeceivd")
         student_monthly_leaderboard = (
-            User.objects.prefetch_related(
-                "user_role_link_user__role",
-                "user_organization_link_user__org",
-                "karma_activity_log_user",
-            )
-            .filter(
+            User.objects.filter(
                 user_role_link_user__role__title=RoleType.STUDENT.value,
                 user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
                 exist_in_guild=True,
@@ -154,6 +151,7 @@ class CollegeLeaderboard(APIView):
 
 
 class CollegeMonthlyLeaderboard(APIView):
+    @method_decorator(cache_page(60 * 5))
     @extend_schema(tags=['Leaderboard'], description="Retrieve College Monthly Leaderboard.",
         responses={200: inline_serializer(
             name='LeaderboardCollegeMonthlyItem',
@@ -302,7 +300,7 @@ class WadhwaniZonalLeaderboard(APIView):
                 total_karma=F("total_karma"),
                 students=F("students"),
             )
-            .order_by("-total_karma")
+            .order_by("-total_karma")[:20]
         )
 
         response_data = serializers.WadhwaniZoneLeaderboardSerializer(zone_leaderboard, many=True).data
@@ -353,7 +351,8 @@ class IGMentorLeaderboard(APIView):
                 user__user_ig_link_user__assignment_type='MENTOR',
                 user__user_ig_link_user__is_active=True,
             )
-            .select_related('user__wallet_user')
+            .select_related('user')
+            .only('user_id', 'user__id', 'user__full_name')
             .annotate(
                 total_karma=Coalesce(F('user__wallet_user__karma'), Value(0)),
                 completed_sessions=Coalesce(
@@ -416,7 +415,8 @@ class CampusMentorLeaderboard(APIView):
                 user_id__in=campus_mentor_user_ids,
                 is_active=True,
             )
-            .select_related('user__wallet_user')
+            .select_related('user')
+            .only('user_id', 'user__id', 'user__full_name')
             .annotate(
                 total_karma=Coalesce(F('user__wallet_user__karma'), Value(0)),
                 completed_sessions=Coalesce(
@@ -478,7 +478,8 @@ class CompanyMentorLeaderboard(APIView):
                 user_id__in=company_mentor_user_ids,
                 is_active=True,
             )
-            .select_related('user__wallet_user')
+            .select_related('user')
+            .only('user_id', 'user__id', 'user__full_name')
             .annotate(
                 total_karma=Coalesce(F('user__wallet_user__karma'), Value(0)),
                 completed_sessions=Coalesce(
