@@ -127,9 +127,13 @@ class ImportVoucherLogAPI(APIView):
                     count += 1
                     valid_rows.append(row)
 
-        # Serializing and saving valid voucher rows to the database
+        # Strip muid/hashtag (not serializer fields) so the strict-serializer patch doesn't reject them.
         voucher_serializer = VoucherLogCSVSerializer(
-            data=valid_rows, many=True)
+            data=[
+                {k: v for k, v in row.items() if k not in ('muid', 'hashtag')}
+                for row in valid_rows
+            ],
+            many=True)
         with transaction.atomic():
             if voucher_serializer.is_valid():
                 voucher_serializer.save()
