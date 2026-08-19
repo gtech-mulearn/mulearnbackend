@@ -4,10 +4,11 @@ from datetime import timedelta
 from decouple import config as decouple_config
 from django.contrib.auth.hashers import make_password
 from django.core.files.storage import FileSystemStorage
-from django.db.models import Q
+from django.db.models import Prefetch, Q
 from rest_framework.views import APIView
 
 from db.organization import UserOrganizationLink
+from db.task import UserIgLink
 from db.user import ForgotPassword, User, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
@@ -34,7 +35,7 @@ class UserInfoAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         user = (
             User.objects.prefetch_related(
-                "user_domains", "user_endgoals", "user_role_link_user"
+                "user_domains", "user_endgoals", "user_role_link_user__role"
             )
             .filter(muid=user_muid)
             .first()
@@ -628,7 +629,21 @@ class UserSearchAPI(APIView):
         queryset = (
             User.objects.all()
             .select_related("wallet_user")
-            .prefetch_related("user_settings_user")
+            .prefetch_related(
+                "user_settings_user",
+                Prefetch(
+                    "user_ig_link_user",
+                    queryset=UserIgLink.objects.select_related("ig").only(
+                        "user_id", "ig__id", "ig__name"
+                    ),
+                ),
+                Prefetch(
+                    "user_organization_link_user",
+                    queryset=UserOrganizationLink.objects.select_related("org").only(
+                        "user_id", "org__id", "org__title", "org__code", "org__org_type"
+                    ),
+                ),
+            )
             .order_by("-wallet_user__karma")
         )
         if role:
@@ -637,14 +652,10 @@ class UserSearchAPI(APIView):
                 user_role_link_user__verified=True,
             )
         if ig_id:
-            queryset = queryset.prefetch_related("user_ig_link_user").filter(
-                user_ig_link_user__ig_id=ig_id
-            )
+            queryset = queryset.filter(user_ig_link_user__ig_id=ig_id)
 
         if org_id:
-            queryset = queryset.prefetch_related("user_organization_link_user").filter(
-                user_organization_link_user__org_id=org_id
-            )
+            queryset = queryset.filter(user_organization_link_user__org_id=org_id)
 
         queryset = CommonUtils.get_paginated_queryset(
             queryset,

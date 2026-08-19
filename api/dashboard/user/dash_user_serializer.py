@@ -227,7 +227,9 @@ class UserDetailsSerializer(serializers.ModelSerializer):
             return super().update(instance, validated_data)
 
     def get_organizations(self, user):
-        organization_links = user.user_organization_link_user.select_related("org")
+        organization_links = user.user_organization_link_user.select_related(
+            "org__district__zone__state__country", "department"
+        )
         if not organization_links.exists():
             return None
 
@@ -708,11 +710,11 @@ class UserBasicDetailsSerializer(serializers.ModelSerializer):
         )
 
     def get_organizations(self, obj):
-        org_links = (
-            obj.user_organization_link_user.all()
-            .select_related("org")
-            .only("org__id", "org__title", "org__code", "org__org_type")
-        )
+        # Use .all() so Django resolves results from _prefetched_objects_cache (the
+        # view's Prefetch already carries select_related("org").only(...)). Chaining
+        # .select_related()/.only() here would clone the queryset and bypass the
+        # cache, issuing a new SQL query per user (N+1).
+        org_links = obj.user_organization_link_user.all()
         data = []
         for org_link in org_links:
             data.append(
@@ -726,9 +728,8 @@ class UserBasicDetailsSerializer(serializers.ModelSerializer):
         return data
 
     def get_interest_groups(self, obj):
-        ig_links = (
-            obj.user_ig_link_user.all().select_related("ig").only("ig__id", "ig__name")
-        )
+        # Same _prefetched_objects_cache reasoning as get_organizations above.
+        ig_links = obj.user_ig_link_user.all()
         data = []
         for ig_link in ig_links:
             data.append({"id": ig_link.ig.id, "name": ig_link.ig.name})
