@@ -360,4 +360,11 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'mu_celery.org_aggregates_cron.refresh_org_aggregates',
         'schedule': crontab(minute='*/15'),
     },
+    # Keeps learning_circle.cached_total_karma / .cached_rank fresh for the
+    # circle detail view's ranking display. Same 15-minute cadence and lag
+    # rationale as refresh-org-aggregates-cron above.
+    'refresh-learning-circle-aggregates-cron': {
+        'task': 'mu_celery.learning_circle_aggregates_cron.refresh_learning_circle_aggregates',
+        'schedule': crontab(minute='*/15'),
+    },
 }
