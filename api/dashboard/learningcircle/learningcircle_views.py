@@ -313,7 +313,7 @@ class LearningCircleMeetingView(APIView):
         if error:
             return error
         circle = circle_meeting.circle_id
-        if circle_meeting.created_by_id != user_id and not _is_lead_or_creator(circle, user_id):
+        if not _is_lead_or_creator(circle, user_id):
             return CustomResponse(
                 general_message="You do not have permission to edit this Circle Meeting"
             ).get_failure_response()
@@ -342,7 +342,7 @@ class LearningCircleMeetingView(APIView):
         if error:
             return error
         circle = circle_meeting.circle_id
-        if circle_meeting.created_by_id != user_id and not _is_lead_or_creator(circle, user_id):
+        if not _is_lead_or_creator(circle, user_id):
             return CustomResponse(
                 general_message="You do not have permission to delete this Circle Meeting"
             ).get_failure_response()
@@ -1737,6 +1737,11 @@ class CircleMemberRemoveAPI(APIView):
         if not link:
             return CustomResponse(
                 general_message="User is not a member of this circle"
+            ).get_failure_response()
+
+        if link.lead:
+            return CustomResponse(
+                general_message="Transfer leadership before removing the circle lead"
             ).get_failure_response()
 
         link.delete()
