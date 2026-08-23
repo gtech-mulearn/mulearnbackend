@@ -295,10 +295,10 @@ class LearningCircleMeetingView(APIView):
             return CustomResponse(
                 general_message="Learning Circle not found"
             ).get_failure_response()
-        # Only accepted members (including the lead/creator) may create meetings.
-        if not _is_member_or_creator(circle, user_id):
+        # Only the circle lead or creator may create meetings.
+        if not _is_lead_or_creator(circle, user_id):
             return CustomResponse(
-                general_message="Only circle members can create meetings"
+                general_message="Only the circle lead or creator can create meetings"
             ).get_failure_response()
         meet_code = generate_code()
         request_data = request.data.copy()
@@ -338,7 +338,8 @@ class LearningCircleMeetingView(APIView):
         circle_meeting, error = _get_meeting_or_response(meet_id)
         if error:
             return error
-        if circle_meeting.created_by_id != user_id:
+        circle = circle_meeting.circle_id
+        if not _is_lead_or_creator(circle, user_id):
             return CustomResponse(
                 general_message="You do not have permission to edit this Circle Meeting"
             ).get_failure_response()
@@ -363,10 +364,11 @@ class LearningCircleMeetingView(APIView):
     )
     def delete(self, request, meet_id: str):
         user_id = JWTUtils.fetch_user_id(request)
-        circle_meeting = CircleMeetingLog.objects.select_related(
-            "created_by", "circle_id"
-        ).get(id=meet_id)
-        if circle_meeting.created_by_id != user_id:
+        circle_meeting, error = _get_meeting_or_response(meet_id)
+        if error:
+            return error
+        circle = circle_meeting.circle_id
+        if not _is_lead_or_creator(circle, user_id):
             return CustomResponse(
                 general_message="You do not have permission to delete this Circle Meeting"
             ).get_failure_response()
@@ -1663,11 +1665,6 @@ class CircleTransferLeadAPI(APIView):
                 general_message="Only the circle lead or creator can transfer leadership"
             ).get_failure_response()
 
-        # caller_link may be None if the caller is the circle creator without a UserCircleLink row
-        caller_link = UserCircleLink.objects.filter(
-            circle=circle, user_id=user_id, accepted=True, lead=True
-        ).first()
-
         target_muid = request.data.get("muid")
         if not target_muid:
             return CustomResponse(general_message="muid is required").get_failure_response()
@@ -1684,31 +1681,178 @@ class CircleTransferLeadAPI(APIView):
                 general_message="You are already the lead"
             ).get_failure_response()
 
-        try:
-            target_link = UserCircleLink.objects.get(
-                circle=circle, user_id=target_user_id, accepted=True
-            )
-        except UserCircleLink.DoesNotExist:
-            return CustomResponse(
-                general_message="Target user is not an accepted member of this circle"
-            ).get_failure_response()
-
-        if target_link.lead:
-            return CustomResponse(
-                general_message="Target user is already the lead"
-            ).get_failure_response()
-
-        # Demote the caller only if they have an explicit lead link (creator may not).
-        # Atomic with the promotion below so a failure between the two can't leave
-        # the circle with two leads or zero leads.
         with transaction.atomic():
-            if caller_link:
-                caller_link.lead = False
-                caller_link.save()
+            # Lock ALL lead links in this circle to serialize concurrent transfers.
+            # This prevents two creator-authorized transfers from both promoting
+            # different targets, which would leave the circle with multiple leads.
+            current_leads = list(
+                UserCircleLink.objects.select_for_update().filter(
+                    circle=circle, accepted=True, lead=True
+                )
+            )
+
+            target_link = UserCircleLink.objects.select_for_update().filter(
+                circle=circle, user_id=target_user_id, accepted=True
+            ).first()
+
+            if not target_link:
+                return CustomResponse(
+                    general_message="Target user is not an accepted member of this circle"
+                ).get_failure_response()
+
+            if target_link.lead:
+                return CustomResponse(
+                    general_message="Target user is already the lead"
+                ).get_failure_response()
+
+            # Re-validate requester authority inside the transaction
+            is_creator = (circle.created_by_id == user_id)
+            caller_link = next((l for l in current_leads if l.user_id == user_id), None)
+            if not is_creator and not caller_link:
+                return CustomResponse(
+                    general_message="Only the circle lead or creator can transfer leadership"
+                ).get_failure_response()
+
+            # Demote all existing leads (should be at most one, but defensive)
+            for lead_link in current_leads:
+                lead_link.lead = False
+                lead_link.save()
 
             target_link.lead = True
             target_link.save()
 
         return CustomResponse(
             general_message="Lead transferred successfully"
+        ).get_success_response()
+
+
+class CircleLeaveAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['Dashboard - Learningcircle'],
+        description="Leave a Learning Circle. Leads must transfer leadership first.",
+        responses={200: OpenApiResponse(description="Left the circle successfully. No response body.")},
+    )
+    def delete(self, request, circle_id: str):
+        user_id = JWTUtils.fetch_user_id(request)
+
+        try:
+            circle = LearningCircle.objects.get(id=circle_id)
+        except LearningCircle.DoesNotExist:
+            return CustomResponse(general_message="Learning Circle not found").get_failure_response()
+
+        if circle.created_by_id == user_id:
+            return CustomResponse(
+                general_message="The circle creator cannot leave. Delete the circle instead."
+            ).get_failure_response()
+
+        with transaction.atomic():
+            link = UserCircleLink.objects.select_for_update().filter(
+                circle=circle, user_id=user_id, accepted=True
+            ).first()
+
+            if not link:
+                return CustomResponse(
+                    general_message="You are not a member of this circle"
+                ).get_failure_response()
+
+            if link.lead:
+                return CustomResponse(
+                    general_message="You are the lead. Transfer leadership before leaving."
+                ).get_failure_response()
+
+            link.delete()
+
+        return CustomResponse(
+            general_message="You have left the circle successfully"
+        ).get_success_response()
+
+
+class CircleMemberRemoveAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['Dashboard - Learningcircle'],
+        description="Remove (kick) a member from a Learning Circle. Only the lead or creator can do this.",
+        responses={200: OpenApiResponse(description="Member removed from the circle successfully. No response body.")},
+    )
+    def delete(self, request, circle_id: str):
+        user_id = JWTUtils.fetch_user_id(request)
+
+        try:
+            circle = LearningCircle.objects.get(id=circle_id)
+        except LearningCircle.DoesNotExist:
+            return CustomResponse(general_message="Learning Circle not found").get_failure_response()
+
+        if not _is_lead_or_creator(circle, user_id):
+            return CustomResponse(
+                general_message="Only the circle lead or creator can remove members"
+            ).get_failure_response()
+
+        target_muid = request.data.get("muid")
+        if not target_muid:
+            return CustomResponse(general_message="muid is required").get_failure_response()
+
+        try:
+            target_user = User.objects.get(muid=target_muid)
+        except User.DoesNotExist:
+            return CustomResponse(general_message="No user found with this muid").get_failure_response()
+
+        target_user_id = target_user.id
+
+        if target_user_id == user_id:
+            return CustomResponse(
+                general_message="You cannot remove yourself. Use the leave endpoint instead."
+            ).get_failure_response()
+
+        if target_user_id == circle.created_by_id:
+            return CustomResponse(
+                general_message="The circle creator cannot be removed"
+            ).get_failure_response()
+
+        with transaction.atomic():
+            # Lock both the requester's and target's links to prevent
+            # a concurrent leadership transfer from racing with removal
+            requester_link = UserCircleLink.objects.select_for_update().filter(
+                circle=circle, user_id=user_id, accepted=True
+            ).first()
+
+            # Re-validate requester authority inside the transaction
+            is_creator = (circle.created_by_id == user_id)
+            if not is_creator and (not requester_link or not requester_link.lead):
+                return CustomResponse(
+                    general_message="Only the circle lead or creator can remove members"
+                ).get_failure_response()
+
+            link = UserCircleLink.objects.select_for_update().filter(
+                circle=circle, user_id=target_user_id, accepted=True
+            ).first()
+
+            if not link:
+                return CustomResponse(
+                    general_message="User is not a member of this circle"
+                ).get_failure_response()
+
+            if link.lead:
+                return CustomResponse(
+                    general_message="Transfer leadership before removing the circle lead"
+                ).get_failure_response()
+
+            link.delete()
+
+        # Notify the removed user
+        lead_user = User.objects.filter(id=user_id).first()
+        if lead_user:
+            NotificationUtils.insert_notification(
+                user=target_user,
+                title="Removed from Circle",
+                description=f"You have been removed from the learning circle '{circle.title}'.",
+                button=None,
+                url=None,
+                created_by=lead_user,
+            )
+
+        return CustomResponse(
+            general_message="Member removed successfully"
         ).get_success_response()
