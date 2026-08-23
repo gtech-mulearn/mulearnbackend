@@ -1712,21 +1712,22 @@ class CircleLeaveAPI(APIView):
                 general_message="The circle creator cannot leave. Delete the circle instead."
             ).get_failure_response()
 
-        link = UserCircleLink.objects.filter(
-            circle=circle, user_id=user_id, accepted=True
-        ).first()
+        with transaction.atomic():
+            link = UserCircleLink.objects.select_for_update().filter(
+                circle=circle, user_id=user_id, accepted=True
+            ).first()
 
-        if not link:
-            return CustomResponse(
-                general_message="You are not a member of this circle"
-            ).get_failure_response()
+            if not link:
+                return CustomResponse(
+                    general_message="You are not a member of this circle"
+                ).get_failure_response()
 
-        if link.lead:
-            return CustomResponse(
-                general_message="You are the lead. Transfer leadership before leaving."
-            ).get_failure_response()
+            if link.lead:
+                return CustomResponse(
+                    general_message="You are the lead. Transfer leadership before leaving."
+                ).get_failure_response()
 
-        link.delete()
+            link.delete()
 
         return CustomResponse(
             general_message="You have left the circle successfully"
@@ -1775,21 +1776,22 @@ class CircleMemberRemoveAPI(APIView):
                 general_message="The circle creator cannot be removed"
             ).get_failure_response()
 
-        link = UserCircleLink.objects.filter(
-            circle=circle, user_id=target_user_id, accepted=True
-        ).first()
+        with transaction.atomic():
+            link = UserCircleLink.objects.select_for_update().filter(
+                circle=circle, user_id=target_user_id, accepted=True
+            ).first()
 
-        if not link:
-            return CustomResponse(
-                general_message="User is not a member of this circle"
-            ).get_failure_response()
+            if not link:
+                return CustomResponse(
+                    general_message="User is not a member of this circle"
+                ).get_failure_response()
 
-        if link.lead:
-            return CustomResponse(
-                general_message="Transfer leadership before removing the circle lead"
-            ).get_failure_response()
+            if link.lead:
+                return CustomResponse(
+                    general_message="Transfer leadership before removing the circle lead"
+                ).get_failure_response()
 
-        link.delete()
+            link.delete()
 
         # Notify the removed user
         lead_user = User.objects.filter(id=user_id).first()
