@@ -17,7 +17,7 @@ from rest_framework import serializers as s
 from rest_framework.views import APIView
 
 from db.comic import Genre
-from utils.permission import CustomizePermission, JWTUtils, RoleRequired
+from utils.permission import CustomizePermission, OptionalAuthentication, JWTUtils, RoleRequired
 from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
@@ -31,6 +31,8 @@ from .serializers import GenreReadSerializer, GenreWriteSerializer
 
 def _is_admin(request):
     """Return True if the JWT carries the Admins role."""
+    if not JWTUtils.is_logged_in(request):
+        return False
     return RoleType.ADMIN.value in JWTUtils.fetch_role(request)
 
 
@@ -41,13 +43,13 @@ def _is_admin(request):
 class GenreListCreateView(APIView):
     """
     GET  /muComics/comics/genres/
-         Non-admins → only is_active=True genres.
-         Admins     → all genres; optionally filter with ?is_active=true|false.
+         Non-admins (and unauthenticated users) → only is_active=True genres.
+         Admins                                 → all genres; optionally filter with ?is_active=true|false.
 
     POST /muComics/comics/genres/  [Admin only]
          Create a new genre (is_active defaults to True).
     """
-    authentication_classes = [CustomizePermission]
+    authentication_classes = [OptionalAuthentication]
 
     @extend_schema(
         tags=['muComics - Genre'],
@@ -126,11 +128,11 @@ class GenreListCreateView(APIView):
 
 class GenreDetailView(APIView):
     """
-    GET    → active genres only for non-admins; any genre for admins.
+    GET    → active genres only for non-admins (and unauthenticated users); any genre for admins.
     PATCH  → update name (Admin only).
     DELETE → soft deactivate: is_active = False (Admin only).
     """
-    authentication_classes = [CustomizePermission]
+    authentication_classes = [OptionalAuthentication]
 
     def _get_genre(self, genre_id, admin):
         """
