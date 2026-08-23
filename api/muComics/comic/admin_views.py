@@ -101,8 +101,12 @@ class GenreListCreateView(APIView):
         request=GenreWriteSerializer,
         responses={200: GenreReadSerializer},
     )
-    @RoleRequired([RoleType.ADMIN])
     def post(self, request):
+        if not _is_admin(request):
+            return CustomResponse(
+                general_message='Only admins can create genres.'
+            ).get_unauthorized_response()
+
         user_id = JWTUtils.fetch_user_id(request)
 
         serializer = GenreWriteSerializer(
@@ -172,8 +176,12 @@ class GenreDetailView(APIView):
         request=GenreWriteSerializer,
         responses={200: GenreReadSerializer},
     )
-    @RoleRequired([RoleType.ADMIN])
     def patch(self, request, genre_id):
+        if not _is_admin(request):
+            return CustomResponse(
+                general_message='Only admins can update genres.'
+            ).get_unauthorized_response()
+
         user_id = JWTUtils.fetch_user_id(request)
         # Admin context — can edit active or inactive genre
         genre, error = self._get_genre(genre_id, admin=True)
@@ -213,8 +221,12 @@ class GenreDetailView(APIView):
             },
         )},
     )
-    @RoleRequired([RoleType.ADMIN])
     def delete(self, request, genre_id):
+        if not _is_admin(request):
+            return CustomResponse(
+                general_message='Only admins can deactivate genres.'
+            ).get_unauthorized_response()
+
         user_id = JWTUtils.fetch_user_id(request)
         genre, error = self._get_genre(genre_id, admin=True)
         if error:
