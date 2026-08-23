@@ -532,8 +532,13 @@ class ComicContributorListView(APIView):
     #     serializer = ContributorListSerializer(links, many=True)
     #     return CustomResponse(response=serializer.data).get_success_response()
     def get(self, request, comic_id):
+        is_authenticated = JWTUtils.is_logged_in(request)
         comic = _get_active_comics().filter(id=comic_id).first()
         if not comic:
+            return CustomResponse(general_message='Comic not found.').get_failure_response()
+
+        # Unauthenticated users can only view contributors for published comics
+        if not is_authenticated and comic.status != Comic.Status.PUBLISHED:
             return CustomResponse(general_message='Comic not found.').get_failure_response()
 
         links = ComicContributorLink.objects.filter(comic=comic).select_related('user', 'comic')
