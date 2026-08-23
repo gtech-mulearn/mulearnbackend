@@ -1732,6 +1732,19 @@ class CircleMemberRemoveAPI(APIView):
             ).get_failure_response()
 
         with transaction.atomic():
+            # Lock both the requester's and target's links to prevent
+            # a concurrent leadership transfer from racing with removal
+            requester_link = UserCircleLink.objects.select_for_update().filter(
+                circle=circle, user_id=user_id, accepted=True
+            ).first()
+
+            # Re-validate requester authority inside the transaction
+            is_creator = (circle.created_by_id == user_id)
+            if not is_creator and (not requester_link or not requester_link.lead):
+                return CustomResponse(
+                    general_message="Only the circle lead or creator can remove members"
+                ).get_failure_response()
+
             link = UserCircleLink.objects.select_for_update().filter(
                 circle=circle, user_id=target_user_id, accepted=True
             ).first()
