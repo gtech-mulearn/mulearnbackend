@@ -1615,10 +1615,14 @@ class CircleTransferLeadAPI(APIView):
             ).get_failure_response()
 
         with transaction.atomic():
-            # Lock both links to prevent concurrent removal or transfer races
-            caller_link = UserCircleLink.objects.select_for_update().filter(
-                circle=circle, user_id=user_id, accepted=True, lead=True
-            ).first()
+            # Lock ALL lead links in this circle to serialize concurrent transfers.
+            # This prevents two creator-authorized transfers from both promoting
+            # different targets, which would leave the circle with multiple leads.
+            current_leads = list(
+                UserCircleLink.objects.select_for_update().filter(
+                    circle=circle, accepted=True, lead=True
+                )
+            )
 
             target_link = UserCircleLink.objects.select_for_update().filter(
                 circle=circle, user_id=target_user_id, accepted=True
@@ -1636,15 +1640,16 @@ class CircleTransferLeadAPI(APIView):
 
             # Re-validate requester authority inside the transaction
             is_creator = (circle.created_by_id == user_id)
+            caller_link = next((l for l in current_leads if l.user_id == user_id), None)
             if not is_creator and not caller_link:
                 return CustomResponse(
                     general_message="Only the circle lead or creator can transfer leadership"
                 ).get_failure_response()
 
-            # Demote the caller only if they have an explicit lead link
-            if caller_link:
-                caller_link.lead = False
-                caller_link.save()
+            # Demote all existing leads (should be at most one, but defensive)
+            for lead_link in current_leads:
+                lead_link.lead = False
+                lead_link.save()
 
             target_link.lead = True
             target_link.save()
