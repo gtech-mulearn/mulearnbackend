@@ -1640,11 +1640,6 @@ class CircleTransferLeadAPI(APIView):
                 general_message="Only the circle lead or creator can transfer leadership"
             ).get_failure_response()
 
-        # caller_link may be None if the caller is the circle creator without a UserCircleLink row
-        caller_link = UserCircleLink.objects.filter(
-            circle=circle, user_id=user_id, accepted=True, lead=True
-        ).first()
-
         target_muid = request.data.get("muid")
         if not target_muid:
             return CustomResponse(general_message="muid is required").get_failure_response()
@@ -1661,24 +1656,34 @@ class CircleTransferLeadAPI(APIView):
                 general_message="You are already the lead"
             ).get_failure_response()
 
-        try:
-            target_link = UserCircleLink.objects.get(
-                circle=circle, user_id=target_user_id, accepted=True
-            )
-        except UserCircleLink.DoesNotExist:
-            return CustomResponse(
-                general_message="Target user is not an accepted member of this circle"
-            ).get_failure_response()
-
-        if target_link.lead:
-            return CustomResponse(
-                general_message="Target user is already the lead"
-            ).get_failure_response()
-
-        # Demote the caller only if they have an explicit lead link (creator may not).
-        # Atomic with the promotion below so a failure between the two can't leave
-        # the circle with two leads or zero leads.
         with transaction.atomic():
+            # Lock both links to prevent concurrent removal or transfer races
+            caller_link = UserCircleLink.objects.select_for_update().filter(
+                circle=circle, user_id=user_id, accepted=True, lead=True
+            ).first()
+
+            target_link = UserCircleLink.objects.select_for_update().filter(
+                circle=circle, user_id=target_user_id, accepted=True
+            ).first()
+
+            if not target_link:
+                return CustomResponse(
+                    general_message="Target user is not an accepted member of this circle"
+                ).get_failure_response()
+
+            if target_link.lead:
+                return CustomResponse(
+                    general_message="Target user is already the lead"
+                ).get_failure_response()
+
+            # Re-validate requester authority inside the transaction
+            is_creator = (circle.created_by_id == user_id)
+            if not is_creator and not caller_link:
+                return CustomResponse(
+                    general_message="Only the circle lead or creator can transfer leadership"
+                ).get_failure_response()
+
+            # Demote the caller only if they have an explicit lead link
             if caller_link:
                 caller_link.lead = False
                 caller_link.save()
