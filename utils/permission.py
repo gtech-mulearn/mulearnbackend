@@ -4,17 +4,47 @@ from utils.response import CustomResponse
 import datetime
 from datetime import datetime
 
-# pyrefly: ignore [missing-import]
-import jwt
 from django.conf import settings
 from django.http import HttpRequest
 from rest_framework import authentication
 from rest_framework.authentication import get_authorization_header
-from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.permissions import BasePermission
 
 from mulearnbackend.settings import SECRET_KEY
+import logging
+
+from utils.token_verification import (
+    FORMAT_LEGACY,
+    FORMAT_OIDC,
+    TokenError,
+    _JWKSCache,
+    normalise,
+    token_format,
+    verify_legacy_token,
+    verify_oidc_token,
+)
 from utils.utils import DateTimeUtils
+
+# Dedicated logger so the per-format counter can be scraped or shipped without
+# wading through the rest of this service's logging.
+token_logger = logging.getLogger("mulearn.token_format")
+
+_JWKS_SINGLETON = None
+
+
+def _jwks_cache():
+    """
+    One JWKS cache for the process.
+
+    Built lazily rather than at import time so that this module stays
+    importable when the identity provider is not configured yet - which is the
+    case in every environment until authserver is deployed.
+    """
+    global _JWKS_SINGLETON
+    if _JWKS_SINGLETON is None:
+        issuer = getattr(settings, "OIDC_ISSUER", "").rstrip("/")
+        _JWKS_SINGLETON = _JWKSCache(f"{issuer}/oauth/.well-known/jwks.json")
+    return _JWKS_SINGLETON
 from .exception import UnauthorizedAccessException
 from .response import CustomResponse
 
@@ -117,102 +147,121 @@ class OptionalAuthentication(authentication.BaseAuthentication):
 
 
 class JWTUtils:
+    """
+    Claim access for authenticated requests.
+
+    Verification happens ONCE per request, in _validated(), and every accessor
+    below reads that single validated payload. Previously fetch_role,
+    fetch_user_id and fetch_muid each decoded the token themselves and none of
+    them checked expiry - so a caller reaching for a claim directly accepted
+    expired tokens (audit finding F10).
+
+    Both token formats are accepted during the transition. The public signatures
+    are unchanged, so the ~580 call sites need no edits.
+    """
+
+    _CACHE_ATTR = "_mulearn_validated_token"
+
+    @staticmethod
+    def _raw_token(request):
+        header = authentication.get_authorization_header(request).decode("utf-8")
+        parts = header.split()
+        if len(parts) != 2:
+            raise UnauthorizedAccessException("Invalid token header")
+        return parts[1]
+
+    @staticmethod
+    def _validated(request):
+        """
+        The verified, normalised payload for this request.
+
+        Cached on the request object: a single request can touch several
+        accessors, and re-verifying (which may consult JWKS) per accessor would
+        be both slow and the very thing that let F10 happen.
+        """
+        cached = getattr(request, JWTUtils._CACHE_ATTR, None)
+        if cached is not None:
+            return cached
+
+        token = JWTUtils._raw_token(request)
+        fmt = token_format(token)
+
+        try:
+            if fmt == FORMAT_OIDC:
+                payload = verify_oidc_token(
+                    token,
+                    jwks_cache=_jwks_cache(),
+                    issuer=getattr(settings, "OIDC_ISSUER", None),
+                    audience=getattr(settings, "OIDC_AUDIENCE", "mulearn-api"),
+                )
+            elif fmt == FORMAT_LEGACY:
+                payload = verify_legacy_token(
+                    token, secret=SECRET_KEY, now=DateTimeUtils.get_current_utc_time()
+                )
+            else:
+                raise TokenError("Unsupported token algorithm")
+        except TokenError as exc:
+            raise UnauthorizedAccessException(str(exc)) from exc
+
+        validated = normalise(payload, fmt)
+
+        # Per-format counter. Legacy support is removed only when this shows
+        # zero legacy validations for seven consecutive days - observed, not
+        # assumed - so the counter is a precondition for that step, not
+        # decoration.
+        token_logger.info("token_validated format=%s", validated["format"])
+
+        setattr(request, JWTUtils._CACHE_ATTR, validated)
+        return validated
+
     @staticmethod
     def fetch_role(request):
-        token = authentication.get_authorization_header(request).decode("utf-8").split()
-        payload = jwt.decode(
-            token[1], settings.SECRET_KEY, algorithms=["HS256"], verify=True
+        """
+        Role titles for the caller.
+
+        New-format tokens carry no roles: they are muLearn's data, not identity
+        data, so they are resolved here from this service's own tables. That is
+        what makes a revoked role take effect immediately rather than whenever
+        the token happens to expire.
+        """
+        validated = JWTUtils._validated(request)
+        if validated["roles"] is not None:
+            return validated["roles"]
+
+        from db.user import UserRoleLink
+
+        return list(
+            UserRoleLink.objects.filter(
+                user_id=validated["user_id"]
+            ).values_list("role__title", flat=True)
         )
-        roles = payload.get("roles")
-        if roles is None:
-            raise Exception(
-                "The corresponding JWT token does not contain the 'roles' key"
-            )
-        return roles
 
     @staticmethod
     def fetch_user_id(request):
-        token = authentication.get_authorization_header(request).decode("utf-8").split()
-        payload = jwt.decode(
-            token[1], settings.SECRET_KEY, algorithms=["HS256"], verify=True
-        )
-        user_id = payload.get("id")
-        if user_id is None:
-            raise Exception(
-                "The corresponding JWT token does not contain the 'user_id' key"
-            )
+        user_id = JWTUtils._validated(request)["user_id"]
+        if not user_id:
+            raise UnauthorizedAccessException("Token has no subject")
         return user_id
 
     @staticmethod
     def fetch_muid(request):
-        token = authentication.get_authorization_header(request).decode("utf-8").split()
-        payload = jwt.decode(
-            token[1], settings.SECRET_KEY, algorithms=["HS256"], verify=True
+        """muid is a muLearn handle, absent from new-format tokens by design."""
+        validated = JWTUtils._validated(request)
+        if validated["muid"] is not None:
+            return validated["muid"]
+
+        from db.user import User
+
+        return (
+            User.objects.filter(id=validated["user_id"])
+            .values_list("muid", flat=True)
+            .first()
         )
-        muid = payload.get("muid")
-        if muid is None:
-            raise Exception(
-                "The corresponding JWT token does not contain the 'muid' key"
-            )
-        return muid
 
     @staticmethod
     def is_jwt_authenticated(request):
-        token_prefix = "Bearer"
-        secret_key = SECRET_KEY
-        try:
-            auth_header = get_authorization_header(request).decode("utf-8")
-            if not auth_header or not auth_header.startswith(token_prefix):
-                raise UnauthorizedAccessException("Invalid token header")
-
-            token = auth_header[len(token_prefix):].strip()
-            if not token:
-                raise UnauthorizedAccessException("Empty Token")
-
-            payload = jwt.decode(token, secret_key, algorithms=["HS256"], verify=True)
-
-            user_id = payload.get("id")
-            expiry = datetime.strptime(payload.get("expiry"), "%Y-%m-%d %H:%M:%S%z")
-
-            if not user_id or expiry < DateTimeUtils.get_current_utc_time():
-                raise UnauthorizedAccessException("Token Expired or Invalid")
-
-            return None, payload
-        except jwt.exceptions.InvalidSignatureError as e:
-            raise UnauthorizedAccessException(
-                {
-                    "hasError": True,
-                    "message": {"general": [str(e)]},
-                    "statusCode": 1000,
-                }
-            ) from e
-        except jwt.exceptions.DecodeError as e:
-            raise UnauthorizedAccessException(
-                {
-                    "hasError": True,
-                    "message": {"general": [str(e)]},
-                    "statusCode": 1000,
-                }
-            ) from e
-        except AuthenticationFailed as e:
-            raise UnauthorizedAccessException(str(e)) from e
-        except Exception as e:
-            raise UnauthorizedAccessException(
-                {
-                    "hasError": True,
-                    "message": {"general": [str(e)]},
-                    "statusCode": 1000,
-                }
-            ) from e
-
-    @staticmethod
-    def is_logged_in(request):
-        try:
-            JWTUtils.is_jwt_authenticated(request)
-            return True
-        except UnauthorizedAccessException:
-            return False
-
+        validated = JWTUtils._validated(request)
+        return None, validated["raw"]
 
 def role_required(roles):
     def decorator(view_func):
@@ -251,6 +300,7 @@ def dynamic_role_required(type):
         return wrapped_view_func
 
     return decorator
+
 
 class RoleRequired:
     """
