@@ -31,6 +31,7 @@ from db.user import (
     UserSettings,
 )
 from utils.permission import CustomizePermission, JWTUtils
+from utils.session_revocation import revoke_all_sessions
 from utils.response import CustomResponse
 from utils.types import (
     OrganizationType,
@@ -38,7 +39,7 @@ from utils.types import (
     WebHookCategory,
     TFPTasksHashtags,
 )
-from utils.utils import DiscordWebhooks
+from utils.utils import DateTimeUtils, DiscordWebhooks
 from django.contrib.auth.hashers import check_password
 
 from . import profile_serializer
@@ -617,6 +618,17 @@ class ResetPasswordAPI(APIView):
 
         user.password = hashed_pwd
         user.save()
+
+        # F3: a password change must invalidate sessions established with the
+        # old password, otherwise a stolen refresh token outlives the change.
+        if not revoke_all_sessions(user.id, DateTimeUtils.get_current_utc_time().timestamp()):
+            return CustomResponse(
+                general_message=(
+                    "Password changed, but existing sessions could not be signed "
+                    "out. Please log out of all devices manually."
+                )
+            ).get_failure_response()
+
         return CustomResponse(
             general_message="New Password Saved Successfully"
         ).get_success_response()

@@ -1,0 +1,6 @@
+# Test-only dependencies. Not installed in the deployed image - the
+# Dockerfile installs requirements.txt only.
+#
+# Every test under utils/ exercises a Django-free module (no Django, no
+# database, no settings), so this file is deliberately tiny.
+pytest==8.3.4

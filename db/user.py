@@ -28,11 +28,31 @@ class User(models.Model):
     exist_in_guild = models.BooleanField(default=False)
     district = models.ForeignKey("District", on_delete=models.CASCADE, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    # NOTE: `user.last_login` is added by db-scripts alter-1.89 and is written
+    # by authserver only (Django's AbstractBaseUser requires it).
+    #
+    # It is deliberately NOT declared here. Declaring a column before the alter
+    # script has run makes Django SELECT it, and every user query then fails
+    # with "Unknown column 'user.last_login'" — which would take this service
+    # down the moment it deployed ahead of the schema. Nothing here reads the
+    # column, so declaring it buys nothing and risks an outage.
+    #
+    # Add it here once alter-1.89 is applied everywhere.
     suspended_at = models.DateTimeField(blank=True, null=True)
     interested_in_work = models.BooleanField(default=False)
     interested_in_gig_work = models.BooleanField(default=False)
     suspended_by = models.ForeignKey("self", on_delete=models.SET(settings.SYSTEM_ADMIN_ID), blank=True, null=True,
                                      related_name="user_suspended_by_user", db_column="suspended_by", default=None)
+    # Added by db-scripts/alter/alter-1.29.sql alongside suspended_at/suspended_by,
+    # but never mirrored into either ORM — audit finding F19.
+    #
+    # DECLARED, NOT ENFORCED. ActiveUserManager deliberately does not filter on
+    # deleted_at: nothing in either service writes these columns today, so
+    # filtering would change authentication behaviour on the strength of data
+    # that is always NULL. Soft-delete semantics need their own decision.
+    deleted_at = models.DateTimeField(blank=True, null=True)
+    deleted_by = models.ForeignKey("self", on_delete=models.SET(settings.SYSTEM_ADMIN_ID), blank=True, null=True,
+                                   related_name="user_deleted_by_user", db_column="deleted_by", default=None)
     objects = user_manager.ActiveUserManager()
     every = models.Manager()
 

@@ -97,7 +97,7 @@ class AchievementCreateAPIView(APIView):
         # Icon can be either a file upload or a text URL
         icon_file = request.FILES.get("icon")
         icon_url = data.get("icon", "") if not icon_file else ""
-        
+
         required_fields = ["name", "description", "tags", "type", "has_vc"]
         missing_fields = [field for field in required_fields if field not in data]
         if missing_fields:
@@ -109,7 +109,7 @@ class AchievementCreateAPIView(APIView):
         has_vc_value = data.get("has_vc")
         if isinstance(has_vc_value, str):
             has_vc_value = has_vc_value.lower() in ("true", "1", "yes")
-        
+
         tags_value = data.get("tags", [])
         if isinstance(tags_value, str):
             try:
@@ -131,54 +131,59 @@ class AchievementCreateAPIView(APIView):
                     general_message="Invalid level_id"
                 ).get_failure_response()
 
-        # Handle icon file upload
-        icon_path = icon_url  # Default to URL if provided
-        if icon_file:
-            # Validate file type
-            allowed_extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg']
-            file_ext = icon_file.name.split('.')[-1].lower()
-            if file_ext not in allowed_extensions:
-                return CustomResponse(
-                    general_message=f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"
-                ).get_failure_response()
-            
-            # Validate file size (max 5MB)
-            if icon_file.size > 5 * 1024 * 1024:
-                return CustomResponse(
-                    general_message="File size exceeds 5MB limit"
-                ).get_failure_response()
-            
-            # Create directory if it doesn't exist
-            upload_dir = os.path.join(settings.MEDIA_ROOT, 'achievements', 'icons')
-            os.makedirs(upload_dir, exist_ok=True)
-            
-            # Generate unique filename
-            unique_filename = f"{uuid.uuid4()}.{file_ext}"
-            file_path = os.path.join(upload_dir, unique_filename)
-            
-            # Save file
-            with open(file_path, 'wb+') as destination:
-                for chunk in icon_file.chunks():
-                    destination.write(chunk)
-            
-            # Store relative path for database
-            icon_path = f"achievements/icons/{unique_filename}"
+        try:
+            # Handle icon file upload
+            icon_path = icon_url  # Default to URL if provided
+            if icon_file:
+                # Validate file type
+                allowed_extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg']
+                file_ext = icon_file.name.split('.')[-1].lower()
+                if file_ext not in allowed_extensions:
+                    return CustomResponse(
+                        general_message=f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"
+                    ).get_failure_response()
 
-        achievement = Achievement.objects.create(
-            id=str(uuid.uuid4()),
-            name=data["name"],
-            description=data["description"],
-            icon=icon_path,
-            tags=tags_value,
-            type=data["type"],
-            level_id=level,
-            has_vc=has_vc_value,
-            template_id=data.get("template_id"),
-            created_by=user,
-            updated_by=user,
-            created_at=now(),
-            updated_at=now(),
-        )
+                # Validate file size (max 5MB)
+                if icon_file.size > 5 * 1024 * 1024:
+                    return CustomResponse(
+                        general_message="File size exceeds 5MB limit"
+                    ).get_failure_response()
+
+                # Create directory if it doesn't exist
+                upload_dir = os.path.join(settings.MEDIA_ROOT, 'achievements', 'icons')
+                os.makedirs(upload_dir, exist_ok=True)
+
+                # Generate unique filename
+                unique_filename = f"{uuid.uuid4()}.{file_ext}"
+                file_path = os.path.join(upload_dir, unique_filename)
+
+                # Save file
+                with open(file_path, 'wb+') as destination:
+                    for chunk in icon_file.chunks():
+                        destination.write(chunk)
+
+                # Store relative path for database
+                icon_path = f"achievements/icons/{unique_filename}"
+
+            achievement = Achievement.objects.create(
+                id=str(uuid.uuid4()),
+                name=data["name"],
+                description=data["description"],
+                icon=icon_path,
+                tags=tags_value,
+                type=data["type"],
+                level_id=level,
+                has_vc=has_vc_value,
+                template_id=data.get("template_id"),
+                created_by=user,
+                updated_by=user,
+                created_at=now(),
+                updated_at=now(),
+            )
+        except Exception as e:
+            return CustomResponse(
+                general_message=f"Failed to create achievement: {str(e)}"
+            ).get_failure_response()
 
         return CustomResponse(
             general_message=f"Achievement '{achievement.name}' created successfully!"
@@ -1183,17 +1188,22 @@ class AchievementBulkImportTemplateAPIView(APIView):
         responses={200: achievement_serializer.AchievementSerializer},
     )
     def get(self, request):
-        wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.append(['muid', 'achievement_id'])
-        
-        output = BytesIO()
-        wb.save(output)
-        output.seek(0)
-        
-        response = FileResponse(output, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-        response['Content-Disposition'] = 'attachment; filename=achievement_bulk_import_template.xlsx'
-        return response
+        try:
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.append(['muid', 'achievement_id'])
+
+            output = BytesIO()
+            wb.save(output)
+            output.seek(0)
+
+            response = FileResponse(output, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            response['Content-Disposition'] = 'attachment; filename=achievement_bulk_import_template.xlsx'
+            return response
+        except Exception as e:
+            return CustomResponse(
+                general_message=f"Failed to generate template: {str(e)}"
+            ).get_failure_response()
 
 
 class AchievementLogListAPIView(APIView):

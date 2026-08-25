@@ -1,0 +1,36 @@
+# PR gate: unit tests.
+#
+# Everything here runs Django-free - no settings, no database, no env vars -
+# which is why the suite runs in about a second.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [ "dev", "main" ]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout mulearnbackend
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install test dependencies
+        # requirements.txt is deliberately NOT installed: it pins mysqlclient,
+        # which needs MySQL headers, and no test here touches a database.
+        run: pip install -r requirements-dev.txt
+
+      - name: Unit tests
+        # Add new test directories here as they appear. Everything listed runs
+        # Django-free, so no settings, database or env vars are needed.
+        run: pytest utils/ -q

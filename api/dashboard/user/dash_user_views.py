@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import timedelta
 
@@ -10,6 +11,7 @@ from rest_framework.views import APIView
 from db.organization import UserOrganizationLink
 from db.user import ForgotPassword, User, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
+from utils.session_revocation import revoke_all_sessions
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType, WebHookActions, WebHookCategory
 from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks, send_template_mail
@@ -19,6 +21,8 @@ from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiRespo
 from rest_framework import serializers as s
 
 BE_DOMAIN_NAME = decouple_config("BE_DOMAIN_NAME")
+
+logger = logging.getLogger(__name__)
 
 
 class UserInfoAPI(APIView):
@@ -389,11 +393,27 @@ class UserVerificationCSV(APIView):
 
 
 class ForgotPasswordAPI(APIView):
+    # F8: was unthrottled, so this endpoint could be used to flood a victim's
+    # inbox and create unbounded reset rows.
+    throttle_scope = "password_reset"
+
+    # F7: this previously answered "User not exist" for unknown identifiers,
+    # making it an unauthenticated membership oracle. The response is now
+    # identical whether or not the account exists.
+    GENERIC_RESPONSE = (
+        "If an account exists for that ID, a password reset link has been sent."
+    )
+
     @extend_schema(tags=['Dashboard - User'], description="Create Forgot Password.",
         responses={200: OpenApiResponse(description="Forgot-password email sent")},
     )
     def post(self, request):
         email_muid = request.data.get("emailOrMuid")
+
+        if not email_muid:
+            return CustomResponse(
+                general_message="emailOrMuid is required"
+            ).get_failure_response()
 
         if not (
             user := User.objects.filter(
@@ -401,8 +421,8 @@ class ForgotPasswordAPI(APIView):
             ).first()
         ):
             return CustomResponse(
-                general_message="User not exist"
-            ).get_failure_response()
+                general_message=self.GENERIC_RESPONSE
+            ).get_success_response()
 
         created_at = DateTimeUtils.get_current_utc_time()
         expiry = created_at + timedelta(seconds=900)  # 15 minutes
@@ -418,14 +438,19 @@ class ForgotPasswordAPI(APIView):
             "token": forget_user.id,
         }
 
-        send_template_mail(
-            context=context,
-            subject="Password Reset Requested",
-            address=html_address,
-        )
+        # A mail failure must not distinguish this branch from the unknown-user
+        # branch — a 500 here would leak existence just as effectively.
+        try:
+            send_template_mail(
+                context=context,
+                subject="Password Reset Requested",
+                address=html_address,
+            )
+        except Exception:
+            logger.exception("Failed to send password reset mail")
 
         return CustomResponse(
-            general_message="Forgot Password Email Send Successfully"
+            general_message=self.GENERIC_RESPONSE
         ).get_success_response()
 
 
@@ -476,9 +501,23 @@ class ResetPasswordConfirmAPI(APIView):
         new_password = request.data.get("password")
         hashed_pwd = make_password(new_password)
 
-        forget_user.user.password = hashed_pwd
-        forget_user.user.save()
+        user = forget_user.user
+        user.password = hashed_pwd
+        user.save()
         forget_user.delete()
+
+        # F3: password reset is the control a user reaches for when they think
+        # their account is compromised. Without this, the attacker's refresh
+        # token survives the reset for up to 7 days and the reset achieves
+        # nothing against the threat it exists to address.
+        if not revoke_all_sessions(user.id, DateTimeUtils.get_current_utc_time().timestamp()):
+            return CustomResponse(
+                general_message=(
+                    "Password reset, but existing sessions could not be signed "
+                    "out. Please contact support if you suspect your account "
+                    "was accessed."
+                )
+            ).get_failure_response()
 
         return CustomResponse(
             general_message="New Password Saved Successfully"

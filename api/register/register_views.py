@@ -322,6 +322,7 @@ class LearningCircleUserViewAPI(APIView):
 
 
 class RegisterDataAPI(APIView):
+    throttle_scope = "registration"
 
     @extend_schema(
         tags=['Register'],
@@ -607,6 +608,11 @@ class AreaOfInterestAPI(APIView):
 
 
 class UserEmailVerificationAPI(APIView):
+    # F7: unauthenticated account-existence oracle. It exists for signup-form
+    # UX so it is throttled rather than removed — enough to stop feeding a
+    # breach corpus through it, not enough to hinder a real signup.
+    throttle_scope = "email_check"
+
     @extend_schema(tags=['Register'], description="Create User Email Verification.",
         responses={200: serializers.UserSerializer},
     )
