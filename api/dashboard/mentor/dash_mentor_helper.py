@@ -2,31 +2,60 @@ from datetime import timedelta
 from django.db import transaction
 from django.utils import timezone
 from django.core.cache import cache
-from db.user import UserMentor, MentorScopeGrant
+from db.user import UserMentor, MentorScopeGrant, MentorApplication
 from db.organization import UserOrganizationLink
 from db.task import InterestGroup, UserIgLink, TaskList, KarmaActivityLog
-from db.mentor import MentorshipSession, IgOpportunity
+from db.mentor import MentorshipSession, IgOpportunity, SystemActionLog
 from db.learning_circle import LearningCircle
 from utils.utils import DateTimeUtils
 
 
 CACHE_TTL = 15 * 60  # 15 minutes
 
+# Maximum number of distinct Interest Groups a mentor may actively mentor at
+# once, counted across ALL of their approved applications combined (an
+# IG_MENTOR app and a COMPANY_MENTOR app can each carry their own
+# preferred_ig_ids — this caps the union, not any single application's list).
+MAX_PREFERRED_IGS = 5
 
-def get_mentor_company(mentor):
-    """
-    Resolve a mentor's employer title.
 
-    A mentor's company is their identity, not a permission scope — it must
-    be visible regardless of which tier(s) they hold. Falls back from the
-    tier-scoped `UserMentor.org` (only ever set for COMPANY_MENTOR) to the
-    user's actual employment record, since IG-only mentors never get `org` set.
+def get_effective_ig_ids(user, preferred_ig_ids, exclude_application_id=None):
     """
-    if mentor.org:
-        return mentor.org.title
+    The full set of IG ids `user` would actively mentor if `preferred_ig_ids`
+    were in effect for one application, unioned with every OTHER currently
+    APPROVED application this user holds. `exclude_application_id` excludes
+    that one application's own DB row from the "other approved" side of the
+    union — needed because callers pass its in-progress preferred_ig_ids
+    explicitly rather than relying on a DB read (the caller's own row may not
+    be saved/committed as APPROVED yet, or may still hold its old value).
+
+    This is the single source of truth for a mentor's active IG footprint:
+    reconcile_mentor_ig_links applies it, release_mentor_ig_links and the
+    max-IG-limit checks validate against it — so a mentor's IG access is
+    additive across tiers/applications and never depends on approval order.
+    """
+    desired = {str(i) for i in (preferred_ig_ids or []) if i}
+
+    other_approved = MentorApplication.objects.filter(
+        user=user, status=MentorApplication.Status.APPROVED,
+    )
+    if exclude_application_id:
+        other_approved = other_approved.exclude(id=exclude_application_id)
+    for app in other_approved:
+        desired.update(str(i) for i in (app.preferred_ig_ids or []) if i)
+
+    return desired
+
+
+def get_mentor_company(application):
+    """
+    Resolve an application's organization title.
+    """
+    if application.org:
+        return application.org.title
 
     org_link = UserOrganizationLink.objects.filter(
-        user=mentor.user, org__org_type="Company"
+        user=application.user, org__org_type="Company"
     ).select_related("org").first()
     return org_link.org.title if org_link else None
 
@@ -35,47 +64,76 @@ def get_mentor_scopes(user_id):
     """
     Return the set of active (scope_type, scope_id) pairs this user holds
     mentor authority over. This is the single deterministic source of truth
-    for permission checks — never query UserMentor.mentor_tier directly for
-    authorization, since a user can hold multiple tiers and grants are what
-    actually govern access.
+    for both authorization AND tier membership — a user's tiers are not
+    stored anywhere on UserMentor, they are derived entirely from which
+    MentorScopeGrant rows are active for them.
     """
-    grants = MentorScopeGrant.objects.filter(
-        mentor__user_id=user_id,
-        mentor__status=UserMentor.Status.APPROVED,
+    grants = MentorScopeGrant.objects.select_related('application').filter(
+        application__user_id=user_id,
+        application__status=MentorApplication.Status.APPROVED,
         is_active=True,
     ).values_list('scope_type', 'scope_id')
-
-    scopes = set(grants)
-    if scopes:
-        return scopes
-
-    # Legacy fallback: grants may not exist yet for this mentor (e.g. before
-    # the alter-1.63 backfill ran, or a race with grant creation).
-    fallback = set()
-    for tier, org_id in UserMentor.objects.filter(
-        user_id=user_id, status=UserMentor.Status.APPROVED
-    ).values_list('mentor_tier', 'org_id'):
-        if tier == UserMentor.MentorTier.IG_MENTOR:
-            # org_id is always NULL on IG_MENTOR rows — IG authority lives
-            # per-IG in UserIgLink, not on the UserMentor row. Emit one scope
-            # per actively-mentored IG; a bare (IG_MENTOR, None) entry would
-            # be silently discarded by any caller filtering on a non-null
-            # scope_id (e.g. get_scope_ids), making the mentor appear to
-            # have no IG authority at all during the pre-backfill window.
-            ig_ids = UserIgLink.objects.filter(
-                user_id=user_id,
-                assignment_type=UserIgLink.AssignmentType.MENTOR,
-                is_active=True,
-            ).values_list('ig_id', flat=True)
-            fallback.update((tier, str(ig_id)) for ig_id in ig_ids)
-        else:
-            fallback.add((tier, str(org_id) if org_id is not None else None))
-    return fallback
+    return set(grants)
 
 
 def has_scope(user_id, scope_type, scope_id=None):
     scope_id = str(scope_id) if scope_id is not None else None
     return (scope_type, scope_id) in get_mentor_scopes(user_id)
+
+
+def is_mentor_active(user_id):
+    """
+    False if the user has no UserMentor profile, or has one that's been
+    admin-deactivated (§6.1) — used to block session/event/opportunity
+    creation without touching individual MentorScopeGrant rows.
+    """
+    return UserMentor.objects.filter(user_id=user_id, is_active=True).exists()
+
+
+def notify_admins_company_mentor_decision(actor, application, outcome):
+    """
+    Passive admin visibility for company-mentor approve/reject decisions
+    (§4.5) — the company owner is the sole verifier for this tier, so admin
+    gets a notification-only copy rather than approval authority.
+    """
+    from db.user import UserRoleLink
+    from api.notification.notifications_utils import NotificationUtils
+    from utils.types import RoleType
+
+    admins = UserRoleLink.objects.filter(role__title=RoleType.ADMIN.value, is_active=True).select_related('user')
+    for link in admins:
+        NotificationUtils.insert_notification(
+            user=link.user,
+            title=f"Company Mentor {outcome.title()}",
+            description=f"{actor.full_name} {outcome} the company-mentor application for {application.user.full_name}.",
+            button="View",
+            url=None,
+            created_by=actor,
+        )
+
+
+def notify_ig_leads(ig, applicant, application):
+    """
+    Notify an IG's lead(s) that a learner has applied to become that IG's
+    mentor — the leads (in addition to admins) can act on this via
+    MentorVerifyAPI's IG-lead authorization branch.
+    """
+    from db.user import UserRoleLink
+    from api.notification.notifications_utils import NotificationUtils
+    from utils.types import RoleType
+    from django.conf import settings
+
+    lead_role_title = RoleType.IG_LEAD_ROLE(ig.code)
+    leads = UserRoleLink.objects.filter(role__title=lead_role_title).select_related('user')
+    for link in leads:
+        NotificationUtils.insert_notification(
+            user=link.user,
+            title="New IG Mentor Application",
+            description=f"{applicant.full_name} has applied to be a mentor for {ig.name}.",
+            button="View Application",
+            url=f"{settings.FR_DOMAIN_NAME}/dashboard/mentor/applications/{application.id}/",
+            created_by=applicant,
+        )
 
 
 def get_scope_ids(user_id, scope_type):
@@ -86,29 +144,37 @@ def get_scope_ids(user_id, scope_type):
 def get_verified_company_for_mentor(user_id):
     """
     Resolve the verified Company a user may act on behalf of: either they are
-    its registrant (company_user), or they hold an active COMPANY_MENTOR
-    grant scoped to its Organization. Single source of truth for the
-    previously-duplicated _get_company_for_user/get_verified_company helpers.
+    its registrant (company_user), an accepted CompanyAdminLink co-admin, or
+    they hold an active COMPANY_MENTOR grant scoped to its Organization.
+    Single source of truth for the previously-duplicated
+    _get_company_for_user/get_verified_company helpers.
     """
-    from db.company import Company
-    from db.organization import Organization
+    from db.company import Company, CompanyAdminLink
     from db.user import MentorScopeGrant
 
     company = Company.objects.filter(company_user_id=user_id, status="verified").first()
     if company:
         return company
 
+    company = Company.objects.filter(
+        admin_links__user_id=user_id,
+        admin_links__status=CompanyAdminLink.Status.ACCEPTED,
+        status="verified",
+    ).first()
+    if company:
+        return company
+
     org_ids = get_scope_ids(user_id, MentorScopeGrant.ScopeType.COMPANY_MENTOR)
     if not org_ids:
         return None
-    org = Organization.objects.filter(id__in=org_ids).first()
-    if not org:
-        return None
-    return Company.objects.filter(name=org.title, status="verified").first()
+    # Resolve strictly via the real Company.org FK — resolving by
+    # name==org.title is fragile (renames, or two orgs sharing a title,
+    # silently resolve to the wrong company).
+    return Company.objects.filter(org_id__in=org_ids, status="verified").first()
 
 
 @transaction.atomic
-def reconcile_mentor_ig_grants(mentor, preferred_ig_ids, actor_user_id):
+def reconcile_mentor_ig_grants(application, actor_user_id):
     """
     Make the mentor's active IG_MENTOR MentorScopeGrant set exactly equal
     the (valid) preferred_ig_ids — the MentorScopeGrant counterpart to
@@ -116,6 +182,7 @@ def reconcile_mentor_ig_grants(mentor, preferred_ig_ids, actor_user_id):
     Company/Campus grant this mentor holds is untouched (grants are additive
     and independent per scope).
     """
+    preferred_ig_ids = application.preferred_ig_ids
     desired = {str(i) for i in (preferred_ig_ids or []) if i}
     if desired:
         desired &= {
@@ -127,7 +194,7 @@ def reconcile_mentor_ig_grants(mentor, preferred_ig_ids, actor_user_id):
 
     ig_grants = list(
         MentorScopeGrant.objects.filter(
-            mentor=mentor, scope_type=MentorScopeGrant.ScopeType.IG_MENTOR
+            application=application, scope_type=MentorScopeGrant.ScopeType.IG_MENTOR
         )
     )
     current_active = {g.scope_id for g in ig_grants if g.is_active}
@@ -145,7 +212,7 @@ def reconcile_mentor_ig_grants(mentor, preferred_ig_ids, actor_user_id):
             existing.save(update_fields=["is_active", "revoked_by", "revoked_at"])
         else:
             MentorScopeGrant.objects.create(
-                mentor=mentor,
+                application=application,
                 scope_type=MentorScopeGrant.ScopeType.IG_MENTOR,
                 scope_id=ig_id,
                 is_active=True,
@@ -155,18 +222,26 @@ def reconcile_mentor_ig_grants(mentor, preferred_ig_ids, actor_user_id):
 
     if to_remove:
         MentorScopeGrant.objects.filter(
-            mentor=mentor,
+            application=application,
             scope_type=MentorScopeGrant.ScopeType.IG_MENTOR,
             scope_id__in=to_remove,
         ).update(is_active=False, revoked_by_id=actor_user_id, revoked_at=now)
 
 
 @transaction.atomic
-def reconcile_mentor_ig_links(user, preferred_ig_ids, actor_user_id):
+def reconcile_mentor_ig_links(user, preferred_ig_ids, actor_user_id, exclude_application_id=None):
     """
     Make the user's ACTIVE MENTOR UserIgLink set exactly equal the (valid)
-    preferred_ig_ids: adds/reactivates links for newly chosen IGs and
-    deactivates links for removed IGs.
+    union of `preferred_ig_ids` (the application currently being reconciled)
+    and every OTHER APPROVED application's preferred_ig_ids — see
+    get_effective_ig_ids. Adds/reactivates links for newly chosen IGs and
+    deactivates links for IGs no APPROVED application wants anymore.
+
+    Using the union (rather than just this application's own list) is
+    what makes a mentor's active IGs additive across tiers: approving or
+    editing one application's IG list can no longer clobber the IGs another
+    still-APPROVED application legitimately grants, regardless of which was
+    approved first.
 
     Only ever touches assignment_type=MENTOR rows — LEARNER/LEAD/MODERATOR
     links for the same IG are never modified. Used both for first-time admin
@@ -174,7 +249,7 @@ def reconcile_mentor_ig_links(user, preferred_ig_ids, actor_user_id):
 
     Returns (added_ig_ids, removed_ig_ids) as sets of str.
     """
-    desired = {str(i) for i in (preferred_ig_ids or []) if i}
+    desired = get_effective_ig_ids(user, preferred_ig_ids, exclude_application_id)
     if desired:
         desired &= {
             str(x)
@@ -223,6 +298,33 @@ def reconcile_mentor_ig_links(user, preferred_ig_ids, actor_user_id):
 
     return to_add, to_remove
 
+
+def release_mentor_ig_links(user, ig_ids, exclude_application_id, actor_user_id):
+    """
+    Deactivate MENTOR UserIgLink rows for `ig_ids`, but only the ones no
+    OTHER currently-APPROVED application (excluding `exclude_application_id`,
+    the one being rejected/revoked) still claims. Used wherever a single
+    application/grant is revoked directly (outside reconcile_mentor_ig_links'
+    approve-time reconciliation) so revoking one application never removes
+    IG access another still-APPROVED application legitimately grants.
+
+    Returns the set of ig_ids actually deactivated.
+    """
+    still_claimed = get_effective_ig_ids(user, [], exclude_application_id=exclude_application_id)
+    safe_to_release = {str(i) for i in ig_ids if i} - still_claimed
+
+    if safe_to_release:
+        now = DateTimeUtils.get_current_utc_time()
+        UserIgLink.objects.filter(
+            user=user,
+            assignment_type=UserIgLink.AssignmentType.MENTOR,
+            ig_id__in=safe_to_release,
+            is_active=True,
+        ).update(is_active=False, unassigned_at=now)
+
+    return safe_to_release
+
+
 def get_mentor_overview(user_id):
         """
         Dynamically aggregates metrics based on the authenticated mentor's scope,
@@ -231,19 +333,19 @@ def get_mentor_overview(user_id):
         active_scopes = []
 
         # 1. Campus and Company Scopes from UserMentor
-        user_mentors = UserMentor.objects.filter(user_id=user_id, status=UserMentor.Status.APPROVED).select_related('org')
-        for mentor in user_mentors:
-            if mentor.mentor_tier == UserMentor.MentorTier.CAMPUS_MENTOR and mentor.org_id:
+        applications = MentorApplication.objects.filter(user_id=user_id, status=MentorApplication.Status.APPROVED).select_related('org')
+        for app in applications:
+            if app.mentor_tier == MentorApplication.MentorTier.CAMPUS_MENTOR and app.org_id:
                 active_scopes.append({
                     "scope_type": "CAMPUS_MENTOR",
-                    "scope_id": mentor.org_id,
-                    "scope_name": mentor.org.title
+                    "scope_id": app.org_id,
+                    "scope_name": app.org.title
                 })
-            elif mentor.mentor_tier == UserMentor.MentorTier.COMPANY_MENTOR and mentor.org_id:
+            elif app.mentor_tier == MentorApplication.MentorTier.COMPANY_MENTOR and app.org_id:
                 active_scopes.append({
                     "scope_type": "COMPANY_MENTOR",
-                    "scope_id": mentor.org_id,
-                    "scope_name": mentor.org.title
+                    "scope_id": app.org_id,
+                    "scope_name": app.org.title
                 })
 
         # 2. IG Scopes from UserIgLink

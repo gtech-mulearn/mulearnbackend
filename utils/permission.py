@@ -1,3 +1,6 @@
+from functools import wraps
+from db.user import UserMentor
+from utils.response import CustomResponse
 import datetime
 from datetime import datetime
 
@@ -18,6 +21,17 @@ from .response import CustomResponse
 from db.user import DynamicRole, DynamicUser
 from utils.types import RoleType
 
+
+def mentor_active_required(func):
+    @wraps(func)
+    def wrapper(self, request, *args, **kwargs):
+        user_id = JWTUtils.fetch_user_id(request)
+        if not UserMentor.objects.filter(user_id=user_id, is_active=True).exists():
+            return CustomResponse(
+                general_message="Your mentor account is deactivated. Please contact an administrator."
+            ).get_failure_response(status_code=403)
+        return func(self, request, *args, **kwargs)
+    return wrapper
 
 # def get_current_utc_time():
 #     return format_time(datetime.utcnow())
@@ -74,6 +88,31 @@ class CustomizePermission(BasePermission):
         Returns:
             str: The value for the WWW-Authenticate header.
         """
+        return f'{self.token_prefix} realm="api"'
+
+
+class OptionalAuthentication(authentication.BaseAuthentication):
+    """
+    Authentication class for endpoints that should serve both authenticated
+    and unauthenticated users. Unlike CustomizePermission, a missing
+    Authorization header is treated as an anonymous request instead of
+    being rejected. A token that IS present must still be valid.
+
+    Use this in `authentication_classes` (with no `permission_classes` /
+    `role_required`) on any view that wants to branch its own behavior via
+    `JWTUtils.is_logged_in(request)` rather than requiring auth outright.
+    """
+
+    token_prefix = "Bearer"
+    secret_key = SECRET_KEY
+
+    def authenticate(self, request):
+        auth_header = get_authorization_header(request).decode("utf-8")
+        if not auth_header:
+            return None
+        return JWTUtils.is_jwt_authenticated(request)
+
+    def authenticate_header(self, request):
         return f'{self.token_prefix} realm="api"'
 
 

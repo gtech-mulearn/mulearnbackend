@@ -2,7 +2,7 @@ import uuid
 from io import BytesIO
 from tempfile import NamedTemporaryFile
 
-from django.db.models import F, Prefetch, Sum, Q
+from django.db.models import F
 from django.http import FileResponse
 from openpyxl import load_workbook
 from rest_framework.views import APIView
@@ -14,7 +14,6 @@ from db.organization import (
     UserOrganizationLink,
     District,
 )
-from django.db.models import Count
 from db.user import User
 
 from utils.permission import CustomizePermission, JWTUtils, role_required
@@ -174,19 +173,37 @@ class InstitutionAPI(APIView):
         else:
             organisations = Organization.objects.filter(org_type=org_type)
 
+        params = request.query_params
+        zone_id = params.get("zone_id")
+        state_id = params.get("state_id")
+        country_id = params.get("country_id")
+        affiliation_id = params.get("affiliation_id")
+
+        if zone_id:
+            organisations = organisations.filter(district__zone_id=zone_id)
+        if state_id:
+            organisations = organisations.filter(district__zone__state_id=state_id)
+        if country_id:
+            organisations = organisations.filter(
+                district__zone__state__country_id=country_id
+            )
+        if affiliation_id:
+            organisations = organisations.filter(affiliation_id=affiliation_id)
+
+        # cached_total_karma / cached_member_count are denormalised onto
+        # `organization` and refreshed by mu_celery.org_aggregates_cron. They must
+        # NOT be annotated here: the campus search page sorts by them, so ordering
+        # applies
+        # across the whole result set before LIMIT, which meant a correlated
+        # subquery ran for every organisation on every request - and Django's
+        # Paginator ran the entire annotated query a second time for `count`.
+        # Any annotation carrying an aggregate or subquery forces that count
+        # into a `SELECT COUNT(*) FROM (...)` wrapper, so keeping the queryset
+        # annotation-free is what makes the count a plain indexed COUNT(*).
         org_queryset = (
             organisations
-            .select_related("affiliation")
-            .prefetch_related(
-                Prefetch(
-                    "user_organization_link_org",
-                    queryset=UserOrganizationLink.objects.filter(
-                        verified=True
-                    ).select_related("user"),
-                )
-            )
-            .annotate(user_count=Count("user_organization_link_org", filter=Q(user_organization_link_org__verified=True)))
-            .order_by("-user_count")  # Sort by highest user_count
+            .select_related("affiliation", "district__zone__state__country")
+            .order_by("-cached_total_karma")  # Sort by highest karma
         )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
@@ -209,6 +226,8 @@ class InstitutionAPI(APIView):
                 "zone": "district__zone__name",
                 "state": "district__zone__state__name",
                 "country": "district__zone__state__country__name",
+                "karma": "cached_total_karma",
+                "user_count": "cached_member_count",
             },
         )
 
@@ -243,15 +262,11 @@ class InstitutionCSVAPI(APIView):
                 "district__zone",
                 "district",
             )
-            .prefetch_related(
-                Prefetch(
-                    "user_organization_link_org",
-                    queryset=UserOrganizationLink.objects.filter(
-                        verified=True
-                    ).select_related("user"),
-                )
-            )
         )
+        # No prefetch of user_organization_link_org: it existed only to feed the
+        # old InstitutionSerializer.get_user_count, which now reads the
+        # denormalised cached_member_count column. On a full export this was
+        # loading every verified link and user for every organisation.
 
         serializer = InstitutionSerializer(organizations, many=True).data
 
@@ -268,25 +283,27 @@ class InstitutionDetailsAPI(APIView):
         responses={200: InstitutionSerializer},
     )
     def get(self, request, org_code):
-        organization = (
-            Organization.objects.filter(code=org_code)
-            .values(
-                "id",
-                "title",
-                "code",
-                affiliation_uuid=F("affiliation__id"),
-                affiliation_name=F("affiliation__title"),
-                district_uuid=F("district__id"),
-                district_name=F("district__name"),
-                zone_uuid=F("district__zone__id"),
-                zone_name=F("district__zone__name"),
-                state_uuid=F("district__zone__state__id"),
-                state_name=F("district__zone__state__name"),
-                country_uuid=F("district__zone__state__country__id"),
-                country_name=F("district__zone__state__country__name"),
-            )
-            .annotate(karma=Sum("user_organization_link_org__user__wallet_user__karma"))
-            .order_by("-karma")
+        # karma/user_count read straight off the denormalised columns maintained by
+        # mu_celery.org_aggregates_cron (verified members only) - matches what
+        # InstitutionAPI shows on the org list page for the same organisation,
+        # instead of a separately-computed, unfiltered-by-verified live Sum that
+        # could show a different total here than on the list page.
+        organization = Organization.objects.filter(code=org_code).values(
+            "id",
+            "title",
+            "code",
+            affiliation_uuid=F("affiliation__id"),
+            affiliation_name=F("affiliation__title"),
+            district_uuid=F("district__id"),
+            district_name=F("district__name"),
+            zone_uuid=F("district__zone__id"),
+            zone_name=F("district__zone__name"),
+            state_uuid=F("district__zone__state__id"),
+            state_name=F("district__zone__state__name"),
+            country_uuid=F("district__zone__state__country__id"),
+            country_name=F("district__zone__state__country__name"),
+            karma=F("cached_total_karma"),
+            user_count=F("cached_member_count"),
         )
 
         return CustomResponse(response=organization).get_success_response()
@@ -518,7 +535,11 @@ class InstitutionPrefillAPI(APIView):
         responses={200: InstitutionPrefillSerializer},
     )
     def get(self, request, org_code):
-        organization = Organization.objects.filter(code=org_code).first()
+        organization = (
+            Organization.objects.filter(code=org_code)
+            .select_related("affiliation", "district__zone__state__country")
+            .first()
+        )
 
         serializer = InstitutionPrefillSerializer(organization, many=False).data
 
@@ -695,8 +716,8 @@ class OrganisationImportAPI(APIView):
 
         title_excel = set()
         code_excel = set()
-        title_db = Organization.objects.values_list("title", flat=True)
-        code_db = Organization.objects.values_list("code", flat=True)
+        title_db = set(Organization.objects.values_list("title", flat=True))
+        code_db = set(Organization.objects.values_list("code", flat=True))
 
         affiliations_to_fetch = set()
         districts_to_fetch = set()
@@ -849,8 +870,24 @@ class UnverifiedOrganizationsListAPI(APIView):
             .filter(verified__isnull=True)
             .order_by("-created_at")
         )
-        seializer = UnverifiedOrganizationsSerializer(unverified_orgs, many=True)
-        return CustomResponse(response=seializer.data).get_success_response()
+
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            unverified_orgs,
+            request,
+            ["title", "created_by__full_name", "department__title"],
+            {
+                "title": "title",
+                "created_by": "created_by__full_name",
+                "department": "department__title",
+                "created_at": "created_at",
+            },
+        )
+        seializer = UnverifiedOrganizationsSerializer(
+            paginated_queryset.get("queryset"), many=True
+        )
+        return CustomResponse().paginated_response(
+            data=seializer.data, pagination=paginated_queryset.get("pagination")
+        )
 
 
 class VerifyOrganizationAPI(APIView):

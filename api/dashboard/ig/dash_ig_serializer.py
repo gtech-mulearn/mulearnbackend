@@ -1,5 +1,6 @@
 from rest_framework import serializers
 import json
+from datetime import date
 
 from db.task import InterestGroup
 from db.user import User, Socials
@@ -109,7 +110,6 @@ def _resolve_ig_mentors(ig, mentor_links=None, mentor_socials_map=None, mentor_p
         links = mentor_links
 
     user_ids = [link.user_id for link in links]
-
     if mentor_socials_map is None:
         socials_qs = Socials.objects.filter(user_id__in=user_ids).values(
             "user_id", "github", "facebook", "instagram", "linkedin",
@@ -125,6 +125,15 @@ def _resolve_ig_mentors(ig, mentor_links=None, mentor_socials_map=None, mentor_p
     else:
         mentor_profiles = mentor_profiles_map
 
+    from db.user import MentorApplication
+    applications = {
+        a.user_id: a
+        for a in MentorApplication.objects.filter(
+            user_id__in=user_ids,
+            status=MentorApplication.Status.APPROVED,
+        ).select_related("org")
+    }
+
     mentors = []
     for link in links:
         user = link.user
@@ -134,13 +143,13 @@ def _resolve_ig_mentors(ig, mentor_links=None, mentor_socials_map=None, mentor_p
             for key in ["github", "facebook", "instagram", "linkedin",
                         "dribble", "behance", "stackoverflow", "medium", "hackerrank"]
         }
-        mentor_profile = mentor_profiles.get(user.id)
+        application = applications.get(user.id)
         mentors.append({
             "muid": user.muid,
             "full_name": user.full_name,
             "email": user.email,
             "profile_pic": user.profile_pic,
-            "company": get_mentor_company(mentor_profile) if mentor_profile else None,
+            "company": get_mentor_company(application) if application else None,
             "socials": socials,
         })
     return mentors
@@ -160,9 +169,18 @@ class InterestGroupSerializer(serializers.ModelSerializer):
         choices=["maker", "coder", "creative", "manager", "others"]
     )
     status = serializers.ChoiceField(
-        choices=["active", "requested", "cancelled", "rejected"]
+        choices=["active", "inactive", "requested", "cancelled", "rejected"]
     )
-    impact_projects = ImpactProjectSerializer(source="impact_project_ig", many=True, read_only=True)
+    impact_projects = ImpactProjectSerializer(
+        source="impact_project_ig",
+        many=True,
+        read_only=True
+    )
+    media_content_links = serializers.SerializerMethodField()
+    is_sponsored = serializers.SerializerMethodField()
+    sponsor_company_name = serializers.SerializerMethodField()
+    sponsor_company_logo = serializers.SerializerMethodField()
+    community_partners = serializers.SerializerMethodField()
 
     class Meta:
         model = InterestGroup
@@ -186,6 +204,11 @@ class InterestGroupSerializer(serializers.ModelSerializer):
             "category",
             "status",
             "members",
+            "media_content_links",
+            "is_sponsored",
+            "sponsor_company_name",
+            "sponsor_company_logo",
+            "community_partners",
             "updated_by",
             "updated_at",
             "created_by",
@@ -197,6 +220,59 @@ class InterestGroupSerializer(serializers.ModelSerializer):
         if hasattr(obj, "members"):
             return obj.members
         return obj.user_ig_link_ig.all().count()
+
+    def get_media_content_links(self, obj):
+        """
+        Media content (e.g. Office Hours sessions) linked to this IG via
+        ig_media_content_link, excluding soft-deleted media content.
+        Only upcoming and ongoing (today) content is included.
+        """
+        today = date.today()
+        links = obj.media_content_links.filter(
+            media_content__deleted_at__isnull=True,
+            media_content__date__gte=today,
+        ).select_related("media_content").order_by("media_content__date")
+
+        return [
+            {
+                "id": link.id,
+                "media_content_id": link.media_content_id,
+                "content_type": link.media_content.content_type,
+                "title": link.media_content.title,
+                "date": link.media_content.date,
+                "link": link.media_content.link,
+                "status": "ongoing" if link.media_content.date == today else "upcoming",
+            }
+            for link in links
+        ]
+
+    def get_community_partners(self, obj):
+        """
+        Community partners linked to this IG via ig_community_partner_link.
+        """
+        links = obj.community_partner_links.select_related("community_partner")
+        return [
+            {
+                "id": link.community_partner.id,
+                "name": link.community_partner.name,
+                "logo_key": link.community_partner.logo_key,
+                "description": link.community_partner.description,
+                "linkedin": link.community_partner.linkedin,
+                "github": link.community_partner.github,
+                "website": link.community_partner.website,
+                "instagram": link.community_partner.instagram,
+            }
+            for link in links
+        ]
+
+    def get_is_sponsored(self, obj):
+        return obj.sponsor_status == "approved" and obj.sponsor_company_id is not None
+
+    def get_sponsor_company_name(self, obj):
+        return obj.sponsor_company.name if self.get_is_sponsored(obj) else None
+
+    def get_sponsor_company_logo(self, obj):
+        return obj.sponsor_company.logo if self.get_is_sponsored(obj) else None
 
     def to_representation(self, instance):
         """Convert JSON-serialized text fields back to Python objects for API output.

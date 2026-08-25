@@ -1,12 +1,14 @@
 from django.core.files.storage import FileSystemStorage
 from django.db.models import Sum, F, Value, Count, Q, Prefetch, Subquery, OuterRef, IntegerField
 from django.db.models.functions import Concat, Coalesce
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
 from rest_framework.views import APIView
 from decouple import config as decouple_config
 from . import serializers
 from db.task import TaskList, InterestGroup
 from db.organization import Organization, UserOrganizationLink
-from db.user import User, UserRoleLink, UserMentor
+from db.user import User, UserRoleLink, UserMentor, MentorScopeGrant, MentorApplication
 from db.mentor import MentorshipSession, MentorshipSessionUserLink
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
@@ -30,12 +32,13 @@ class StudentsLeaderboard(APIView):
             )
             .distinct()
             .select_related("wallet_user")
+            .only("muid", "full_name", "wallet_user__karma")
             .prefetch_related(
                 Prefetch(
                     "user_organization_link_user",
                     queryset=UserOrganizationLink.objects.filter(
                         org__org_type=OrganizationType.COLLEGE.value
-                    ).select_related("org"),
+                    ).select_related("org").only("user_id", "org__title"),
                     to_attr="colleges",
                 )
             )
@@ -66,14 +69,8 @@ class StudentsMonthlyLeaderboard(APIView):
     )
     def get(self, request):
         start_date, end_date = DateTimeUtils.get_start_and_end_of_previous_month()
-        print("REquest reeceivd")
         student_monthly_leaderboard = (
-            User.objects.prefetch_related(
-                "user_role_link_user__role",
-                "user_organization_link_user__org",
-                "karma_activity_log_user",
-            )
-            .filter(
+            User.objects.filter(
                 user_role_link_user__role__title=RoleType.STUDENT.value,
                 user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
                 exist_in_guild=True,
@@ -154,6 +151,7 @@ class CollegeLeaderboard(APIView):
 
 
 class CollegeMonthlyLeaderboard(APIView):
+    @method_decorator(cache_page(60 * 5))
     @extend_schema(tags=['Leaderboard'], description="Retrieve College Monthly Leaderboard.",
         responses={200: inline_serializer(
             name='LeaderboardCollegeMonthlyItem',
@@ -302,7 +300,7 @@ class WadhwaniZonalLeaderboard(APIView):
                 total_karma=F("total_karma"),
                 students=F("students"),
             )
-            .order_by("-total_karma")
+            .order_by("-total_karma")[:20]
         )
 
         response_data = serializers.WadhwaniZoneLeaderboardSerializer(zone_leaderboard, many=True).data
@@ -338,15 +336,23 @@ class IGMentorLeaderboard(APIView):
             .values('cnt')
         )
 
+        ig_mentor_user_ids = MentorScopeGrant.objects.filter(
+            scope_type=MentorScopeGrant.ScopeType.IG_MENTOR,
+            scope_id=str(ig.id),
+            is_active=True,
+            application__status=MentorApplication.Status.APPROVED,
+        ).values_list('application__user_id', flat=True)
+
         mentor_qs = (
             UserMentor.objects.filter(
-                mentor_tier=UserMentor.MentorTier.IG_MENTOR,
-                status=UserMentor.Status.APPROVED,
+                user_id__in=ig_mentor_user_ids,
+                is_active=True,
                 user__user_ig_link_user__ig=ig,
                 user__user_ig_link_user__assignment_type='MENTOR',
                 user__user_ig_link_user__is_active=True,
             )
-            .select_related('user__wallet_user', 'org')
+            .select_related('user')
+            .only('user_id', 'user__id', 'user__full_name')
             .annotate(
                 total_karma=Coalesce(F('user__wallet_user__karma'), Value(0)),
                 completed_sessions=Coalesce(
@@ -358,7 +364,7 @@ class IGMentorLeaderboard(APIView):
             .order_by('-completed_sessions', '-total_karma')
         )
 
-        rankings = {mentor.id: idx + 1 for idx, mentor in enumerate(mentor_qs)}
+        rankings = {mentor.user_id: idx + 1 for idx, mentor in enumerate(mentor_qs)}
         serialized = serializers.IGMentorLeaderboardSerializer(
             mentor_qs,
             many=True,
@@ -397,13 +403,20 @@ class CampusMentorLeaderboard(APIView):
             .values('cnt')
         )
 
+        campus_mentor_user_ids = MentorScopeGrant.objects.filter(
+            scope_type=MentorScopeGrant.ScopeType.CAMPUS_MENTOR,
+            scope_id=str(campus.id),
+            is_active=True,
+            application__status=MentorApplication.Status.APPROVED,
+        ).values_list('application__user_id', flat=True)
+
         mentor_qs = (
             UserMentor.objects.filter(
-                mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
-                status=UserMentor.Status.APPROVED,
-                org=campus,
+                user_id__in=campus_mentor_user_ids,
+                is_active=True,
             )
-            .select_related('user__wallet_user', 'org')
+            .select_related('user')
+            .only('user_id', 'user__id', 'user__full_name')
             .annotate(
                 total_karma=Coalesce(F('user__wallet_user__karma'), Value(0)),
                 completed_sessions=Coalesce(
@@ -414,10 +427,73 @@ class CampusMentorLeaderboard(APIView):
             .order_by('-completed_sessions', '-total_karma')
         )
 
-        rankings = {mentor.id: idx + 1 for idx, mentor in enumerate(mentor_qs)}
+        rankings = {mentor.user_id: idx + 1 for idx, mentor in enumerate(mentor_qs)}
         serialized = serializers.CampusMentorLeaderboardSerializer(
             mentor_qs,
             many=True,
-            context={'rankings': rankings},
+            context={'rankings': rankings, 'campus': campus},
+        )
+        return CustomResponse(response=serialized.data).get_success_response()
+
+
+class CompanyMentorLeaderboard(APIView):
+    @extend_schema(
+        tags=['Leaderboard'],
+        description=(
+            "Retrieve the mentor leaderboard for a specific company. "
+            "Mentors are ranked primarily by the number of COMPLETED company sessions, "
+            "with total karma as a tiebreaker."
+        ),
+        responses={200: serializers.CompanyMentorLeaderboardSerializer(many=True)},
+    )
+    def get(self, request, company_id):
+        from db.company import Company
+
+        company = Company.objects.filter(id=company_id, status="verified").first()
+        if not company or not company.org_id:
+            return CustomResponse(general_message="Company not found").get_failure_response()
+
+        completed_sessions_subquery = (
+            MentorshipSessionUserLink.objects.filter(
+                user_id=OuterRef('user_id'),
+                participant_role=MentorshipSessionUserLink.ParticipantRole.MENTOR,
+                session__session_type=MentorshipSession.SessionType.COMPANY_SESSION,
+                session__entity_id=str(company.org_id),
+                session__status=MentorshipSession.Status.COMPLETED,
+            )
+            .values('user_id')
+            .annotate(cnt=Count('id'))
+            .values('cnt')
+        )
+
+        company_mentor_user_ids = MentorScopeGrant.objects.filter(
+            scope_type=MentorScopeGrant.ScopeType.COMPANY_MENTOR,
+            scope_id=str(company.org_id),
+            is_active=True,
+            application__status=MentorApplication.Status.APPROVED,
+        ).values_list('application__user_id', flat=True)
+
+        mentor_qs = (
+            UserMentor.objects.filter(
+                user_id__in=company_mentor_user_ids,
+                is_active=True,
+            )
+            .select_related('user')
+            .only('user_id', 'user__id', 'user__full_name')
+            .annotate(
+                total_karma=Coalesce(F('user__wallet_user__karma'), Value(0)),
+                completed_sessions=Coalesce(
+                    Subquery(completed_sessions_subquery, output_field=IntegerField()),
+                    Value(0),
+                ),
+            )
+            .order_by('-completed_sessions', '-total_karma')
+        )
+
+        rankings = {mentor.user_id: idx + 1 for idx, mentor in enumerate(mentor_qs)}
+        serialized = serializers.CompanyMentorLeaderboardSerializer(
+            mentor_qs,
+            many=True,
+            context={'rankings': rankings, 'company': company},
         )
         return CustomResponse(response=serialized.data).get_success_response()

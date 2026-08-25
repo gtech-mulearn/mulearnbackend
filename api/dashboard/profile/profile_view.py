@@ -251,7 +251,7 @@ class UserIgEditView(APIView):
         user = User.objects.get(id=user_id)
 
         serializer = profile_serializer.UserIgEditSerializer(
-            user, data=request.data, partial=True
+            user, data=request.data
         )
 
         if not serializer.is_valid():
@@ -301,7 +301,7 @@ class UserProfileAPI(APIView):
                     queryset=UserIgLink.objects.select_related("ig"),
                 ),
             )
-            .select_related("wallet_user")
+            .select_related("wallet_user", "user_lvl_link_user")
             .get(muid=user_muid)
         )
 

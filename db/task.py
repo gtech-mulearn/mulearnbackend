@@ -49,6 +49,7 @@ class InterestGroup(models.Model):
         max_length=20,
         choices=[
             ('active', 'Active'),
+            ('inactive', 'Inactive'),
             ('requested', 'Requested'),
             ('cancelled', 'Cancelled'),
             ('rejected', 'Rejected'),
@@ -56,6 +57,18 @@ class InterestGroup(models.Model):
         default='requested',
         blank=False,
         null=False
+    )
+    # PRD §7.3 — company-sponsored IG branding/framing: a company can request
+    # to be the recognised sponsor of an IG, subject to platform-admin
+    # approval. sponsor_status is independent of `status` above (which
+    # governs the IG's own existence, not its sponsorship).
+    sponsor_company = models.ForeignKey(
+        'db.Company', on_delete=models.SET_NULL, null=True, blank=True,
+        db_column='sponsor_company_id', related_name='sponsored_igs'
+    )
+    sponsor_status = models.CharField(
+        max_length=10, null=True, blank=True,
+        choices=[('pending', 'Pending'), ('approved', 'Approved'), ('rejected', 'Rejected')],
     )
     about = models.TextField(blank=True, null=True)
     prerequisites = models.TextField(blank=True, null=True)
@@ -114,6 +127,8 @@ class UserLvlLink(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="user_lvl_link_user")
     level = models.ForeignKey(Level, on_delete=models.CASCADE, related_name="user_lvl_link_level")
+    grit = models.IntegerField(default=50)
+    last_level_down_at = models.DateTimeField(null=True, blank=True)
     updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="updated_by",
                                    related_name="user_lvl_link_updated_by")
     updated_at = models.DateTimeField(auto_now=True)
@@ -171,6 +186,9 @@ class TaskList(models.Model):
         ('approved', 'Approved'),
         ('pending',  'Pending'),
         ('rejected', 'Rejected'),
+        # PRD §6.3 — lightweight "request changes" state distinct from
+        # outright rejection; the submitter can amend and resubmit.
+        ('changes_requested', 'Changes Requested'),
     ]
     approval_status = models.CharField(
         max_length=20, choices=APPROVAL_STATUS_CHOICES, default='approved'

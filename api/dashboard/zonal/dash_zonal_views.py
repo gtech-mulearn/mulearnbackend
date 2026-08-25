@@ -20,7 +20,7 @@ class ZonalDetailsAPI(APIView):
     @role_required([RoleType.ZONAL_CAMPUS_LEAD.value])
     @extend_schema(
         tags=['Dashboard - Zonal'],
-        description="Retrieve Zonal Details.",
+        description="Retrieve Zonal Details",
         responses={200: dash_zonal_serializer.ZonalDetailsSerializer},
     )
     def get(self, request):

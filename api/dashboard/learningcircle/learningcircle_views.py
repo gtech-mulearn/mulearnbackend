@@ -20,6 +20,9 @@ from db.user import UserDomains, User
 from django.conf import settings
 from api.notification.broadcast_utils import BroadcastUtils
 from api.notification.notifications_utils import NotificationUtils
+from api.notification.service import NotificationService
+from api.notification.types import NotificationType
+from api.notification.audience import Audience
 from utils.karma import add_karma, remove_karma
 from utils.utils import CommonUtils
 from utils.permission import CustomizePermission, JWTUtils
@@ -77,6 +80,26 @@ class LearningCircleView(APIView):
         if ig_id:
             learning_circles = learning_circles.filter(ig_id=ig_id)
 
+        status = request.query_params.get("status")
+        if status:
+            if status == "joined":
+                joined_ids = UserCircleLink.objects.filter(
+                    user_id=user_id, accepted=True
+                ).values_list("circle_id", flat=True)
+                learning_circles = learning_circles.filter(id__in=joined_ids)
+            elif status == "pending":
+                pending_ids = UserCircleLink.objects.filter(
+                    user_id=user_id, accepted__isnull=True
+                ).values_list("circle_id", flat=True)
+                learning_circles = learning_circles.filter(id__in=pending_ids)
+            elif status == "not_joined":
+                member_ids = UserCircleLink.objects.filter(
+                    user_id=user_id,
+                ).filter(
+                    Q(accepted=True) | Q(accepted__isnull=True)
+                ).values_list("circle_id", flat=True)
+                learning_circles = learning_circles.exclude(id__in=member_ids)
+
         paginated_queryset = CommonUtils.get_paginated_queryset(
             learning_circles,
             request,
@@ -91,12 +114,20 @@ class LearningCircleView(APIView):
                 circle_id__in=page_circle_ids,
             ).values_list("circle_id", flat=True)
         )
+        pending_circle_ids = set(
+            UserCircleLink.objects.filter(
+                user_id=user_id,
+                accepted__isnull=True,
+                circle_id__in=page_circle_ids,
+            ).values_list("circle_id", flat=True)
+        )
         serializer = LearningCircleListMinSerializer(
             page,
             many=True,
             context={
                 "user_id": user_id,
                 "joined_circle_ids": joined_circle_ids,
+                "pending_circle_ids": pending_circle_ids,
             },
         )
         return CustomResponse().paginated_response(
@@ -204,7 +235,9 @@ class LearningCircleMeetingInfoAPI(APIView):
     )
     def get(self, request, meet_id: str):
         user_id = JWTUtils.fetch_user_id(request)
-        meet = CircleMeetingLog.objects.filter(id=meet_id).first()
+        meet = CircleMeetingLog.objects.filter(id=meet_id).select_related(
+            "circle_id__ig", "created_by"
+        ).first()
         if not meet:
             return CustomResponse(
                 general_message="Meeting not found"
@@ -228,12 +261,21 @@ class LearningCircleMeetingListView(APIView):
             return CustomResponse(
                 general_message="Learning Circle not found"
             ).get_failure_response()
-        circle_meetings = CircleMeetingLog.objects.filter(circle_id=learning_circle)
-        serializer = CircleMeetupMinSerializer(circle_meetings, many=True)
-        return CustomResponse(
-            general_message="Circle Meetings fetched successfully",
-            response=serializer.data,
-        ).get_success_response()
+        circle_meetings = (
+            CircleMeetingLog.objects.filter(circle_id=learning_circle)
+            .select_related("circle_id__ig", "circle_id__org", "created_by")
+            .prefetch_related("circle_meeting_attendance_meet_id")
+            .order_by("-meet_time")
+        )
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            circle_meetings, request, search_fields=["title"]
+        )
+        serializer = CircleMeetupMinSerializer(
+            paginated_queryset.get("queryset"), many=True
+        )
+        return CustomResponse().paginated_response(
+            data=serializer.data, pagination=paginated_queryset.get("pagination")
+        )
 
 
 class LearningCircleMeetingView(APIView):
@@ -253,10 +295,10 @@ class LearningCircleMeetingView(APIView):
             return CustomResponse(
                 general_message="Learning Circle not found"
             ).get_failure_response()
-        # Only accepted members (including the lead/creator) may create meetings.
-        if not _is_member_or_creator(circle, user_id):
+        # Only the circle lead or creator may create meetings.
+        if not _is_lead_or_creator(circle, user_id):
             return CustomResponse(
-                general_message="Only circle members can create meetings"
+                general_message="Only the circle lead or creator can create meetings"
             ).get_failure_response()
         meet_code = generate_code()
         request_data = request.data.copy()
@@ -269,7 +311,19 @@ class LearningCircleMeetingView(APIView):
                 general_message="Circle Meeting creation failed",
                 response=serializer.errors,
             ).get_failure_response()
-        serializer.save()
+        with transaction.atomic():
+            serializer.save()
+            NotificationService.dispatch(
+                notif_type = NotificationType.LC_MEETING_SCHEDULED,
+                audience   = Audience.lc_members(circle_id),
+                context    = {
+                    "lc_name":   circle.title,
+                    "meet_time": serializer.instance.meet_time.strftime("%d %b %Y, %I:%M %p"),
+                },
+                entity_id  = str(circle_id),
+                occurrence = str(serializer.instance.id),
+                actor_id   = user_id,
+            )
         return CustomResponse(
             general_message="Circle Meeting created successfully"
         ).get_success_response()
@@ -284,7 +338,8 @@ class LearningCircleMeetingView(APIView):
         circle_meeting, error = _get_meeting_or_response(meet_id)
         if error:
             return error
-        if circle_meeting.created_by_id != user_id:
+        circle = circle_meeting.circle_id
+        if not _is_lead_or_creator(circle, user_id):
             return CustomResponse(
                 general_message="You do not have permission to edit this Circle Meeting"
             ).get_failure_response()
@@ -309,10 +364,11 @@ class LearningCircleMeetingView(APIView):
     )
     def delete(self, request, meet_id: str):
         user_id = JWTUtils.fetch_user_id(request)
-        circle_meeting = CircleMeetingLog.objects.select_related(
-            "created_by", "circle_id"
-        ).get(id=meet_id)
-        if circle_meeting.created_by_id != user_id:
+        circle_meeting, error = _get_meeting_or_response(meet_id)
+        if error:
+            return error
+        circle = circle_meeting.circle_id
+        if not _is_lead_or_creator(circle, user_id):
             return CustomResponse(
                 general_message="You do not have permission to delete this Circle Meeting"
             ).get_failure_response()
@@ -363,6 +419,42 @@ class LearningCircleRSVPAPI(APIView):
         )
         return CustomResponse(
             general_message="You have successfully RSVP'd for the Circle Meeting"
+        ).get_success_response()
+
+    @extend_schema(
+        tags=['Dashboard - Learningcircle'],
+        description="Remove Learning Circle RSVP. Allowed until 30 minutes before the meeting starts.",
+        responses={200: OpenApiResponse(description="RSVP removed successfully. No response body.")},
+    )
+    def delete(self, request, meet_id: str):
+        user_id = JWTUtils.fetch_user_id(request)
+        circle_meeting, error = _get_meeting_or_response(meet_id)
+        if error:
+            return error
+        if not _is_member_or_creator(circle_meeting.circle_id, user_id):
+            return CustomResponse(
+                general_message="Only circle members can modify RSVP for this meeting"
+            ).get_failure_response()
+        attendee = CircleMeetingAttendees.objects.filter(
+            meet_id=circle_meeting, user_id_id=user_id
+        ).first()
+        if not attendee:
+            return CustomResponse(
+                general_message="You have not RSVP'd for this meeting"
+            ).get_failure_response()
+        if attendee.is_joined:
+            return CustomResponse(
+                general_message="Cannot remove RSVP after joining the meeting"
+            ).get_failure_response()
+        now = DateTimeUtils.get_current_utc_time()
+        cutoff_time = circle_meeting.meet_time - timedelta(minutes=30)
+        if now >= cutoff_time:
+            return CustomResponse(
+                general_message="Cannot remove RSVP within 30 minutes of the meeting start time"
+            ).get_failure_response()
+        attendee.delete()
+        return CustomResponse(
+            general_message="Your RSVP has been successfully removed"
         ).get_success_response()
 
 
@@ -654,10 +746,14 @@ class LearningCircleReportAPI(APIView):
             return CustomResponse(
                 general_message="Please provide the report"
             ).get_failure_response()
+        attendee_map = {
+            attendee.user_id_id: attendee
+            for attendee in CircleMeetingAttendees.objects.filter(
+                meet_id=circle_meeting, user_id_id__in=attendees.keys()
+            )
+        }
         for attendee_id, approved in attendees.items():
-            attendee = CircleMeetingAttendees.objects.filter(
-                meet_id=circle_meeting, user_id_id=attendee_id
-            ).first()
+            attendee = attendee_map.get(attendee_id)
             if not attendee or not attendee.is_joined:
                 return CustomResponse(
                     general_message="Attendee has not joined the Circle Meeting"
@@ -667,15 +763,15 @@ class LearningCircleReportAPI(APIView):
                     general_message="Attendee has not submitted the report"
                 ).get_failure_response()
         karma_user_ids = []
+        to_update = []
+        for attendee_id, approved in attendees.items():
+            attendee = attendee_map[attendee_id]
+            attendee.is_lc_approved = approved
+            to_update.append(attendee)
+            if approved:
+                karma_user_ids.append(attendee_id)
         with transaction.atomic():
-            for attendee_id, approved in attendees.items():
-                attendee = CircleMeetingAttendees.objects.filter(
-                    meet_id=circle_meeting, user_id_id=attendee_id
-                ).first()
-                attendee.is_lc_approved = approved
-                attendee.save()
-                if approved:
-                    karma_user_ids.append(attendee_id)
+            CircleMeetingAttendees.objects.bulk_update(to_update, ["is_lc_approved"])
             circle_meeting.is_report_submitted = True
             circle_meeting.report_text = report
             circle_meeting.save()
@@ -716,18 +812,17 @@ class LearningCircleReportAPI(APIView):
         karma_user_ids = list(
             attendees.filter(is_lc_approved=True).values_list("user_id_id", flat=True)
         )
-        for attendee in attendees:
-            attendee.is_lc_approved = False
-            attendee.save()
-        circle_meeting.is_report_submitted = False
-        circle_meeting.report_text = None
-        circle_meeting.save()
-        if karma_user_ids:
-            remove_karma(
-                karma_user_ids,
-                Lc.LC_REPORT_HASHTAG.value,
-                Lc.LC_REPORT_KARMA.value,
-            )
+        with transaction.atomic():
+            attendees.update(is_lc_approved=False)
+            circle_meeting.is_report_submitted = False
+            circle_meeting.report_text = None
+            circle_meeting.save()
+            if karma_user_ids:
+                remove_karma(
+                    karma_user_ids,
+                    Lc.LC_REPORT_HASHTAG.value,
+                    Lc.LC_REPORT_KARMA.value,
+                )
         return CustomResponse(
             general_message="The report has been deleted successfully"
         ).get_success_response()
@@ -758,7 +853,9 @@ class LearningCircleReportExportAPI(APIView):
                 general_message="You do not have permission to export the report"
             ).get_failure_response()
 
-        attendees = (
+        # Materialized once: .count() below and the row-by-row CSV write further
+        # down would otherwise each re-execute the same SELECT.
+        attendees = list(
             CircleMeetingAttendees.objects.filter(
                 meet_id=circle_meeting, is_joined=True
             )
@@ -805,7 +902,7 @@ class LearningCircleReportExportAPI(APIView):
         writer.writerow(
             ["LC Approved", "Yes" if circle_meeting.is_approved else "No"]
         )
-        writer.writerow(["Total Attendees", attendees.count()])
+        writer.writerow(["Total Attendees", len(attendees)])
         writer.writerow([])
         writer.writerow(["Minutes of Meeting"])
         writer.writerow([clean(circle_meeting.report_text)])
@@ -815,7 +912,6 @@ class LearningCircleReportExportAPI(APIView):
             [
                 "MuID",
                 "Full Name",
-                "Email",
                 "Report Submitted",
                 "LC Approved",
                 "Report",
@@ -828,7 +924,6 @@ class LearningCircleReportExportAPI(APIView):
                 [
                     clean(user.muid),
                     clean(user.full_name),
-                    clean(user.email),
                     "Yes" if attendee.is_report_submitted else "No",
                     "Yes" if attendee.is_lc_approved else "No",
                     clean(attendee.report_text),
@@ -855,7 +950,9 @@ class LearningCircleMeetingPublicListView(APIView):
         request_data = request.query_params
         ig_id = request_data.get("ig_id", None)
         queryset = (
-            CircleMeetingLog.objects.select_related("circle_id__ig")
+            CircleMeetingLog.objects.select_related(
+                "circle_id__ig", "circle_id__org", "created_by"
+            )
             .all()
             .order_by("-meet_time")
         )
@@ -930,20 +1027,25 @@ class LearningCircleMeetingListAPI(APIView):
             filter = Q(id__in=user_meetups)
         else:
             filter = Q()
-        meetings = CircleMeetingLog.objects.filter(filter).order_by("meet_time")
+        meetings = (
+            CircleMeetingLog.objects.filter(filter)
+            .select_related("circle_id__ig", "circle_id__org", "created_by")
+            .prefetch_related("circle_meeting_attendance_meet_id")
+            .order_by("meet_time")
+        )
         if category and category != "all" and isinstance(category, list):
-            meetings = meetings.select_related("circle_id__ig").filter(
-                circle_id__ig__category__in=category
-            )
+            meetings = meetings.filter(circle_id__ig__category__in=category)
 
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            meetings, request, search_fields=["title"]
+        )
         serializer = CircleMeetupMinSerializer(
-            meetings, many=True, context={"user_id": user_id}
+            paginated_queryset.get("queryset"), many=True, context={"user_id": user_id}
         )
 
-        return CustomResponse(
-            general_message="Meetings fetched successfully",
-            response=serializer.data,
-        ).get_success_response()
+        return CustomResponse().paginated_response(
+            data=serializer.data, pagination=paginated_queryset.get("pagination")
+        )
 
 
 
@@ -989,11 +1091,14 @@ class LearningCircleMemberDetailsView(APIView):
             ).select_related('user')
             
             leaders = set(link.user_id for link in member_links if link.lead)
-            
+
             member_ids = [link.user_id for link in member_links]
-            
-            users = {user.id: user for user in User.objects.filter(id__in=member_ids)}
-    
+
+            # member_links.select_related('user') already hydrated each user --
+            # User.objects.filter(id__in=member_ids) here would just re-fetch the
+            # same rows a second time.
+            users = {link.user_id: link.user for link in member_links}
+
             karma_data = KarmaActivityLog.objects.filter(
                 user_id__in=member_ids,
                 task__ig=circle.ig
@@ -1022,8 +1127,12 @@ class LearningCircleMemberDetailsView(APIView):
             # Sort by karma (highest first)
             member_details = sorted(member_details, key=lambda x: x['ig_karma'], reverse=True)
 
-            # Build owner details from the circle's created_by FK
-            owner = circle.created_by
+            # Build owner details from the current leader, falling back to circle creator
+            leader_id = next(iter(leaders), None)
+            if leader_id and leader_id in users:
+                owner = users[leader_id]
+            else:
+                owner = circle.created_by
             owner_details = {
                 'id': owner.id,
                 'full_name': owner.full_name,
@@ -1096,13 +1205,26 @@ class UserCircleListAPI(APIView):
         links = (
             UserCircleLink.objects.filter(user_id=user_id, accepted=True)
             .select_related('circle__ig', 'circle__org')
+            .order_by('-accepted_at')
         )
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            links, request, search_fields=["circle__title"]
+        )
+        page = paginated_queryset.get("queryset")
+        circle_ids = [link.circle_id for link in page]
+        total_members_map = {
+            row["circle"]: row["count"]
+            for row in UserCircleLink.objects.filter(
+                circle_id__in=circle_ids, accepted=True
+            ).values("circle").annotate(count=Count("id"))
+        }
         from .learningcircle_serializer import UserCircleListSerializer
-        serializer = UserCircleListSerializer(links, many=True)
-        return CustomResponse(
-            general_message="User circles fetched successfully",
-            response=serializer.data,
-        ).get_success_response()
+        serializer = UserCircleListSerializer(
+            page, many=True, context={"total_members_map": total_members_map}
+        )
+        return CustomResponse().paginated_response(
+            data=serializer.data, pagination=paginated_queryset.get("pagination")
+        )
 
 
 class CircleJoinAPI(APIView):
@@ -1155,27 +1277,30 @@ class CircleJoinAPI(APIView):
                 general_message="You have a previous link to this circle that prevents joining. Contact the circle lead."
             ).get_failure_response()
 
-        UserCircleLink.objects.create(
-            id=str(uuid.uuid4()),
-            user_id=user_id,
-            circle=circle,
-            lead=False,
-            is_invited=False,
-            accepted=None,
-            accepted_at=None,
-        )
+        requester_name = User.objects.filter(id=user_id).values_list("full_name", flat=True).first() or ""
 
-        # Notify the circle lead about the new join request
-        lead_link = UserCircleLink.objects.filter(circle=circle, lead=True).select_related('user').first()
-        requester = User.objects.filter(id=user_id).first()
-        if lead_link and requester:
-            NotificationUtils.insert_notification(
-                user=lead_link.user,
-                title="Member Request",
-                description=f"{requester.full_name} has requested to join your learning circle '{circle.title}'",
-                button="View",
-                url=f"{settings.FR_DOMAIN_NAME}/dashboard/learningcircle/{circle_id}/",
-                created_by=requester,
+        # Pre-generate the link ID so we can use it as the occurrence discriminator
+        # in the dedupe_key. This ensures that if two different users each request to
+        # join the same LC, the lead gets a separate notification for each one.
+        link_id = str(uuid.uuid4())
+
+        with transaction.atomic():
+            UserCircleLink.objects.create(
+                id=link_id,
+                user_id=user_id,
+                circle=circle,
+                lead=False,
+                is_invited=False,
+                accepted=None,
+                accepted_at=None,
+            )
+            NotificationService.dispatch(
+                notif_type = NotificationType.LC_JOIN_REQUEST,
+                audience   = Audience.lc_lead(circle_id),
+                context    = {"lc_name": circle.title, "requester_name": requester_name},
+                entity_id  = str(circle_id),
+                occurrence = link_id,   # unique per request — prevents cross-user deduplication
+                actor_id   = user_id,
             )
 
         return CustomResponse(
@@ -1235,11 +1360,11 @@ class CircleJoinAPI(APIView):
 
         try:
             link = UserCircleLink.objects.get(
-                id=link_id, circle=circle, is_invited=False, accepted__isnull=True
+                id=link_id, circle=circle, accepted__isnull=True
             )
         except UserCircleLink.DoesNotExist:
             return CustomResponse(
-                general_message="Pending join request not found"
+                general_message="Pending request not found"
             ).get_failure_response()
 
         action = request.data.get("action")
@@ -1248,37 +1373,34 @@ class CircleJoinAPI(APIView):
                 general_message="Invalid action. Must be 'accept' or 'reject'"
             ).get_failure_response()
 
-        lead_user = User.objects.filter(id=user_id).first()
-        requester_user = link.user
-
         if action == "accept":
-            link.accepted = True
-            link.accepted_at = DateTimeUtils.get_current_utc_time()
-            link.save()
-            # Notify the requester that they have been accepted
-            NotificationUtils.insert_notification(
-                user=requester_user,
-                title="Request Approved",
-                description=f"Your request to join the learning circle '{circle.title}' has been approved.",
-                button="View",
-                url=f"{settings.FR_DOMAIN_NAME}/dashboard/learningcircle/{circle_id}/",
-                created_by=lead_user,
-            )
+            with transaction.atomic():
+                link.accepted = True
+                link.accepted_at = DateTimeUtils.get_current_utc_time()
+                link.save()
+                NotificationService.dispatch(
+                    notif_type = NotificationType.LC_JOIN_APPROVED,
+                    audience   = Audience.user(str(link.user_id)),
+                    context    = {"lc_name": circle.title},
+                    entity_id  = str(circle_id),
+                    occurrence = str(link.id),   # unique per join request instance
+                    actor_id   = user_id,
+                )
             return CustomResponse(
                 general_message="Join request accepted. User is now a member."
             ).get_success_response()
 
-        link.accepted = False
-        link.save()
-        # Notify the requester that they have been rejected
-        NotificationUtils.insert_notification(
-            user=requester_user,
-            title="Request Rejected",
-            description=f"Your request to join the learning circle '{circle.title}' has been rejected.",
-            button=None,
-            url=None,
-            created_by=lead_user,
-        )
+        with transaction.atomic():
+            link.accepted = False
+            link.save()
+            NotificationService.dispatch(
+                notif_type = NotificationType.LC_JOIN_REJECTED,
+                audience   = Audience.user(str(link.user_id)),
+                context    = {"lc_name": circle.title},
+                entity_id  = str(circle_id),
+                occurrence = str(link.id),   # unique per join request instance
+                actor_id   = user_id,
+            )
         return CustomResponse(
             general_message="Join request rejected."
         ).get_success_response()
@@ -1322,20 +1444,23 @@ class CircleMemberAddAPI(APIView):
                 general_message="User is already a member of this circle"
             ).get_failure_response()
 
-        # Remove any pending invite if exists to avoid duplicate
-        UserCircleLink.objects.filter(
-            circle=circle, user_id=target_user_id, accepted__isnull=True
-        ).delete()
+        with transaction.atomic():
+            # Remove any pending invite if exists to avoid duplicate. Atomic with
+            # the create below so a failure after the delete can't leave the
+            # target with neither a pending invite nor a membership.
+            UserCircleLink.objects.filter(
+                circle=circle, user_id=target_user_id, accepted__isnull=True
+            ).delete()
 
-        UserCircleLink.objects.create(
-            id=str(uuid.uuid4()),
-            user_id=target_user_id,
-            circle=circle,
-            lead=False,
-            is_invited=False,
-            accepted=True,
-            accepted_at=DateTimeUtils.get_current_utc_time(),
-        )
+            UserCircleLink.objects.create(
+                id=str(uuid.uuid4()),
+                user_id=target_user_id,
+                circle=circle,
+                lead=False,
+                is_invited=False,
+                accepted=True,
+                accepted_at=DateTimeUtils.get_current_utc_time(),
+            )
         return CustomResponse(general_message="Member added successfully").get_success_response()
 
 
@@ -1389,15 +1514,25 @@ class CircleInviteAPI(APIView):
                 general_message="An invitation is already pending for this user"
             ).get_failure_response()
 
-        UserCircleLink.objects.create(
-            id=str(uuid.uuid4()),
-            user_id=target_user_id,
-            circle=circle,
-            lead=invite_as_lead,
-            is_invited=True,
-            invited_by_id=user_id,
-            accepted=None,
-        )
+        link_id = str(uuid.uuid4())
+        with transaction.atomic():
+            UserCircleLink.objects.create(
+                id=link_id,
+                user_id=target_user_id,
+                circle=circle,
+                lead=invite_as_lead,
+                is_invited=True,
+                invited_by_id=user_id,
+                accepted=None,
+            )
+            NotificationService.dispatch(
+                notif_type = NotificationType.LC_INVITE,
+                audience   = Audience.user(str(target_user_id)),
+                context    = {"lc_name": circle.title},
+                entity_id  = str(circle_id),
+                occurrence = link_id,   # unique per invite — allows re-invite after decline
+                actor_id   = user_id,
+            )
         return CustomResponse(general_message="Invitation sent successfully").get_success_response()
 
 
@@ -1530,11 +1665,6 @@ class CircleTransferLeadAPI(APIView):
                 general_message="Only the circle lead or creator can transfer leadership"
             ).get_failure_response()
 
-        # caller_link may be None if the caller is the circle creator without a UserCircleLink row
-        caller_link = UserCircleLink.objects.filter(
-            circle=circle, user_id=user_id, accepted=True, lead=True
-        ).first()
-
         target_muid = request.data.get("muid")
         if not target_muid:
             return CustomResponse(general_message="muid is required").get_failure_response()
@@ -1551,28 +1681,178 @@ class CircleTransferLeadAPI(APIView):
                 general_message="You are already the lead"
             ).get_failure_response()
 
-        try:
-            target_link = UserCircleLink.objects.get(
-                circle=circle, user_id=target_user_id, accepted=True
+        with transaction.atomic():
+            # Lock ALL lead links in this circle to serialize concurrent transfers.
+            # This prevents two creator-authorized transfers from both promoting
+            # different targets, which would leave the circle with multiple leads.
+            current_leads = list(
+                UserCircleLink.objects.select_for_update().filter(
+                    circle=circle, accepted=True, lead=True
+                )
             )
-        except UserCircleLink.DoesNotExist:
-            return CustomResponse(
-                general_message="Target user is not an accepted member of this circle"
-            ).get_failure_response()
 
-        if target_link.lead:
-            return CustomResponse(
-                general_message="Target user is already the lead"
-            ).get_failure_response()
+            target_link = UserCircleLink.objects.select_for_update().filter(
+                circle=circle, user_id=target_user_id, accepted=True
+            ).first()
 
-        # Demote the caller only if they have an explicit lead link (creator may not)
-        if caller_link:
-            caller_link.lead = False
-            caller_link.save()
+            if not target_link:
+                return CustomResponse(
+                    general_message="Target user is not an accepted member of this circle"
+                ).get_failure_response()
 
-        target_link.lead = True
-        target_link.save()
+            if target_link.lead:
+                return CustomResponse(
+                    general_message="Target user is already the lead"
+                ).get_failure_response()
+
+            # Re-validate requester authority inside the transaction
+            is_creator = (circle.created_by_id == user_id)
+            caller_link = next((l for l in current_leads if l.user_id == user_id), None)
+            if not is_creator and not caller_link:
+                return CustomResponse(
+                    general_message="Only the circle lead or creator can transfer leadership"
+                ).get_failure_response()
+
+            # Demote all existing leads (should be at most one, but defensive)
+            for lead_link in current_leads:
+                lead_link.lead = False
+                lead_link.save()
+
+            target_link.lead = True
+            target_link.save()
 
         return CustomResponse(
             general_message="Lead transferred successfully"
+        ).get_success_response()
+
+
+class CircleLeaveAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['Dashboard - Learningcircle'],
+        description="Leave a Learning Circle. Leads must transfer leadership first.",
+        responses={200: OpenApiResponse(description="Left the circle successfully. No response body.")},
+    )
+    def delete(self, request, circle_id: str):
+        user_id = JWTUtils.fetch_user_id(request)
+
+        try:
+            circle = LearningCircle.objects.get(id=circle_id)
+        except LearningCircle.DoesNotExist:
+            return CustomResponse(general_message="Learning Circle not found").get_failure_response()
+
+        if circle.created_by_id == user_id:
+            return CustomResponse(
+                general_message="The circle creator cannot leave. Delete the circle instead."
+            ).get_failure_response()
+
+        with transaction.atomic():
+            link = UserCircleLink.objects.select_for_update().filter(
+                circle=circle, user_id=user_id, accepted=True
+            ).first()
+
+            if not link:
+                return CustomResponse(
+                    general_message="You are not a member of this circle"
+                ).get_failure_response()
+
+            if link.lead:
+                return CustomResponse(
+                    general_message="You are the lead. Transfer leadership before leaving."
+                ).get_failure_response()
+
+            link.delete()
+
+        return CustomResponse(
+            general_message="You have left the circle successfully"
+        ).get_success_response()
+
+
+class CircleMemberRemoveAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['Dashboard - Learningcircle'],
+        description="Remove (kick) a member from a Learning Circle. Only the lead or creator can do this.",
+        responses={200: OpenApiResponse(description="Member removed from the circle successfully. No response body.")},
+    )
+    def delete(self, request, circle_id: str):
+        user_id = JWTUtils.fetch_user_id(request)
+
+        try:
+            circle = LearningCircle.objects.get(id=circle_id)
+        except LearningCircle.DoesNotExist:
+            return CustomResponse(general_message="Learning Circle not found").get_failure_response()
+
+        if not _is_lead_or_creator(circle, user_id):
+            return CustomResponse(
+                general_message="Only the circle lead or creator can remove members"
+            ).get_failure_response()
+
+        target_muid = request.data.get("muid")
+        if not target_muid:
+            return CustomResponse(general_message="muid is required").get_failure_response()
+
+        try:
+            target_user = User.objects.get(muid=target_muid)
+        except User.DoesNotExist:
+            return CustomResponse(general_message="No user found with this muid").get_failure_response()
+
+        target_user_id = target_user.id
+
+        if target_user_id == user_id:
+            return CustomResponse(
+                general_message="You cannot remove yourself. Use the leave endpoint instead."
+            ).get_failure_response()
+
+        if target_user_id == circle.created_by_id:
+            return CustomResponse(
+                general_message="The circle creator cannot be removed"
+            ).get_failure_response()
+
+        with transaction.atomic():
+            # Lock both the requester's and target's links to prevent
+            # a concurrent leadership transfer from racing with removal
+            requester_link = UserCircleLink.objects.select_for_update().filter(
+                circle=circle, user_id=user_id, accepted=True
+            ).first()
+
+            # Re-validate requester authority inside the transaction
+            is_creator = (circle.created_by_id == user_id)
+            if not is_creator and (not requester_link or not requester_link.lead):
+                return CustomResponse(
+                    general_message="Only the circle lead or creator can remove members"
+                ).get_failure_response()
+
+            link = UserCircleLink.objects.select_for_update().filter(
+                circle=circle, user_id=target_user_id, accepted=True
+            ).first()
+
+            if not link:
+                return CustomResponse(
+                    general_message="User is not a member of this circle"
+                ).get_failure_response()
+
+            if link.lead:
+                return CustomResponse(
+                    general_message="Transfer leadership before removing the circle lead"
+                ).get_failure_response()
+
+            link.delete()
+
+        # Notify the removed user
+        lead_user = User.objects.filter(id=user_id).first()
+        if lead_user:
+            NotificationUtils.insert_notification(
+                user=target_user,
+                title="Removed from Circle",
+                description=f"You have been removed from the learning circle '{circle.title}'.",
+                button=None,
+                url=None,
+                created_by=lead_user,
+            )
+
+        return CustomResponse(
+            general_message="Member removed successfully"
         ).get_success_response()

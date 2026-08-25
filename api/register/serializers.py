@@ -152,22 +152,27 @@ class MentorSerializer(serializers.ModelSerializer):
     user = serializers.CharField(required=False)
     about = serializers.CharField(required=False)
     reason = serializers.CharField(required=False)
-    hours = serializers.IntegerField(required=False)
+    hours = serializers.ChoiceField(choices=UserMentor.HoursCommitment.choices, required=False, allow_null=True)
 
     def create(self, validated_data):
         about = validated_data.get("about", None)
         reason = validated_data.get("reason", None)
         hours = validated_data.get("hours", None)
 
-        UserMentor.objects.create(
+        # UserMentor is now a single profile row per user — get_or_create
+        # rather than create, since a prior mentor application may already
+        # have provisioned this user's profile row.
+        UserMentor.objects.get_or_create(
             user=validated_data["user"],
-            about=about,
-            reason=reason,
-            hours=hours,
-            created_by=validated_data["user"],
-            created_at=DateTimeUtils.get_current_utc_time(),
-            updated_by=validated_data["user"],
-            updated_at=DateTimeUtils.get_current_utc_time(),
+            defaults={
+                "about": about,
+                "reason": reason,
+                "hours": hours,
+                "created_by": validated_data["user"],
+                "created_at": DateTimeUtils.get_current_utc_time(),
+                "updated_by": validated_data["user"],
+                "updated_at": DateTimeUtils.get_current_utc_time(),
+            },
         )
 
     class Meta:
@@ -321,7 +326,7 @@ class UserSerializer(serializers.ModelSerializer):
         UserSettings.objects.create(**additional_values)
 
         if level := Level.objects.filter(level_order="1").first():
-            UserLvlLink.objects.create(level=level, **additional_values)
+            UserLvlLink.objects.create(level=level, grit=100, **additional_values)
 
         additional_values.pop("updated_by")
 

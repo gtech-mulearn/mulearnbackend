@@ -30,7 +30,13 @@ class InstitutionSerializer(serializers.ModelSerializer):
     zone = serializers.ReadOnlyField(source="district.zone.name")
     state = serializers.ReadOnlyField(source="district.zone.state.name")
     country = serializers.ReadOnlyField(source="district.zone.state.country.name")
-    user_count = serializers.SerializerMethodField()
+    # Read straight off the denormalised columns maintained by
+    # mu_celery.org_aggregates_cron. Both keep their existing JSON keys - the
+    # campus search page renders user_count as "N Members" and sorts on both -
+    # but they are now plain column reads instead of a per-row COUNT query and a
+    # correlated subquery.
+    user_count = serializers.IntegerField(source="cached_member_count", read_only=True)
+    total_karma = serializers.IntegerField(source="cached_total_karma", read_only=True)
 
     class Meta:
         model = Organization
@@ -44,10 +50,8 @@ class InstitutionSerializer(serializers.ModelSerializer):
             "state",
             "country",
             "user_count",
+            "total_karma",
         ]
-
-    def get_user_count(self, obj):
-        return obj.user_organization_link_org.filter(verified=True).count()
 
 
 # class InstitutionSerializer(serializers.ModelSerializer):
@@ -242,13 +246,15 @@ class InstitutionPrefillSerializer(serializers.ModelSerializer):
     district_name = serializers.CharField(source="district.name", allow_null=True)
     zone_id = serializers.CharField(source="district.zone.id", allow_null=True)
     zone_name = serializers.CharField(source="district.zone.name", allow_null=True)
-    state_id = serializers.CharField(source="district.state.id", allow_null=True)
-    state_name = serializers.CharField(source="district.state.name", allow_null=True)
+    state_id = serializers.CharField(source="district.zone.state.id", allow_null=True)
+    state_name = serializers.CharField(
+        source="district.zone.state.name", allow_null=True
+    )
     country_id = serializers.CharField(
-        source="district.state.country.id", allow_null=True
+        source="district.zone.state.country.id", allow_null=True
     )
     country_name = serializers.CharField(
-        source="district.state.country.name", allow_null=True
+        source="district.zone.state.country.name", allow_null=True
     )
 
     class Meta:

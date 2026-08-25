@@ -135,6 +135,23 @@ class ImpactProjectListCreateAPI(APIView):
             ImpactProjectUserLink.objects.create(project=project, user=user, is_lead=is_lead)
         _sync_links(project, request_data.get("links", []))
 
+        # Impact projects publish immediately on creation (no draft/approval
+        # concept) — broadcast to the IG's feed per PRD §7.1 "Impact project
+        # published -> Followers/relevant IG or campus feed".
+        try:
+            from api.notification.broadcast_utils import BroadcastUtils
+            actor = User.every.filter(id=user_id).first()
+            BroadcastUtils.create_broadcast(
+                title="New Impact Project Published",
+                description=f'"{project.title}" has been published in {ig.name}.',
+                target_type='interest_group',
+                target_id=ig.id,
+                created_by=actor,
+                expiry_key='impact_project_published',
+            )
+        except Exception:
+            pass
+
         return CustomResponse(
             response={"impactProject": ImpactProjectSerializer(project).data}
         ).get_success_response()
@@ -230,6 +247,38 @@ class ImpactProjectDetailAPI(APIView):
 
         project.delete()
         return CustomResponse(general_message="Impact Project deleted successfully").get_success_response()
+
+
+class PublicImpactProjectListAPI(APIView):
+    """
+    Public, unauthenticated dashboard of impact projects (PRD §2 point 5 —
+    "impact project publishing to the public dashboard"). Impact projects
+    have no draft/status concept — every created project is public.
+    """
+    permission_classes = []
+
+    @extend_schema(
+        tags=['Public - Impact Projects'],
+        description="Public list of impact projects, optionally filtered by ig_id.",
+        responses={200: ImpactProjectSerializer},
+    )
+    def get(self, request):
+        projects = ImpactProject.objects.select_related("created_by", "updated_by").prefetch_related(
+            "impact_project_user_link_project__user", "impact_project_link_project"
+        ).order_by("-created_at")
+
+        ig_id = request.query_params.get("ig_id")
+        if ig_id:
+            projects = projects.filter(ig_id=ig_id)
+
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            projects, request, ["title", "description"],
+            {"title": "title", "created_on": "created_at"},
+        )
+        serializer = ImpactProjectSerializer(paginated_queryset.get("queryset"), many=True)
+        return CustomResponse().paginated_response(
+            data=serializer.data, pagination=paginated_queryset.get("pagination")
+        )
 
 
 class ImpactProjectImageAPI(APIView):

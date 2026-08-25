@@ -227,7 +227,9 @@ class UserDetailsSerializer(serializers.ModelSerializer):
             return super().update(instance, validated_data)
 
     def get_organizations(self, user):
-        organization_links = user.user_organization_link_user.select_related("org")
+        organization_links = user.user_organization_link_user.select_related(
+            "org__district__zone__state__country", "department"
+        )
         if not organization_links.exists():
             return None
 
@@ -350,21 +352,30 @@ class UserVerificationSerializer(serializers.ModelSerializer):
 
         # ----- Mentor (all tiers) -----
         if RoleType.MENTOR.value in role_title or "Mentor" in role_title:
-            # Use next(iter(.all()), None) instead of .first() — .first() adds
-            # ORDER BY pk + LIMIT 1 and clears _result_cache, bypassing the
-            # prefetch set up in the view (N+1).
-            mentor = next(iter(obj.user.user_mentor_user.all()), None)
+            # UserMentor is now a OneToOneField — the reverse accessor is a
+            # single object (or raises DoesNotExist), not a related manager.
+            try:
+                mentor = obj.user.mentor_profile
+            except Exception:
+                mentor = None
             if mentor:
+                from api.dashboard.mentor.dash_mentor_helper import get_mentor_scopes
+                from db.user import MentorApplication
+
+                scopes = get_mentor_scopes(obj.user_id)
+                # "reason" lives on MentorApplication, not UserMentor — pull it
+                # from the user's most recent application.
+                latest_application = MentorApplication.objects.filter(
+                    user_id=obj.user_id
+                ).order_by('-created_at').first()
                 return {
                     "type": "mentor",
-                    "mentor_tier": mentor.mentor_tier,
+                    "tiers": sorted({scope_type for scope_type, _ in scopes}),
                     "about": mentor.about,
                     "expertise": mentor.expertise,
-                    "reason": mentor.reason,
+                    "reason": latest_application.reason if latest_application else None,
                     "hours_available": mentor.hours,
-                    "preferred_ig_ids": mentor.preferred_ig_ids,
-                    "status": mentor.status,
-                    "org_id": mentor.org_id,
+                    "is_active": mentor.is_active,
                 }
             return {"type": "mentor"}
 
@@ -699,11 +710,11 @@ class UserBasicDetailsSerializer(serializers.ModelSerializer):
         )
 
     def get_organizations(self, obj):
-        org_links = (
-            obj.user_organization_link_user.all()
-            .select_related("org")
-            .only("org__id", "org__title", "org__code", "org__org_type")
-        )
+        # Use .all() so Django resolves results from _prefetched_objects_cache (the
+        # view's Prefetch already carries select_related("org").only(...)). Chaining
+        # .select_related()/.only() here would clone the queryset and bypass the
+        # cache, issuing a new SQL query per user (N+1).
+        org_links = obj.user_organization_link_user.all()
         data = []
         for org_link in org_links:
             data.append(
@@ -717,9 +728,8 @@ class UserBasicDetailsSerializer(serializers.ModelSerializer):
         return data
 
     def get_interest_groups(self, obj):
-        ig_links = (
-            obj.user_ig_link_user.all().select_related("ig").only("ig__id", "ig__name")
-        )
+        # Same _prefetched_objects_cache reasoning as get_organizations above.
+        ig_links = obj.user_ig_link_user.all()
         data = []
         for ig_link in ig_links:
             data.append({"id": ig_link.ig.id, "name": ig_link.ig.name})

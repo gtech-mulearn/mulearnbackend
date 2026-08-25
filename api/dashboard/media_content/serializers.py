@@ -11,7 +11,8 @@ from datetime import date
 from rest_framework import serializers
 
 from api.dashboard.media_content.image_utils import resolve_image_url
-from db.events import MediaContent
+from db.events import MediaContent, IgMediaContentLink
+from db.task import InterestGroup
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -40,6 +41,7 @@ class OfficeHoursReadSerializer(serializers.ModelSerializer):
     """
     status = serializers.SerializerMethodField()
     poster_thumbnail = serializers.SerializerMethodField()
+    interest_groups = serializers.SerializerMethodField()
 
     class Meta:
         model = MediaContent
@@ -50,6 +52,7 @@ class OfficeHoursReadSerializer(serializers.ModelSerializer):
             'designation',
             'description',
             'date',
+            'time',
             'link',
             'interest_groups',
             'poster_thumbnail',
@@ -63,6 +66,50 @@ class OfficeHoursReadSerializer(serializers.ModelSerializer):
 
     def get_poster_thumbnail(self, obj):
         return resolve_image_url(obj.poster_thumbnail, self.context.get('request'))
+
+    def get_interest_groups(self, obj):
+        link_ids = obj.interest_groups or []
+        if not link_ids:
+            return []
+        # In a list response the view batches all links for the page into
+        # context['ig_names_map'] in one query; fall back to a per-object
+        # query here only for single-record responses (detail/create/update).
+        names_by_id = self.context.get('ig_names_map')
+        if names_by_id is None:
+            links = IgMediaContentLink.objects.filter(
+                id__in=link_ids
+            ).select_related('interest_group')
+            names_by_id = {link.id: link.interest_group.name for link in links}
+        return [names_by_id[link_id] for link_id in link_ids if link_id in names_by_id]
+
+
+class GrabYourSuperpowersReadSerializer(serializers.ModelSerializer):
+    """
+    Read-only serializer for Grab Your Superpowers sessions.
+    Session name (``title``), date, time, description, speaker details
+    (``performer``/``designation``), hosting college (``campus``), and link.
+    """
+    status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MediaContent
+        fields = [
+            'id',
+            'title',
+            'date',
+            'time',
+            'description',
+            'performer',
+            'designation',
+            'campus',
+            'link',
+            'status',
+            'created_at',
+            'updated_at',
+        ]
+
+    def get_status(self, obj):
+        return _compute_status(obj.date)
 
 
 class SaltMangoTreeReadSerializer(serializers.ModelSerializer):
@@ -82,6 +129,7 @@ class SaltMangoTreeReadSerializer(serializers.ModelSerializer):
             'campus',
             'zone',
             'date',
+            'time',
             'description',
             'link',
             'status',
@@ -109,6 +157,7 @@ class InspirationStationReadSerializer(serializers.ModelSerializer):
             'campus',
             'zone',
             'date',
+            'time',
             'description',
             'link',
             'status',
@@ -135,6 +184,10 @@ class OfficeHoursWriteSerializer(serializers.Serializer):
     date             = serializers.CharField(
         help_text='Format: DD/MM/YYYY'
     )
+    time             = serializers.TimeField(
+        input_formats=['%H:%M', '%H:%M:%S'],
+        help_text='Format: HH:MM (24h)'
+    )
     performer        = serializers.CharField(max_length=200, required=False, allow_blank=True, allow_null=True)
     designation      = serializers.CharField(max_length=200, required=False, allow_blank=True, allow_null=True)
     description      = serializers.CharField(required=False, allow_blank=True, allow_null=True)
@@ -152,6 +205,34 @@ class OfficeHoursWriteSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 "Invalid date format. Expected DD/MM/YYYY (e.g. 27/06/2025)."
             )
+
+    def validate_interest_groups(self, value):
+        """`value` is a list of interest_group ids. Every id must resolve to
+        an existing InterestGroup.
+
+        Bulk import pre-resolves every id referenced across the whole CSV in
+        one query and passes the trusted set via context['known_ig_ids'], so
+        this only falls back to a DB query for ids it doesn't already know
+        about — avoiding a query per CSV row.
+        """
+        if not value:
+            return value
+        known_ids = self.context.get('known_ig_ids')
+        if known_ids is not None:
+            unresolved = [ig_id for ig_id in value if ig_id not in known_ids]
+            found_ids = known_ids if not unresolved else known_ids | set(
+                InterestGroup.objects.filter(id__in=unresolved).values_list('id', flat=True)
+            )
+        else:
+            found_ids = set(
+                InterestGroup.objects.filter(id__in=value).values_list('id', flat=True)
+            )
+        unknown_ids = [ig_id for ig_id in value if ig_id not in found_ids]
+        if unknown_ids:
+            raise serializers.ValidationError(
+                f"Unknown interest group id(s): {', '.join(unknown_ids)}."
+            )
+        return value
 
     def to_internal_value(self, data):
         value = super().to_internal_value(data)
@@ -172,6 +253,10 @@ class _EpisodeWriteSerializer(serializers.Serializer):
     date        = serializers.DateField(
         input_formats=['%Y-%m-%d'],
         help_text='Format: YYYY-MM-DD'
+    )
+    time        = serializers.TimeField(
+        input_formats=['%H:%M', '%H:%M:%S'],
+        help_text='Format: HH:MM (24h)'
     )
     description = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     link        = serializers.URLField(max_length=500, required=False, allow_blank=True, allow_null=True)
@@ -195,4 +280,35 @@ class InspirationStationWriteSerializer(_EpisodeWriteSerializer):
     def to_internal_value(self, data):
         value = super().to_internal_value(data)
         value['content_type'] = MediaContent.ContentType.INSPIRATION_STATION
+        return value
+
+
+class GrabYourSuperpowersWriteSerializer(serializers.Serializer):
+    """
+    Write serializer for Grab Your Superpowers sessions (POST / PATCH).
+
+    Date format accepted: YYYY-MM-DD. Time format accepted: HH:MM (24h).
+    """
+    title       = serializers.CharField(max_length=300)  # session name
+    date        = serializers.DateField(
+        input_formats=['%Y-%m-%d'],
+        help_text='Format: YYYY-MM-DD'
+    )
+    time        = serializers.TimeField(
+        input_formats=['%H:%M', '%H:%M:%S'],
+        help_text='Format: HH:MM (24h)'
+    )
+    description = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    performer   = serializers.CharField(
+        max_length=200, required=False, allow_blank=True, allow_null=True
+    )  # speaker name
+    designation = serializers.CharField(
+        max_length=200, required=False, allow_blank=True, allow_null=True
+    )  # speaker designation/role
+    campus      = serializers.CharField(max_length=200)  # conducted by which college
+    link        = serializers.URLField(max_length=500, required=False, allow_blank=True, allow_null=True)  # meet link
+
+    def to_internal_value(self, data):
+        value = super().to_internal_value(data)
+        value['content_type'] = MediaContent.ContentType.GRAB_YOUR_SUPERPOWERS
         return value

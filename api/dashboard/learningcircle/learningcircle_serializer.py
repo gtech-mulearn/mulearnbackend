@@ -26,6 +26,8 @@ def meeting_is_ended(meet_time, duration_hours):
     return (
         aware_time + timedelta(hours=duration_hours or 0)
     ) <= DateTimeUtils.get_current_utc_time()
+from django.db import transaction
+
 from db.learning_circle import LearningCircle, CircleMeetingLog, CircleMeetingAttendees, UserCircleLink
 from rest_framework import serializers
 
@@ -36,16 +38,12 @@ from utils.utils import DateTimeUtils
 
 from db.task import (
     InterestGroup,
-    KarmaActivityLog,
     # Level,
     # TaskList,
     # Wallet,
     # UserIgLink,
     # UserLvlLink,
 )
-
-import collections
-from django.db.models import Sum
 
 
 class LearningCircleCreateEditSerialzier(serializers.ModelSerializer):
@@ -74,22 +72,24 @@ class LearningCircleCreateEditSerialzier(serializers.ModelSerializer):
     def create(self, validated_data):
         user_id = self.context.get("user_id")
         validated_data["created_by_id"] = user_id
-        circle = LearningCircle.objects.create(**validated_data)
-        # The creator is implicitly the lead and an accepted member. Create their
-        # UserCircleLink up-front so they are counted in member totals, the circle
-        # surfaces in their "My Circles" list, and membership checks stay
-        # consistent. Idempotent via get_or_create.
-        UserCircleLink.objects.get_or_create(
-            circle=circle,
-            user_id=user_id,
-            defaults={
-                "id": str(uuid.uuid4()),
-                "lead": True,
-                "is_invited": False,
-                "accepted": True,
-                "accepted_at": DateTimeUtils.get_current_utc_time(),
-            },
-        )
+        with transaction.atomic():
+            circle = LearningCircle.objects.create(**validated_data)
+            # The creator is implicitly the lead and an accepted member. Create their
+            # UserCircleLink up-front so they are counted in member totals, the circle
+            # surfaces in their "My Circles" list, and membership checks stay
+            # consistent. Idempotent via get_or_create. Atomic with the circle create
+            # so a failure here can't leave a circle with no creator membership link.
+            UserCircleLink.objects.get_or_create(
+                circle=circle,
+                user_id=user_id,
+                defaults={
+                    "id": str(uuid.uuid4()),
+                    "lead": True,
+                    "is_invited": False,
+                    "accepted": True,
+                    "accepted_at": DateTimeUtils.get_current_utc_time(),
+                },
+            )
         return circle
 
     def validate(self, attrs):
@@ -126,8 +126,11 @@ class LearningCircleDetailSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         # Override to add calculated fields that don't exist on the model
         data = super().to_representation(instance)
-        data['rank'] = self.get_rank(instance)
-        data['total_karma'] = self.get_total_karma(instance)
+        # rank/total_karma are a comparison against every other circle, so they're
+        # precomputed by mu_celery/learning_circle_aggregates_cron.py rather than
+        # aggregated live here on every request -- just read the cached columns.
+        data['rank'] = instance.cached_rank
+        data['total_karma'] = instance.cached_total_karma
         data['next_meetup'] = self.get_next_meetup(instance)
         return data
 
@@ -141,68 +144,7 @@ class LearningCircleDetailSerializer(serializers.ModelSerializer):
             "muid": obj.created_by.muid,
         }
 
-    @property
-    def _all_circle_rankings_data(self):
-        """
-        Calculates and caches the rankings for all circles.
-        This method will only run once per serializer instance.
-        """
-        if not hasattr(self, '_cached_circle_rankings'):
-            user_circle_links = UserCircleLink.objects.filter(accepted=True).values('circle_id', 'user_id')
 
-            circle_to_users = collections.defaultdict(list)
-            for link in user_circle_links:
-                circle_to_users[link['circle_id']].append(link['user_id'])
-
-            circle_igs = dict(LearningCircle.objects.values_list('id', 'ig_id'))
-
-            user_karma = (
-                KarmaActivityLog.objects
-                .values('user_id', 'task__ig')
-                .annotate(total_karma=Sum('karma'))
-            )
-
-            user_ig_karma = collections.defaultdict(int)
-            for entry in user_karma:
-                user_ig_karma[(entry['user_id'], entry['task__ig'])] += entry['total_karma']
-
-            circle_data = []
-            for circle_id, user_ids in circle_to_users.items():
-                ig_id = circle_igs.get(circle_id)
-                total = sum(user_ig_karma.get((uid, ig_id), 0) for uid in user_ids)
-                circle_data.append({
-                    'id': circle_id,
-                    'total_karma': total
-                })
-
-            all_circle_ids = set(circle_igs.keys())
-            existing_ids = {c['id'] for c in circle_data}
-            for missing_id in all_circle_ids - existing_ids:
-                circle_data.append({
-                    'id': missing_id,
-                    'total_karma': 0
-                })
-
-            circle_data.sort(key=lambda x: x['total_karma'], reverse=True)
-
-            # Assign ranks efficiently, handling ties if necessary (though current logic doesn't)
-            for i, c in enumerate(circle_data):
-                c['rank'] = i + 1
-
-            # Store as a dictionary for quick lookup by circle ID
-            self._cached_circle_rankings = {item['id']: item for item in circle_data}
-        return self._cached_circle_rankings
-
-    def get_total_karma(self, obj):
-        # Get total karma of learning circle
-        karma_data = self._all_circle_rankings_data.get(obj.id)
-        return karma_data['total_karma'] if karma_data else 0
-
-    def get_rank(self, obj):
-        # Get the rank of the current circle from pre-calculated rankings
-        karma_data = self._all_circle_rankings_data.get(obj.id)
-        return karma_data['rank'] if karma_data else None
-    
     def _get_next_weekday(self, target_day: int):
         """Return the date of the next occurrence of target_day (1=Mon…7=Sun).
         Always returns a future date — if today is the target day, returns next week."""
@@ -265,11 +207,12 @@ class LearningCircleListMinSerializer(serializers.ModelSerializer):
     total_members = serializers.IntegerField(read_only=True)
     is_joined = serializers.SerializerMethodField()
     is_creator = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
     # attendees = serializers.SerializerMethodField()
     class Meta:
         model = LearningCircle
         # The 'attendees' field is removed as 'total_members' is used instead.
-        fields = ["id", "ig", "title", "org", "total_members", "is_joined", "is_creator"]
+        fields = ["id", "ig", "title", "org", "total_members", "is_joined", "is_creator", "status"]
 
     def get_is_joined(self, obj):
         user_id = self.context.get("user_id")
@@ -289,6 +232,18 @@ class LearningCircleListMinSerializer(serializers.ModelSerializer):
         if not user_id:
             return False
         return obj.created_by_id == user_id
+
+    def get_status(self, obj):
+        user_id = self.context.get("user_id")
+        if not user_id:
+            return "not_joined"
+        joined_ids = self.context.get("joined_circle_ids")
+        if joined_ids is not None and obj.id in joined_ids:
+            return "joined"
+        pending_ids = self.context.get("pending_circle_ids")
+        if pending_ids is not None and obj.id in pending_ids:
+            return "pending"
+        return "not_joined"
 
 
 class CircleMeetingLogCreateEditSerializer(serializers.ModelSerializer):
@@ -348,10 +303,13 @@ class CircleMeetingLogCreateEditSerializer(serializers.ModelSerializer):
         validated_data["created_by_id"] = user_id
         validated_data["meet_code"] = meet_code
         validated_data.pop("platform", None)  # platform is not a DB field; used only in validate()
-        meet = CircleMeetingLog.objects.create(**validated_data)
-        CircleMeetingAttendees.objects.create(
-            meet_id=meet, user_id_id=user_id, is_joined=True, joined_at=DateTimeUtils.get_current_utc_time()
-        )
+        with transaction.atomic():
+            meet = CircleMeetingLog.objects.create(**validated_data)
+            # Creator is auto-joined as an attendee; atomic with the meeting create
+            # so a failure here can't leave a meeting with no creator-attendee row.
+            CircleMeetingAttendees.objects.create(
+                meet_id=meet, user_id_id=user_id, is_joined=True, joined_at=DateTimeUtils.get_current_utc_time()
+            )
         return meet
 
     def validate_meet_time(self, value):
@@ -679,6 +637,7 @@ class CircleMeetupMinSerializer(serializers.ModelSerializer):
     is_ended = serializers.SerializerMethodField()
     is_joined = serializers.SerializerMethodField()
     is_rsvp = serializers.SerializerMethodField()
+    can_remove_rsvp = serializers.SerializerMethodField()
     attendees_count = serializers.SerializerMethodField()
     created_by = serializers.CharField(source="created_by.full_name", read_only=True)
     created_by_id = serializers.CharField(source="created_by.id", read_only=True)
@@ -691,24 +650,45 @@ class CircleMeetupMinSerializer(serializers.ModelSerializer):
     def get_is_ended(self, obj):
         return meeting_is_ended(obj.meet_time, obj.duration)
 
+    def _user_attendee(self, obj, user_id):
+        # obj.circle_meeting_attendance_meet_id.all() serves from the
+        # queryset's prefetch_related cache when the caller prefetched it
+        # (LearningCircleMeetingListView / LearningCircleMeetingListAPI do) --
+        # .filter(...) on the related manager would bypass that cache and
+        # issue a fresh query per call, per row, per method.
+        for attendee in obj.circle_meeting_attendance_meet_id.all():
+            if attendee.user_id_id == user_id:
+                return attendee
+        return None
+
     def get_is_joined(self, obj):
         if user_id := self.context.get("user_id"):
-            attendee = obj.circle_meeting_attendance_meet_id.filter(
-                user_id=user_id
-            ).first()
+            attendee = self._user_attendee(obj, user_id)
             if attendee:
                 return attendee.is_joined
         return False
 
     def get_is_rsvp(self, obj):
         if user_id := self.context.get("user_id"):
-            return obj.circle_meeting_attendance_meet_id.filter(
-                user_id=user_id
-            ).exists()
+            return self._user_attendee(obj, user_id) is not None
         return False
 
+    def get_can_remove_rsvp(self, obj):
+        user_id = self.context.get("user_id")
+        if not user_id:
+            return False
+        attendee = self._user_attendee(obj, user_id)
+        if not attendee or attendee.is_joined:
+            return False
+        aware_time = _aware_meet_time(obj.meet_time)
+        if aware_time is None:
+            return False
+        now = DateTimeUtils.get_current_utc_time()
+        cutoff_time = aware_time - timedelta(minutes=30)
+        return now < cutoff_time
+
     def get_attendees_count(self, obj):
-        return obj.circle_meeting_attendance_meet_id.count()
+        return len(obj.circle_meeting_attendance_meet_id.all())
 
     class Meta:
         model = CircleMeetingLog
@@ -725,6 +705,7 @@ class CircleMeetupMinSerializer(serializers.ModelSerializer):
             "recurrence",
             "meet_place",
             "is_rsvp",
+            "can_remove_rsvp",
             "circle_id",
             "coord_x",
             "coord_y",
@@ -752,6 +733,12 @@ class UserCircleListSerializer(serializers.ModelSerializer):
     joined_at = serializers.DateTimeField(source='accepted_at', read_only=True)
 
     def get_total_members(self, obj):
+        # The view batches per-circle member counts into context['total_members_map']
+        # for a list (see UserCircleListAPI.get) in one query instead of one per row;
+        # fall back to a direct count when used for a single object.
+        counts_map = self.context.get("total_members_map")
+        if counts_map is not None:
+            return counts_map.get(obj.circle_id, 0)
         return UserCircleLink.objects.filter(circle=obj.circle_id, accepted=True).count()
 
     class Meta:

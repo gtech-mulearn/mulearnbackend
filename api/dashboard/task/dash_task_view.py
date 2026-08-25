@@ -1,5 +1,5 @@
 import uuid
-from django.db.models import Count, Q
+from django.db.models import Count, Exists, OuterRef, Q
 
 from rest_framework import status
 from rest_framework.views import APIView
@@ -8,7 +8,7 @@ from db.organization import Organization, UserOrganizationLink
 from db.task import Channel, InterestGroup, Level, TaskList, TaskType, UserIgLink
 from db.user import UserMentor
 from db.skill import Skill, TaskSkillLink
-from utils.permission import CustomizePermission, JWTUtils, role_required
+from utils.permission import CustomizePermission, JWTUtils, OptionalAuthentication, role_required
 from utils.response import CustomResponse
 from utils.types import Events, OrganizationType, RoleType
 from utils.utils import CommonUtils, DateTimeUtils, ImportCSV
@@ -32,31 +32,35 @@ from utils.schema_utils import CustomResponseSerializer
 
 
 class TaskPublicListAPI(APIView):
-    authentication_classes = [CustomizePermission]
+    authentication_classes = [OptionalAuthentication]
 
     @extend_schema(
         tags=['Dashboard - Task'],
-        description="Retrieve Task Public List.",
+        description=(
+            "Retrieve active tasks grouped into three journey sections, available to "
+            "both authenticated and unauthenticated callers: "
+            "'start_journey' (generic, level-ordered tasks — excludes IG, intern and event tasks), "
+            "'become_expert' (the caller's IG task(s) plus company-submitted tasks, level-ordered), "
+            "'events' (event-linked tasks visible to the caller). "
+            "Unauthenticated callers see global-scope events and company/global tasks only."
+        ),
         parameters=[
             OpenApiParameter(
-                "task_source",
+                "ig_id",
                 OpenApiTypes.STR,
                 OpenApiParameter.QUERY,
                 required=False,
-                enum=["company", "ig_mentor", "campus_mentor", "platform"],
                 description=(
-                    "Filter tasks by creator type: "
-                    "'company' = tasks submitted by a verified company user, "
-                    "'ig_mentor' = tasks submitted by an approved IG mentor, "
-                    "'campus_mentor' = tasks submitted by an approved campus mentor, "
-                    "'platform' = tasks created by platform admins. "
-                    "Eligibility (IG/campus membership) is enforced by the existing visibility rules."
+                    "Override which Interest Group's tasks appear under become_expert. "
+                    "Defaults to every IG the caller actively belongs to. Works for "
+                    "unauthenticated callers too (any IG can be previewed)."
                 ),
             ),
         ],
         responses={200: inline_serializer("TaskPublicListResponse", fields={
-            "data": s.ListField(child=s.DictField()),
-            "pagination": s.DictField(),
+            "start_journey": s.ListField(child=s.DictField()),
+            "become_expert": s.ListField(child=s.DictField()),
+            "events": s.ListField(child=s.DictField()),
         })},
     )
     def get(self, request):
@@ -64,18 +68,21 @@ class TaskPublicListAPI(APIView):
         from api.dashboard.events.public_views import _get_viewer_id, _build_scope_filter
         from api.dashboard.events.serializers import get_live_events
         from db.events import Event
+        from db.user import UserRoleLink
+        from db.task import KarmaActivityLog
 
-        # Change 2: include event_fk so we can access event data without extra queries
-        task_queryset = TaskList.objects.select_related(
-            "channel", "type", "level", "ig", "org", "event_fk", "requested_by"
+        base_queryset = TaskList.objects.select_related(
+            "channel", "type", "level", "ig", "org", "event_fk",
+            "requested_by", "requested_by__company_profile",
         ).filter(active=True)
 
         # --- Visibility filtering ---
         # Determine which orgs/IGs the current user belongs to (if authenticated).
         # Unauthenticated users can only see global tasks and company tasks.
         campus_org_types = [OrganizationType.COLLEGE.value, OrganizationType.SCHOOL.value]
+        is_authenticated = JWTUtils.is_logged_in(request)
 
-        if JWTUtils.is_logged_in(request):
+        if is_authenticated:
             user_id = JWTUtils.fetch_user_id(request)
 
             learner_org_ids = list(
@@ -84,13 +91,6 @@ class TaskPublicListAPI(APIView):
                     verified=True,
                     org__org_type__in=campus_org_types,
                 ).values_list("org_id", flat=True)
-            )
-
-            learner_ig_ids = list(
-                UserIgLink.objects.filter(
-                    user_id=user_id,
-                    is_active=True,
-                ).values_list("ig_id", flat=True)
             )
 
             # Org visibility rule:
@@ -103,15 +103,71 @@ class TaskPublicListAPI(APIView):
                 | Q(org__org_type__in=campus_org_types, org_id__in=learner_org_ids)
             )
 
-            # IG visibility rule:
-            #   - No IG set   → visible to all
-            #   - IG is set   → only learners in that IG
-            ig_filter = Q(ig__isnull=True) | Q(ig_id__in=learner_ig_ids)
+            member_ig_ids = list(
+                UserIgLink.objects.filter(
+                    user_id=user_id,
+                    is_active=True,
+                ).values_list("ig_id", flat=True)
+            )
 
-        # Change 3: build the set of event IDs the caller is permitted to access,
-        # using the same scope logic as EventTaskPublicListAPI.
-        # _get_viewer_id returns None for unauthenticated callers (safe to use).
-        # _build_scope_filter returns GLOBAL-only when user_id is None.
+            # Tasks the caller has already been awarded karma for.
+            completed_task_ids = set(
+                KarmaActivityLog.objects.filter(
+                    user_id=user_id, appraiser_approved=True
+                ).values_list("task_id", flat=True)
+            )
+        else:
+            # Unauthenticated: global + company tasks only
+            org_filter = Q(org__isnull=True) | Q(org__org_type=OrganizationType.COMPANY.value)
+            member_ig_ids = []
+            completed_task_ids = set()
+
+        # ---------- start_journey: generic, level-ordered tasks ----------
+        # No IG, no event, and not an "intern" task (same convention used by
+        # get_karma_breakdown: hashtag prefix or an active Intern/Intern Lead creator role).
+        is_intern_creator = Exists(
+            UserRoleLink.objects.filter(
+                user=OuterRef("requested_by"),
+                role__title__in=[RoleType.INTERN.value, RoleType.INTERN_LEAD.value],
+                is_active=True,
+            )
+        )
+        start_journey_qs = (
+            base_queryset.filter(event_fk__isnull=True, ig__isnull=True)
+            .filter(org_filter)
+            .annotate(is_intern_creator=is_intern_creator)
+            .exclude(hashtag__startswith="#intern-")
+            .exclude(is_intern_creator=True)
+            .order_by("level__level_order", "title")
+        )
+
+        # ---------- become_expert: caller's IG task(s) + company tasks ----------
+        # Available to unauthenticated callers too (company tasks + any IG
+        # previewed via ig_id); member_ig_ids is only populated when logged in.
+        ig_id_param = request.query_params.get("ig_id")
+        target_ig_ids = [ig_id_param] if ig_id_param else member_ig_ids
+
+        become_expert_filter = Q(
+            requested_by__isnull=False,
+            requested_by__company_profile__isnull=False,
+        )
+        if target_ig_ids:
+            become_expert_filter |= Q(ig_id__in=target_ig_ids)
+
+        become_expert_qs = (
+            base_queryset.filter(event_fk__isnull=True)
+            .filter(become_expert_filter)
+            .order_by("level__level_order", "title")
+            .distinct()
+        )
+        serializer_context = {"completed_task_ids": completed_task_ids}
+        become_expert_data = TaskListPublicSerializer(
+            become_expert_qs, many=True, context=serializer_context
+        ).data
+
+        # ---------- events: event-linked tasks visible to the caller ----------
+        # _get_viewer_id/_build_scope_filter already degrade gracefully to
+        # global-scope-only visibility when the caller is unauthenticated.
         viewer_id = _get_viewer_id(request)
         scope_filter = _build_scope_filter(viewer_id)
         accessible_event_ids = list(
@@ -122,123 +178,23 @@ class TaskPublicListAPI(APIView):
             )
             .values_list("id", flat=True)
         )
-
-        # Change 4: new query param filters + updated visibility logic
-        event_id_param = request.query_params.get("event_id")
-        is_event_task_only = (
-            request.query_params.get("is_event_task", "").lower() == "true"
-            or request.query_params.get("event_tasks_only", "").lower() == "true"
-        )
-
-        if event_id_param:
-            # Filter to a single event — only if that event is accessible to the caller.
-            # Use .exists() on the DB to avoid lazy queryset / type-mismatch issues.
-            event_accessible = get_live_events().filter(
-                scope_filter,
-                status__in=[Event.Status.PUBLISHED, Event.Status.ONGOING],
-                id=event_id_param,
-            ).exists()
-            if event_accessible:
-                task_queryset = task_queryset.filter(event_fk_id=event_id_param)
-            else:
-                task_queryset = task_queryset.none()
-
-        elif is_event_task_only:
-            # Return only event-linked tasks the caller can access
-            task_queryset = task_queryset.filter(
-                event_fk_id__in=accessible_event_ids
-            )
-
-        else:
-            # Default: show regular tasks (existing org/ig rules) PLUS
-            # event-linked tasks filtered by event scope visibility.
-            if JWTUtils.is_logged_in(request):
-                regular_tasks_filter = Q(event_fk__isnull=True) & org_filter & ig_filter
-            else:
-                # Unauthenticated: global + company tasks with no IG restriction
-                regular_tasks_filter = Q(
-                    event_fk__isnull=True,
-                    ig__isnull=True,
-                ) & (Q(org__isnull=True) | Q(org__org_type=OrganizationType.COMPANY.value))
-
-            event_tasks_filter = Q(
-                event_fk__isnull=False,
-                event_fk_id__in=accessible_event_ids,
-            )
-            task_queryset = task_queryset.filter(regular_tasks_filter | event_tasks_filter)
-
-        ig_id = request.query_params.get("ig_id")
-        if ig_id:
-            task_queryset = task_queryset.filter(ig_id=ig_id)
-
-        task_source = request.query_params.get("task_source")
-        if task_source == "company":
-            task_queryset = task_queryset.filter(
-                requested_by__isnull=False,
-                requested_by__company_profile__isnull=False,
-            )
-        elif task_source == "ig_mentor":
-            task_queryset = task_queryset.filter(
-                requested_by__isnull=False,
-                requested_by__user_mentor_user__mentor_tier=UserMentor.MentorTier.IG_MENTOR,
-                requested_by__user_mentor_user__status=UserMentor.Status.APPROVED,
-            ).distinct()
-        elif task_source == "campus_mentor":
-            task_queryset = task_queryset.filter(
-                requested_by__isnull=False,
-                requested_by__user_mentor_user__mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
-                requested_by__user_mentor_user__status=UserMentor.Status.APPROVED,
-            ).distinct()
-        elif task_source == "platform":
-            task_queryset = task_queryset.filter(requested_by__isnull=True)
-
-        paginated_queryset = CommonUtils.get_paginated_queryset(
-            task_queryset,
-            request,
-            search_fields=[
-                "hashtag",
-                "title",
-                "description",
-                "karma",
-                "channel__name",
-                "type__title",
-                "active",
-                "variable_karma",
-                "usage_count",
-                "level__name",
-                "org__title",
-                "ig__name",
-                "event",
-                "event_fk__title",  # Change 5: search by linked event title
-            ],
-            sort_fields={
-                "hashtag": "hashtag",
-                "title": "title",
-                "description": "description",
-                "karma": "karma",
-                "channels": "channel__name",
-                "type": "type__title",
-                "active": "active",
-                "variable_karma": "variable_karma",
-                "usage_count": "usage_count",
-                "level": "level__name",
-                "org": "org__title",
-                "ig": "ig__name",
-                "event": "event",
-                "event_title": "event_fk__title",  # Change 6: sort by linked event title
-                "updated_at": "updated_at",
-                "created_at": "created_at",
-            },
-        )
-
-        task_serializer_data = TaskListPublicSerializer(
-            paginated_queryset.get("queryset"), many=True
+        events_qs = base_queryset.filter(
+            event_fk__isnull=False,
+            event_fk_id__in=accessible_event_ids,
+        ).order_by("event_fk__title", "title")
+        events_data = TaskListPublicSerializer(
+            events_qs, many=True, context=serializer_context
         ).data
 
-        return CustomResponse().paginated_response(
-            data=task_serializer_data,
-            pagination=paginated_queryset.get("pagination"),
-        )
+        return CustomResponse(
+            response={
+                "start_journey": TaskListPublicSerializer(
+                    start_journey_qs, many=True, context=serializer_context
+                ).data,
+                "become_expert": become_expert_data,
+                "events": events_data,
+            }
+        ).get_success_response()
 
 
 class TaskListAPI(APIView):
@@ -291,16 +247,26 @@ class TaskListAPI(APIView):
                 requested_by__company_profile__isnull=False,
             )
         elif task_source == "ig_mentor":
+            from db.user import MentorScopeGrant, MentorApplication
+            ig_mentor_user_ids = MentorScopeGrant.objects.filter(
+                scope_type=MentorScopeGrant.ScopeType.IG_MENTOR, is_active=True,
+                application__status=MentorApplication.Status.APPROVED,
+                application__user__mentor_profile__is_active=True,
+            ).values_list('application__user_id', flat=True)
             task_queryset = task_queryset.filter(
                 requested_by__isnull=False,
-                requested_by__user_mentor_user__mentor_tier=UserMentor.MentorTier.IG_MENTOR,
-                requested_by__user_mentor_user__status=UserMentor.Status.APPROVED,
+                requested_by_id__in=ig_mentor_user_ids,
             ).distinct()
         elif task_source == "campus_mentor":
+            from db.user import MentorScopeGrant, MentorApplication
+            campus_mentor_user_ids = MentorScopeGrant.objects.filter(
+                scope_type=MentorScopeGrant.ScopeType.CAMPUS_MENTOR, is_active=True,
+                application__status=MentorApplication.Status.APPROVED,
+                application__user__mentor_profile__is_active=True,
+            ).values_list('application__user_id', flat=True)
             task_queryset = task_queryset.filter(
                 requested_by__isnull=False,
-                requested_by__user_mentor_user__mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
-                requested_by__user_mentor_user__status=UserMentor.Status.APPROVED,
+                requested_by_id__in=campus_mentor_user_ids,
             ).distinct()
         elif task_source == "platform":
             task_queryset = task_queryset.filter(requested_by__isnull=True)
@@ -1236,9 +1202,9 @@ class AdminTaskApprovalAPI(APIView):
         from django.utils import timezone as tz
 
         action = request.data.get("action")
-        if action not in ("approve", "reject"):
+        if action not in ("approve", "reject", "request_changes"):
             return CustomResponse(
-                general_message="Invalid action. Must be 'approve' or 'reject'.",
+                general_message="Invalid action. Must be 'approve', 'reject', or 'request_changes'.",
                 message={"error_code": "INVALID_ACTION"},
             ).get_failure_response()
 
@@ -1274,7 +1240,7 @@ class AdminTaskApprovalAPI(APIView):
                 "reviewed_by_admin", "reviewed_at", "updated_by", "updated_at",
             ])
             message = "Task approved and is now live."
-        else:
+        elif action == "reject":
             reason = (request.data.get("reason") or "").strip()
             if not reason:
                 return CustomResponse(
@@ -1292,6 +1258,29 @@ class AdminTaskApprovalAPI(APIView):
                 "reviewed_by_admin", "reviewed_at", "updated_by", "updated_at",
             ])
             message = "Task rejected."
+        else:
+            # PRD §6.3 — a lightweight "request changes" state distinct from
+            # outright rejection: the submitter can amend and resubmit
+            # (task_views.py's edit endpoints already reset approval_status
+            # to 'pending' on any edit, so no further plumbing is needed
+            # there) instead of having to start over from a rejection.
+            reason = (request.data.get("reason") or "").strip()
+            if not reason:
+                return CustomResponse(
+                    general_message="A reason describing the requested changes is required.",
+                    message={"error_code": "REASON_REQUIRED"},
+                ).get_failure_response()
+            task.approval_status = "changes_requested"
+            task.active = False
+            task.rejection_reason = reason
+            task.reviewed_by_admin = admin_user
+            task.reviewed_at = now
+            task.updated_by = admin_user
+            task.save(update_fields=[
+                "approval_status", "active", "rejection_reason",
+                "reviewed_by_admin", "reviewed_at", "updated_by", "updated_at",
+            ])
+            message = "Changes requested."
 
         return CustomResponse(
             general_message=message,
