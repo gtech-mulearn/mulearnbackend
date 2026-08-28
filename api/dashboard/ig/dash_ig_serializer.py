@@ -413,6 +413,19 @@ class InterestGroupRequestGetSerializer(InterestGroupSerializer):
         return None
 
 
+def _strip_emails(entries):
+    """Drop the 'email' key from each resolved muid/mentor dict.
+    This endpoint is unauthenticated (public/ig/list/), so member emails
+    (PII) must not be exposed — unlike the admin-only InterestGroupSerializer
+    that reuses the same _resolve_muid_list/_resolve_ig_mentors helpers."""
+    if not isinstance(entries, list):
+        return entries
+    for entry in entries:
+        if isinstance(entry, dict):
+            entry.pop("email", None)
+    return entries
+
+
 class PublicInterestGroupSerializer(serializers.ModelSerializer):
     impact_projects = ImpactProjectSerializer(source="impact_project_ig", many=True, read_only=True)
 
@@ -441,7 +454,9 @@ class PublicInterestGroupSerializer(serializers.ModelSerializer):
             if isinstance(val, str) and val:
                 try:
                     parsed = json.loads(val)
-                    data[field] = _resolve_muid_list(parsed, user_map=user_map, socials_map=socials_map)
+                    data[field] = _strip_emails(
+                        _resolve_muid_list(parsed, user_map=user_map, socials_map=socials_map)
+                    )
                 except Exception:
                     pass
 
@@ -454,12 +469,12 @@ class PublicInterestGroupSerializer(serializers.ModelSerializer):
         else:
             mentor_links = None
 
-        data["mentors"] = _resolve_ig_mentors(
+        data["mentors"] = _strip_emails(_resolve_ig_mentors(
             instance,
             mentor_links=mentor_links,
             mentor_socials_map=mentor_socials_map,
             mentor_profiles_map=mentor_profiles_map
-        )
+        ))
 
         return data
 
