@@ -30,7 +30,6 @@ from .serializers import (
 from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
 from rest_framework import serializers as s
 from api.dashboard.task.dash_task_serializer import TaskListPublicSerializer
-from utils.utils import MAX_PAGE_SIZE
 
 
 
@@ -273,7 +272,10 @@ class PublicEventListAPI(APIView):
     future) are returned; draft/pending/cancelled/rejected/completed
     events are never exposed here.
 
-    Unpaginated — returns the full matching set in one response.
+    Paginated (pageIndex/perPage) — matches every other list endpoint in
+    this codebase. A flat, unbounded-looking response can't safely represent
+    a table that may exceed one page without either silently dropping rows
+    past a cap or growing the payload without limit.
     """
     permission_classes = []
 
@@ -285,24 +287,20 @@ class PublicEventListAPI(APIView):
     def get(self, request):
         events = _fully_public_events_queryset(request)
 
-        events = CommonUtils.get_paginated_queryset(
+        paginated = CommonUtils.get_paginated_queryset(
             events, request,
             search_fields=['title', 'description', 'venue_city'],
             sort_fields=_PUBLIC_EVENT_SORT_FIELDS,
-            is_pagination=False,
         )
-        # Unpaginated by design, but still bounded — MAX_PAGE_SIZE caps the
-        # response so an ever-growing events table can't turn this single
-        # unauthenticated request into an unbounded payload.
-        events = events[:MAX_PAGE_SIZE]
 
         serializer = EventListItemSerializer(
-            events, many=True,
+            paginated['queryset'], many=True,
             context={'user_id': None, 'request': request},
         )
-        return CustomResponse(
-            response=serializer.data,
-        ).get_success_response()
+        return CustomResponse().paginated_response(
+            data=serializer.data,
+            pagination=paginated['pagination'],
+        )
 
 
 class PublicEventFeaturedAPI(APIView):
