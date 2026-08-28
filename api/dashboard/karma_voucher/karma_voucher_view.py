@@ -286,27 +286,22 @@ class VoucherLogAPI(APIView):
             data=request.data, context={'request': request})
         if serializer.is_valid():
             with transaction.atomic():
-                id = serializer.save().id
-                voucher = VoucherLog.objects.filter(id=id).values(
-                    'code',
-                    'user__full_name',
-                    'user__email',
-                    'task__hashtag',
-                    'month',
-                    'week',
-                    'karma'
-                ).first()
-                if not voucher:
+                voucher_id = serializer.save().id
+                voucher_obj = VoucherLog.objects.select_related(
+                    'user', 'task', 'created_by', 'updated_by'
+                ).filter(id=voucher_id).first()
+                if not voucher_obj:
                     transaction.set_rollback(True)
                     return CustomResponse(
                         general_message='Something went wrong. Please try again.').get_failure_response()
-            code = voucher['code']
-            month = voucher['month']
-            week = voucher['week']
-            karma = voucher['karma']
-            task_hashtag = voucher['task__hashtag']
-            full_name = voucher['user__full_name']
-            email = voucher['user__email']
+            voucher_data = VoucherLogSerializer(voucher_obj).data
+            code = voucher_data['code']
+            month = voucher_data['month']
+            week = voucher_data['week']
+            karma = voucher_data['karma']
+            task_hashtag = voucher_obj.task.hashtag
+            full_name = voucher_obj.user.full_name
+            email = voucher_obj.user.email
 
             # Preparing email context and attachment
             from_mail = decouple.config("FROM_MAIL")
@@ -345,14 +340,15 @@ class VoucherLogAPI(APIView):
             except Exception as e:
                 print(f"Failed to send email to {email}: {str(e)}")
             return CustomResponse(general_message='Voucher created successfully',
-                                  response=serializer.data).get_success_response()
+                                  response=voucher_data).get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value])
     @extend_schema(
         tags=['Dashboard - Karma Voucher'],
         description="Partially update Voucher Log.",
-        responses={200: VoucherLogUpdateSerializer},
+        request=VoucherLogUpdateSerializer,
+        responses={200: VoucherLogSerializer},
     )
     def patch(self, request, voucher_id):
         user_id = JWTUtils.fetch_user_id(request)
@@ -365,7 +361,12 @@ class VoucherLogAPI(APIView):
             voucher, data=request.data, context=context)
         if serializer.is_valid():
             serializer.save()
-            return CustomResponse(general_message='Voucher updated successfully').get_success_response()
+            voucher = VoucherLog.objects.select_related(
+                'user', 'task', 'created_by', 'updated_by'
+            ).get(id=voucher_id)
+            voucher_data = VoucherLogSerializer(voucher).data
+            return CustomResponse(general_message='Voucher updated successfully',
+                                  response=voucher_data).get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value])

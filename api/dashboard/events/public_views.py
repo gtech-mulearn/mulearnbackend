@@ -193,15 +193,20 @@ class EventListAPI(APIView):
 # Lifecycle statuses exposed on every fully-public (unauthenticated) events
 # endpoint — list, featured, and detail. Keep this the single source of truth
 # so the endpoints can't silently diverge on what "public" means.
-PUBLIC_EVENT_STATUSES = [Event.Status.PUBLISHED, Event.Status.ONGOING, Event.Status.COMPLETED]
+# NOTE: COMPLETED is intentionally not here — public endpoints never return
+# events whose end_datetime has already passed (see the end_datetime__gte
+# filter below), so a completed event can never be visible regardless of
+# lifecycle status.
+PUBLIC_EVENT_STATUSES = [Event.Status.PUBLISHED, Event.Status.ONGOING]
 
 
 def _fully_public_events_queryset(request, *, featured_only=False):
     """
     Fully public queryset: no authentication and no campus/IG scope gating
-    (every viewer sees the same set). Only lifecycle-public events
-    (published, ongoing, completed) are returned; draft/pending/cancelled/
-    rejected events are never exposed here.
+    (every viewer sees the same set). Only lifecycle-public, not-yet-ended
+    events (published or ongoing, with end_datetime in the future) are
+    returned; draft/pending/cancelled/rejected/completed events are never
+    exposed here.
 
     When ``featured_only`` is True, always restricts to ``is_featured=True``
     (used by /events/featured/), regardless of the ``is_featured`` query param.
@@ -212,13 +217,16 @@ def _fully_public_events_queryset(request, *, featured_only=False):
     events = get_live_events().select_related(
         'category', 'organiser_ig', 'organiser_org'
     ).filter(
-        status__in=PUBLIC_EVENT_STATUSES
+        status__in=PUBLIC_EVENT_STATUSES,
+        end_datetime__gte=now,
     )
 
     # ── status filter — repeated params (?status=a&status=b) and/or
     # comma-separated (?status=a,b) are both accepted and OR'd together.
     # Computed from start/end datetime rather than the lifecycle `status`
-    # field, since a published event may not have started yet.
+    # field, since a published event may not have started yet. "completed"
+    # is deliberately not offered here — the base queryset above already
+    # excludes every event whose end_datetime has passed.
     raw_statuses = params.getlist('status')
     statuses = {
         s.strip().lower()
@@ -232,8 +240,6 @@ def _fully_public_events_queryset(request, *, featured_only=False):
             status_q |= Q(start_datetime__gt=now)
         if 'ongoing' in statuses:
             status_q |= Q(start_datetime__lte=now, end_datetime__gte=now)
-        if 'completed' in statuses:
-            status_q |= Q(end_datetime__lt=now)
         if status_q:
             events = events.filter(status_q)
 
@@ -278,8 +284,9 @@ class PublicEventListAPI(APIView):
 
     Fully public event listing: no authentication and no campus/IG scope
     gating (every viewer sees the same set). Only lifecycle-public events
-    (published, ongoing, completed) are returned; draft/pending/cancelled/
-    rejected events are never exposed here.
+    that haven't ended yet (published or ongoing, end_datetime in the
+    future) are returned; draft/pending/cancelled/rejected/completed
+    events are never exposed here.
 
     Paginated (pageIndex/perPage) — matches every other list endpoint in
     this codebase. A flat, unbounded-looking response can't safely represent
@@ -351,8 +358,9 @@ class PublicEventDetailAPI(APIView):
     GET /api/v1/public/events/<event_id>/
 
     Fully public event detail: no authentication and no campus/IG scope
-    gating. Only lifecycle-public events (published, ongoing, completed) are
-    returned; draft/pending/cancelled/rejected events resolve to "not found".
+    gating. Only lifecycle-public events that haven't ended yet (published
+    or ongoing, end_datetime in the future) are returned; draft/pending/
+    cancelled/rejected/completed events resolve to "not found".
     """
     permission_classes = []
 
@@ -367,6 +375,7 @@ class PublicEventDetailAPI(APIView):
         ).filter(
             id=event_id,
             status__in=PUBLIC_EVENT_STATUSES,
+            end_datetime__gte=timezone.now(),
         ).first()
         if not event:
             return CustomResponse(
