@@ -5,13 +5,13 @@ from .external_api_views import ExternalUserDetailsAPI
 from . import common_views
 from .college_details_views import CollegeDetailsAPI
 from api.dashboard.company import job_views
+from api.dashboard.ig import dash_ig_view
 from api.dashboard.career_lab import career_lab_views
 from api.dashboard.events.public_views import (
     PublicEventListAPI,
     PublicEventFeaturedAPI,
     PublicEventDetailAPI,
 )
-from api.dashboard.ig import dash_ig_view
 
 urlpatterns = [
     path('campus-details/<str:college_code>/', CollegeDetailsAPI.as_view()),

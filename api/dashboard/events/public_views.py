@@ -30,6 +30,7 @@ from .serializers import (
 from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
 from rest_framework import serializers as s
 from api.dashboard.task.dash_task_serializer import TaskListPublicSerializer
+from utils.utils import MAX_PAGE_SIZE
 
 
 
@@ -290,6 +291,10 @@ class PublicEventListAPI(APIView):
             sort_fields=_PUBLIC_EVENT_SORT_FIELDS,
             is_pagination=False,
         )
+        # Unpaginated by design, but still bounded — MAX_PAGE_SIZE caps the
+        # response so an ever-growing events table can't turn this single
+        # unauthenticated request into an unbounded payload.
+        events = events[:MAX_PAGE_SIZE]
 
         serializer = EventListItemSerializer(
             events, many=True,
