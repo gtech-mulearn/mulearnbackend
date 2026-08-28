@@ -1130,7 +1130,7 @@ def get_ig_list_context(ig_queryset):
         )
         socials_map = {s["user_id"]: s for s in socials_qs}
 
-        mentor_profiles = UserMentor.objects.filter(user_id__in=all_user_ids).select_related("org")
+        mentor_profiles = UserMentor.objects.filter(user_id__in=all_user_ids)
         mentor_profiles_map = {m.user_id: m for m in mentor_profiles}
 
     return {
