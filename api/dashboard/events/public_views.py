@@ -17,10 +17,12 @@ from utils.utils import CommonUtils
 
 from datetime import datetime
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 
 from .serializers import (
     EventListItemSerializer,
     EventDetailSerializer,
+    PublicEventDetailSerializer,
     get_live_events,
     EventCalendarItemSerializer,
 )
@@ -87,9 +89,15 @@ def _build_scope_filter(user_id):
 
 def _public_events_queryset(request, *, featured_only=False):
     """
-    Base queryset for public event lists: scope visibility, published/ongoing,
-    optional filters. When ``featured_only`` is True, only ``is_featured`` rows
-    are returned (used by /events/featured/ and /events/is-featured/).
+    SCOPE-GATED queryset for the dashboard-scoped /events/ routes (optional
+    JWT, campus/IG/company visibility rules via `_build_scope_filter`).
+    Published/ongoing, optional filters. When ``featured_only`` is True, only
+    ``is_featured`` rows are returned (used by /events/featured/ and
+    /events/is-featured/).
+
+    NOT the same as `_fully_public_events_queryset` below, which serves the
+    /api/v1/public/events/* routes — no scope gating at all (every anonymous
+    viewer sees the same set). Don't confuse the two when adding a filter.
     """
     user_id = _get_viewer_id(request)
 
@@ -182,6 +190,88 @@ class EventListAPI(APIView):
         )
 
 
+# Lifecycle statuses exposed on every fully-public (unauthenticated) events
+# endpoint — list, featured, and detail. Keep this the single source of truth
+# so the endpoints can't silently diverge on what "public" means.
+PUBLIC_EVENT_STATUSES = [Event.Status.PUBLISHED, Event.Status.ONGOING, Event.Status.COMPLETED]
+
+
+def _fully_public_events_queryset(request, *, featured_only=False):
+    """
+    Fully public queryset: no authentication and no campus/IG scope gating
+    (every viewer sees the same set). Only lifecycle-public events
+    (published, ongoing, completed) are returned; draft/pending/cancelled/
+    rejected events are never exposed here.
+
+    When ``featured_only`` is True, always restricts to ``is_featured=True``
+    (used by /events/featured/), regardless of the ``is_featured`` query param.
+    """
+    params = request.query_params
+    now = timezone.now()
+
+    events = get_live_events().select_related(
+        'category', 'organiser_ig', 'organiser_org'
+    ).filter(
+        status__in=PUBLIC_EVENT_STATUSES
+    )
+
+    # ── status filter — repeated params (?status=a&status=b) and/or
+    # comma-separated (?status=a,b) are both accepted and OR'd together.
+    # Computed from start/end datetime rather than the lifecycle `status`
+    # field, since a published event may not have started yet.
+    raw_statuses = params.getlist('status')
+    statuses = {
+        s.strip().lower()
+        for raw in raw_statuses
+        for s in raw.split(',')
+        if s.strip()
+    }
+    if statuses:
+        status_q = Q()
+        if 'upcoming' in statuses:
+            status_q |= Q(start_datetime__gt=now)
+        if 'ongoing' in statuses:
+            status_q |= Q(start_datetime__lte=now, end_datetime__gte=now)
+        if 'completed' in statuses:
+            status_q |= Q(end_datetime__lt=now)
+        if status_q:
+            events = events.filter(status_q)
+
+    # ── date range filter — invalid YYYY-MM-DD strings are ignored rather
+    # than passed to the ORM, which would otherwise raise an uncaught
+    # django.core.exceptions.ValidationError and 500 the request. ────────
+    if start_date_raw := params.get('start_date'):
+        if start_date := parse_date(start_date_raw):
+            events = events.filter(start_datetime__date__gte=start_date)
+    if end_date_raw := params.get('end_date'):
+        if end_date := parse_date(end_date_raw):
+            events = events.filter(end_datetime__date__lte=end_date)
+
+    # ── other filters ────────────────────────────────────────────────
+    if event_type := params.get('event_type'):
+        events = events.filter(event_type=event_type)
+    if scope := params.get('scope'):
+        events = events.filter(scope=scope)
+    if ig_id := params.get('ig_id'):
+        events = events.filter(scope_ig_id=ig_id)
+    if campus_id := params.get('campus_id'):
+        events = events.filter(scope_org_id=campus_id)
+    if cluster := params.get('cluster'):
+        events = events.filter(organiser_ig__category=cluster)
+    if featured_only:
+        events = events.filter(is_featured=True)
+    elif is_featured := params.get('is_featured'):
+        events = events.filter(is_featured=is_featured.lower() == 'true')
+    if tags := params.get('tags'):
+        events = events.filter(tags__icontains=tags)
+
+    # Deterministic base order — without this, MySQL gives no guarantee on
+    # row order, so paginating (or capping) an unordered queryset can skip
+    # or duplicate rows across pages/requests. `?sortBy=` in
+    # CommonUtils.get_paginated_queryset re-orders on top of this when set.
+    return events.order_by('-start_datetime', 'id')
+
+
 class PublicEventListAPI(APIView):
     """
     GET /api/v1/public/events/
@@ -191,7 +281,10 @@ class PublicEventListAPI(APIView):
     (published, ongoing, completed) are returned; draft/pending/cancelled/
     rejected events are never exposed here.
 
-    Unpaginated — returns the full matching set in one response.
+    Paginated (pageIndex/perPage) — matches every other list endpoint in
+    this codebase. A flat, unbounded-looking response can't safely represent
+    a table that may exceed one page without either silently dropping rows
+    past a cap or growing the payload without limit.
     """
     permission_classes = []
 
@@ -201,68 +294,87 @@ class PublicEventListAPI(APIView):
         responses={200: EventListItemSerializer},
     )
     def get(self, request):
-        params = request.query_params
-        now = timezone.now()
+        events = _fully_public_events_queryset(request)
 
-        events = get_live_events().select_related(
-            'category', 'organiser_ig', 'organiser_org'
-        ).filter(
-            status__in=[Event.Status.PUBLISHED, Event.Status.ONGOING, Event.Status.COMPLETED]
-        )
-
-        # ── status filter — repeated params (?status=a&status=b) and/or
-        # comma-separated (?status=a,b) are both accepted and OR'd together.
-        # Computed from start/end datetime rather than the lifecycle `status`
-        # field, since a published event may not have started yet.
-        raw_statuses = params.getlist('status')
-        statuses = {
-            s.strip().lower()
-            for raw in raw_statuses
-            for s in raw.split(',')
-            if s.strip()
-        }
-        if statuses:
-            status_q = Q()
-            if 'upcoming' in statuses:
-                status_q |= Q(start_datetime__gt=now)
-            if 'ongoing' in statuses:
-                status_q |= Q(start_datetime__lte=now, end_datetime__gte=now)
-            if 'completed' in statuses:
-                status_q |= Q(end_datetime__lt=now)
-            if status_q:
-                events = events.filter(status_q)
-
-        # ── date range filter ────────────────────────────────────────────
-        if start_date := params.get('start_date'):
-            events = events.filter(start_datetime__date__gte=start_date)
-        if end_date := params.get('end_date'):
-            events = events.filter(end_datetime__date__lte=end_date)
-
-        # ── other filters ────────────────────────────────────────────────
-        if event_type := params.get('event_type'):
-            events = events.filter(event_type=event_type)
-        if scope := params.get('scope'):
-            events = events.filter(scope=scope)
-        if ig_id := params.get('ig_id'):
-            events = events.filter(scope_ig_id=ig_id)
-        if campus_id := params.get('campus_id'):
-            events = events.filter(scope_org_id=campus_id)
-        if cluster := params.get('cluster'):
-            events = events.filter(organiser_ig__category=cluster)
-        if is_featured := params.get('is_featured'):
-            events = events.filter(is_featured=is_featured.lower() == 'true')
-        if tags := params.get('tags'):
-            events = events.filter(tags__icontains=tags)
-
-        events = CommonUtils.get_paginated_queryset(
+        paginated = CommonUtils.get_paginated_queryset(
             events, request,
             search_fields=['title', 'description', 'venue_city'],
             sort_fields=_PUBLIC_EVENT_SORT_FIELDS,
-            is_pagination=False,
         )
 
         serializer = EventListItemSerializer(
-            events, many=True,
+            paginated['queryset'], many=True,
+            context={'user_id': None, 'request': request},
+        )
+        return CustomResponse().paginated_response(
+            data=serializer.data,
+            pagination=paginated['pagination'],
+        )
+
+
+class PublicEventFeaturedAPI(APIView):
+    """
+    GET /api/v1/public/events/featured/
+
+    Fully public listing of featured events (``is_featured=True``), same
+    lifecycle/status/date/type filters as PublicEventListAPI. No authentication,
+    no campus/IG scope gating. Paginated, matching PublicEventListAPI.
+    """
+    permission_classes = []
+
+    @extend_schema(
+        tags=['Public - Events'],
+        description="Fully public, unauthenticated list of featured events.",
+        responses={200: EventListItemSerializer},
+    )
+    def get(self, request):
+        events = _fully_public_events_queryset(request, featured_only=True)
+
+        paginated = CommonUtils.get_paginated_queryset(
+            events, request,
+            search_fields=['title', 'description', 'venue_city'],
+            sort_fields=_PUBLIC_EVENT_SORT_FIELDS,
+        )
+
+        serializer = EventListItemSerializer(
+            paginated['queryset'], many=True,
+            context={'user_id': None, 'request': request},
+        )
+        return CustomResponse().paginated_response(
+            data=serializer.data,
+            pagination=paginated['pagination'],
+        )
+
+
+class PublicEventDetailAPI(APIView):
+    """
+    GET /api/v1/public/events/<event_id>/
+
+    Fully public event detail: no authentication and no campus/IG scope
+    gating. Only lifecycle-public events (published, ongoing, completed) are
+    returned; draft/pending/cancelled/rejected events resolve to "not found".
+    """
+    permission_classes = []
+
+    @extend_schema(
+        tags=['Public - Events'],
+        description="Fully public, unauthenticated detail view of a single event.",
+        responses={200: PublicEventDetailSerializer},
+    )
+    def get(self, request, event_id):
+        event = get_live_events().select_related(
+            'category', 'organiser_ig', 'organiser_org', 'scope_org', 'scope_ig',
+        ).filter(
+            id=event_id,
+            status__in=PUBLIC_EVENT_STATUSES,
+        ).first()
+        if not event:
+            return CustomResponse(
+                general_message='Event not found.'
+            ).get_failure_response()
+
+        serializer = PublicEventDetailSerializer(
+            event,
             context={'user_id': None, 'request': request},
         )
         return CustomResponse(
