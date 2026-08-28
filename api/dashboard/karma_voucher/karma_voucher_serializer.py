@@ -170,9 +170,13 @@ class VoucherLogCreateSerializer(serializers.ModelSerializer):
         return user.id
 
     def validate_task(self, value):
-        if not TaskList.objects.filter(id=value).exists():
+        task_ids = list(TaskList.objects.filter(hashtag=value).values_list('id', flat=True)[:2])
+        if not task_ids:
             raise serializers.ValidationError("Enter a valid task")
-        return value
+        if len(task_ids) > 1:
+            raise serializers.ValidationError(
+                "Multiple tasks share this hashtag; contact an admin to resolve the duplicate.")
+        return task_ids[0]
 
     def validate_karma(self, value):
         if value <= 0:
@@ -247,9 +251,13 @@ class VoucherLogUpdateSerializer(serializers.ModelSerializer):
         return user.id
     
     def validate_new_task(self, value):
-        if not TaskList.objects.filter(id=value).exists():
+        task_ids = list(TaskList.objects.filter(hashtag=value).values_list('id', flat=True)[:2])
+        if not task_ids:
             raise serializers.ValidationError("Enter a valid task")
-        return value
+        if len(task_ids) > 1:
+            raise serializers.ValidationError(
+                "Multiple tasks share this hashtag; contact an admin to resolve the duplicate.")
+        return task_ids[0]
     
     def validate_new_karma(self, value):
         if value <= 0:
