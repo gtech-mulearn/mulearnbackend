@@ -438,6 +438,22 @@ class EventDetailSerializer(serializers.ModelSerializer):
         return None
 
 
+class PublicEventDetailSerializer(EventDetailSerializer):
+    """
+    Detail serializer for fully anonymous callers (GET /api/v1/public/events/<id>/).
+
+    Drops ``created_by``/``updated_by``/``co_owners`` from EventDetailSerializer —
+    those expose internal user PII (id, full_name, muid, profile_pic) that has
+    always required a valid JWT to reach via the dashboard EventDetailAPI.
+    """
+
+    class Meta(EventDetailSerializer.Meta):
+        fields = [
+            f for f in EventDetailSerializer.Meta.fields
+            if f not in ('created_by', 'updated_by', 'co_owners')
+        ]
+
+
 # ─────────────────────────────────────────────────────────────
 # EVENT WRITE  (create / update input)
 # ─────────────────────────────────────────────────────────────
