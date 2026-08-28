@@ -29,7 +29,6 @@ from .serializers import (
 from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
 from rest_framework import serializers as s
 from api.dashboard.task.dash_task_serializer import TaskListPublicSerializer
-from utils.utils import MAX_PAGE_SIZE
 
 
 
@@ -266,7 +265,11 @@ def _fully_public_events_queryset(request, *, featured_only=False):
     if tags := params.get('tags'):
         events = events.filter(tags__icontains=tags)
 
-    return events
+    # Deterministic base order — without this, MySQL gives no guarantee on
+    # row order, so paginating (or capping) an unordered queryset can skip
+    # or duplicate rows across pages/requests. `?sortBy=` in
+    # CommonUtils.get_paginated_queryset re-orders on top of this when set.
+    return events.order_by('-start_datetime', 'id')
 
 
 class PublicEventListAPI(APIView):
@@ -278,7 +281,10 @@ class PublicEventListAPI(APIView):
     (published, ongoing, completed) are returned; draft/pending/cancelled/
     rejected events are never exposed here.
 
-    Unpaginated — returns the full matching set in one response.
+    Paginated (pageIndex/perPage) — matches every other list endpoint in
+    this codebase. A flat, unbounded-looking response can't safely represent
+    a table that may exceed one page without either silently dropping rows
+    past a cap or growing the payload without limit.
     """
     permission_classes = []
 
@@ -290,24 +296,20 @@ class PublicEventListAPI(APIView):
     def get(self, request):
         events = _fully_public_events_queryset(request)
 
-        events = CommonUtils.get_paginated_queryset(
+        paginated = CommonUtils.get_paginated_queryset(
             events, request,
             search_fields=['title', 'description', 'venue_city'],
             sort_fields=_PUBLIC_EVENT_SORT_FIELDS,
-            is_pagination=False,
         )
-        # Unpaginated by design, but still bounded — MAX_PAGE_SIZE caps the
-        # response so an ever-growing events table can't turn this single
-        # unauthenticated request into an unbounded payload.
-        events = events[:MAX_PAGE_SIZE]
 
         serializer = EventListItemSerializer(
-            events, many=True,
+            paginated['queryset'], many=True,
             context={'user_id': None, 'request': request},
         )
-        return CustomResponse(
-            response=serializer.data,
-        ).get_success_response()
+        return CustomResponse().paginated_response(
+            data=serializer.data,
+            pagination=paginated['pagination'],
+        )
 
 
 class PublicEventFeaturedAPI(APIView):
@@ -316,7 +318,7 @@ class PublicEventFeaturedAPI(APIView):
 
     Fully public listing of featured events (``is_featured=True``), same
     lifecycle/status/date/type filters as PublicEventListAPI. No authentication,
-    no campus/IG scope gating. Unpaginated, matching PublicEventListAPI.
+    no campus/IG scope gating. Paginated, matching PublicEventListAPI.
     """
     permission_classes = []
 
@@ -328,22 +330,20 @@ class PublicEventFeaturedAPI(APIView):
     def get(self, request):
         events = _fully_public_events_queryset(request, featured_only=True)
 
-        events = CommonUtils.get_paginated_queryset(
+        paginated = CommonUtils.get_paginated_queryset(
             events, request,
             search_fields=['title', 'description', 'venue_city'],
             sort_fields=_PUBLIC_EVENT_SORT_FIELDS,
-            is_pagination=False,
         )
-        # Unpaginated by design, but still bounded — see PublicEventListAPI.
-        events = events[:MAX_PAGE_SIZE]
 
         serializer = EventListItemSerializer(
-            events, many=True,
+            paginated['queryset'], many=True,
             context={'user_id': None, 'request': request},
         )
-        return CustomResponse(
-            response=serializer.data,
-        ).get_success_response()
+        return CustomResponse().paginated_response(
+            data=serializer.data,
+            pagination=paginated['pagination'],
+        )
 
 
 class PublicEventDetailAPI(APIView):

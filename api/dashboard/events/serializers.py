@@ -453,6 +453,14 @@ class PublicEventDetailSerializer(EventDetailSerializer):
             if f not in ('created_by', 'updated_by', 'co_owners')
         ]
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if not data.get('viewer_can_access_registration'):
+            data['registration_url'] = None
+            if isinstance(data.get('venue'), dict):
+                data['venue']['venue_online_link'] = None
+        return data
+
 
 # ─────────────────────────────────────────────────────────────
 # EVENT WRITE  (create / update input)
