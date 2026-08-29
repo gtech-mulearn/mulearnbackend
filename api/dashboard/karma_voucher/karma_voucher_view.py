@@ -246,7 +246,8 @@ class VoucherLogAPI(APIView):
         responses={200: VoucherLogSerializer},
     )
     def get(self, request):
-        voucher_queryset = VoucherLog.objects.all()
+        voucher_queryset = VoucherLog.objects.select_related(
+            'user', 'task', 'created_by', 'updated_by')
         paginated_queryset = CommonUtils.get_paginated_queryset(
             voucher_queryset, request,
             search_fields=["user__full_name",
