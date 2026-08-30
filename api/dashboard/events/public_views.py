@@ -105,7 +105,8 @@ def _public_events_queryset(request, *, featured_only=False):
     events = get_live_events().select_related('category', 'organiser_ig', 'organiser_org').filter(scope_filter)
 
     events = events.filter(
-        status__in=[Event.Status.PUBLISHED, Event.Status.ONGOING]
+        status__in=[Event.Status.PUBLISHED, Event.Status.ONGOING],
+        end_datetime__gte=timezone.now(),
     )
 
     if featured_only:
@@ -674,6 +675,7 @@ class EventTaskPublicListAPI(APIView):
             .filter(
                 scope_filter,
                 status__in=[Event.Status.PUBLISHED, Event.Status.ONGOING],
+                end_datetime__gte=timezone.now(),
             )
             .values_list('id', flat=True)
         )

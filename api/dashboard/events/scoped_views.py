@@ -2,6 +2,7 @@
 Scoped Event Feed views.
 Each view returns published events filtered to a specific entity scope.
 """
+from django.utils import timezone
 from rest_framework.views import APIView
 
 from db.events import Event
@@ -47,6 +48,7 @@ class IGEventListAPI(APIView):
         events = get_live_events().select_related('category', 'organiser_ig', 'organiser_org').filter(
             Q(organiser_ig_id=ig_id) | Q(scope_ig_id=ig_id),
             status__in=PUBLISHED_STATUSES,
+            end_datetime__gte=timezone.now(),
         )
 
         paginated = CommonUtils.get_paginated_queryset(
@@ -93,6 +95,7 @@ class ClusterEventListAPI(APIView):
         events = get_live_events().select_related('category', 'organiser_ig', 'organiser_org').filter(
             organiser_ig_id__in=ig_ids,
             status__in=PUBLISHED_STATUSES,
+            end_datetime__gte=timezone.now(),
         )
 
         paginated = CommonUtils.get_paginated_queryset(
@@ -132,6 +135,7 @@ class CampusEventListAPI(APIView):
         events = get_live_events().select_related('category', 'organiser_ig', 'organiser_org').filter(
             Q(scope_org_id=campus_id) | Q(organiser_org_id=campus_id),
             status__in=PUBLISHED_STATUSES,
+            end_datetime__gte=timezone.now(),
         )
 
         # Optional cluster filter
@@ -174,6 +178,7 @@ class CampusIGEventListAPI(APIView):
         events = get_live_events().select_related('category', 'organiser_ig', 'organiser_org').filter(
             organiser_ci_id=campus_ig_id,
             status__in=PUBLISHED_STATUSES,
+            end_datetime__gte=timezone.now(),
         )
 
         paginated = CommonUtils.get_paginated_queryset(
@@ -212,6 +217,7 @@ class CompanyEventListAPI(APIView):
             organiser_org_id=company_id,
             organiser_type=Event.OrganiserType.COMPANY,
             status__in=PUBLISHED_STATUSES,
+            end_datetime__gte=timezone.now(),
         )
 
         paginated = CommonUtils.get_paginated_queryset(
