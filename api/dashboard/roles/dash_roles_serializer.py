@@ -20,7 +20,7 @@ class UserRoleLinkManagementSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["id", "muid", "full_name"]
+        fields = ["id", "muid", "full_name", "profile_pic"]
 
 
 class RoleAssignmentSerializer(serializers.Serializer):

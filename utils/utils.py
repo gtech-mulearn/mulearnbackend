@@ -95,7 +95,13 @@ class CommonUtils:
                 if sort_by.startswith("-"):
                     sort_field_name = f"-{sort_field_name}"
 
-                queryset = queryset.order_by(sort_field_name)
+                # "pk" tiebreak: the requested field alone is rarely unique
+                # (e.g. many rows share a start_datetime or a status), so
+                # without it, rows tied on sort_field_name can be returned in
+                # a different relative order between requests, causing
+                # offset-paginated clients to skip or see duplicate rows
+                # across pages.
+                queryset = queryset.order_by(sort_field_name, "pk")
         if is_pagination:
             paginator = Paginator(queryset, per_page)
             try:
