@@ -178,12 +178,10 @@ class UserRoleSearchAPI(APIView):
             paginated_queryset.get("queryset"), many=True
         ).data
 
-        return CustomResponse(
-            response={
-                "data": serialized_data,
-                "pagination": paginated_queryset.get("pagination"),
-            }
-        ).get_success_response()
+        return CustomResponse().paginated_response(
+            data=serialized_data,
+            pagination=paginated_queryset.get("pagination"),
+        )
 
 
 class UserRoleLinkManagement(APIView):
@@ -217,12 +215,10 @@ class UserRoleLinkManagement(APIView):
         serialized_users = dash_roles_serializer.UserRoleLinkManagementSerializer(
             paginated_queryset.get("queryset"), many=True
         )
-        return CustomResponse(
-            response={
-                "data": serialized_users.data,
-                "pagination": paginated_queryset.get("pagination"),
-            }
-        ).get_success_response()
+        return CustomResponse().paginated_response(
+            data=serialized_users.data,
+            pagination=paginated_queryset.get("pagination"),
+        )
 
     @role_required([RoleType.ADMIN.value])
     @extend_schema(
@@ -249,12 +245,10 @@ class UserRoleLinkManagement(APIView):
         serialized_users = dash_roles_serializer.UserRoleLinkManagementSerializer(
             paginated_queryset.get("queryset"), many=True
         )
-        return CustomResponse(
-            response={
-                "data": serialized_users.data,
-                "pagination": paginated_queryset.get("pagination"),
-            }
-        ).get_success_response()
+        return CustomResponse().paginated_response(
+            data=serialized_users.data,
+            pagination=paginated_queryset.get("pagination"),
+        )
 
     @role_required([RoleType.ADMIN.value])
     @extend_schema(
