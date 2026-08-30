@@ -24,6 +24,7 @@ from .serializers import (
     EventDetailSerializer,
     PublicEventDetailSerializer,
     get_live_events,
+    get_active_events,
     EventCalendarItemSerializer,
 )
 from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
@@ -102,12 +103,7 @@ def _public_events_queryset(request, *, featured_only=False):
     user_id = _get_viewer_id(request)
 
     scope_filter = _build_scope_filter(user_id)
-    events = get_live_events().select_related('category', 'organiser_ig', 'organiser_org').filter(scope_filter)
-
-    events = events.filter(
-        status__in=[Event.Status.PUBLISHED, Event.Status.ONGOING],
-        end_datetime__gte=timezone.now(),
-    )
+    events = get_active_events().select_related('category', 'organiser_ig', 'organiser_org').filter(scope_filter)
 
     if featured_only:
         events = events.filter(is_featured=True)
@@ -191,16 +187,6 @@ class EventListAPI(APIView):
         )
 
 
-# Lifecycle statuses exposed on every fully-public (unauthenticated) events
-# endpoint — list, featured, and detail. Keep this the single source of truth
-# so the endpoints can't silently diverge on what "public" means.
-# NOTE: COMPLETED is intentionally not here — public endpoints never return
-# events whose end_datetime has already passed (see the end_datetime__gte
-# filter below), so a completed event can never be visible regardless of
-# lifecycle status.
-PUBLIC_EVENT_STATUSES = [Event.Status.PUBLISHED, Event.Status.ONGOING]
-
-
 def _fully_public_events_queryset(request, *, featured_only=False):
     """
     Fully public queryset: no authentication and no campus/IG scope gating
@@ -215,11 +201,8 @@ def _fully_public_events_queryset(request, *, featured_only=False):
     params = request.query_params
     now = timezone.now()
 
-    events = get_live_events().select_related(
+    events = get_active_events().select_related(
         'category', 'organiser_ig', 'organiser_org'
-    ).filter(
-        status__in=PUBLIC_EVENT_STATUSES,
-        end_datetime__gte=now,
     )
 
     # ── status filter — repeated params (?status=a&status=b) and/or
@@ -371,12 +354,10 @@ class PublicEventDetailAPI(APIView):
         responses={200: PublicEventDetailSerializer},
     )
     def get(self, request, event_id):
-        event = get_live_events().select_related(
+        event = get_active_events().select_related(
             'category', 'organiser_ig', 'organiser_org', 'scope_org', 'scope_ig',
         ).filter(
             id=event_id,
-            status__in=PUBLIC_EVENT_STATUSES,
-            end_datetime__gte=timezone.now(),
         ).first()
         if not event:
             return CustomResponse(
@@ -671,12 +652,8 @@ class EventTaskPublicListAPI(APIView):
         scope_filter = _build_scope_filter(user_id)
 
         accessible_event_ids = (
-            get_live_events()
-            .filter(
-                scope_filter,
-                status__in=[Event.Status.PUBLISHED, Event.Status.ONGOING],
-                end_datetime__gte=timezone.now(),
-            )
+            get_active_events()
+            .filter(scope_filter)
             .values_list('id', flat=True)
         )
 

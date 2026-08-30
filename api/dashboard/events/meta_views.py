@@ -50,15 +50,12 @@ class LinkableEventsAPI(APIView):
     )
     def get(self, request):
         from api.dashboard.events.public_views import _get_viewer_id, _build_scope_filter
-        from api.dashboard.events.serializers import get_live_events
+        from api.dashboard.events.serializers import get_active_events
 
         viewer_id = _get_viewer_id(request)
         scope_filter = _build_scope_filter(viewer_id)
 
-        events = get_live_events().filter(
-            scope_filter,
-            status__in=[Event.Status.PUBLISHED, Event.Status.ONGOING],
-        )
+        events = get_active_events().filter(scope_filter)
 
         search = request.query_params.get("search")
         if search:
