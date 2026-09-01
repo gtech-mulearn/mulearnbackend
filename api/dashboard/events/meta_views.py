@@ -358,7 +358,7 @@ class EventTypesScopesAPI(APIView):
             general_message='Event types and scopes retrieved.',
             response={
                 "event_type": [
-                    {"value": v, "label": l}
+                    {"value": v, "label": l.replace("_", " ")}
                     for v, l in zip(Event.EventType.values, Event.EventType.labels)
                 ],
                 "event_scope": [
