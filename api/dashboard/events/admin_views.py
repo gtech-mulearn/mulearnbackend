@@ -3,6 +3,7 @@ Admin Events API views.
 All endpoints require the 'Admins' role.
 """
 from rest_framework.views import APIView
+from django.utils import timezone
 
 from db.events import Event, EventLog
 from db.user import User
@@ -55,6 +56,10 @@ class AdminEventListAPI(APIView):
         # now resolves it to completed/ongoing rather than publishing something
         # that already happened, so an approver has to be able to see it. The
         # old exclusion left those events permanently unreachable.
+
+        events = events.exclude(
+            status__in=PENDING_STATUSES, start_datetime__lt=timezone.now()
+        )
 
         params = request.query_params
         if status := params.get('status'):
