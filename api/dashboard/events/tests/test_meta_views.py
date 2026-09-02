@@ -9,8 +9,8 @@ def api_client():
 @pytest.mark.django_db
 def test_event_types_scopes_api(api_client):
     """
-    Verify that EventTypesScopesAPI replaces underscores with spaces in
-    event_type labels, leaves values intact, and returns HTTP 200.
+    Verify that EventTypesScopesAPI returns valid event_type labels without underscores,
+    leaves values intact, and returns HTTP 200.
     """
     resp = api_client.get("/api/v1/dashboard/events/meta/event-type-scope/")
     
@@ -36,6 +36,6 @@ def test_event_types_scopes_api(api_client):
         # Labels should not contain underscores
         assert "_" not in lbl, f"Label {lbl} should not contain underscores"
         
-        # Label should exactly match original, but with underscores replaced
-        expected_label = original_type_map[val].replace("_", " ")
+        # Label should exactly match original
+        expected_label = original_type_map[val]
         assert lbl == expected_label, f"Expected label '{expected_label}', got '{lbl}'"
