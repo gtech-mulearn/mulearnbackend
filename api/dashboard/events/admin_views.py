@@ -3,6 +3,7 @@ Admin Events API views.
 All endpoints require the 'Admins' role.
 """
 from rest_framework.views import APIView
+from django.utils import timezone
 
 from db.events import Event, EventLog
 from db.user import User
@@ -49,6 +50,10 @@ class AdminEventListAPI(APIView):
     )
     def get(self, request):
         events = Event.objects.all().select_related('category', 'organiser_ig', 'organiser_org')
+
+        events = events.exclude(
+            status__in=PENDING_STATUSES, start_datetime__lt=timezone.now()
+        )
 
         params = request.query_params
         if status := params.get('status'):
