@@ -92,6 +92,7 @@ class VoucherLogCSVSerializer(serializers.ModelSerializer):
 class VoucherLogSerializer(serializers.ModelSerializer):
     user = serializers.CharField(source='user.full_name')
     task = serializers.CharField(source='task.title')
+    hashtag = serializers.CharField(source='task.hashtag')
     created_by = serializers.CharField(source='created_by.full_name')
     updated_by = serializers.CharField(source='updated_by.full_name')
     muid = serializers.CharField(source="user.muid")
@@ -103,6 +104,7 @@ class VoucherLogSerializer(serializers.ModelSerializer):
             "code",
             "user",
             "task",
+            "hashtag",
             "karma",
             "month",
             "week",
@@ -170,9 +172,13 @@ class VoucherLogCreateSerializer(serializers.ModelSerializer):
         return user.id
 
     def validate_task(self, value):
-        if not TaskList.objects.filter(id=value).exists():
+        task_ids = list(TaskList.objects.filter(hashtag=value).values_list('id', flat=True)[:2])
+        if not task_ids:
             raise serializers.ValidationError("Enter a valid task")
-        return value
+        if len(task_ids) > 1:
+            raise serializers.ValidationError(
+                "Multiple tasks share this hashtag; contact an admin to resolve the duplicate.")
+        return task_ids[0]
 
     def validate_karma(self, value):
         if value <= 0:
@@ -213,7 +219,7 @@ class VoucherLogCreateSerializer(serializers.ModelSerializer):
 
 class VoucherLogUpdateSerializer(serializers.ModelSerializer):
     new_user = serializers.CharField(required=False)
-    new_task = serializers.CharField(required=False)
+    hashtag = serializers.CharField(required=False)
     new_karma = serializers.IntegerField(required=False)
     new_month = serializers.CharField(required=False)
     new_week = serializers.CharField(required=False)
@@ -222,7 +228,7 @@ class VoucherLogUpdateSerializer(serializers.ModelSerializer):
         model = VoucherLog
         fields = [
             "new_user",
-            "new_task",
+            "hashtag",
             "new_karma",
             "new_month",
             "new_week",
@@ -230,7 +236,7 @@ class VoucherLogUpdateSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         instance.user_id = validated_data.get('new_user', instance.user_id)
-        instance.task_id = validated_data.get('new_task', instance.task_id)
+        instance.task_id = validated_data.get('hashtag', instance.task_id)
         instance.karma = validated_data.get('new_karma', instance.karma)
         instance.month = validated_data.get('new_month', instance.month)
         instance.week = validated_data.get('new_week', instance.week)
@@ -245,11 +251,15 @@ class VoucherLogUpdateSerializer(serializers.ModelSerializer):
         if not user:
             raise serializers.ValidationError("Enter a valid user")
         return user.id
-    
-    def validate_new_task(self, value):
-        if not TaskList.objects.filter(id=value).exists():
+
+    def validate_hashtag(self, value):
+        task_ids = list(TaskList.objects.filter(hashtag=value).values_list('id', flat=True)[:2])
+        if not task_ids:
             raise serializers.ValidationError("Enter a valid task")
-        return value
+        if len(task_ids) > 1:
+            raise serializers.ValidationError(
+                "Multiple tasks share this hashtag; contact an admin to resolve the duplicate.")
+        return task_ids[0]
     
     def validate_new_karma(self, value):
         if value <= 0:
@@ -271,7 +281,7 @@ class VoucherLogUpdateSerializer(serializers.ModelSerializer):
     def validate(self, data):
         # Use existing instance values if new ones are not provided
         user_id = data.get('new_user', self.instance.user_id)
-        task_id = data.get('new_task', self.instance.task_id)
+        task_id = data.get('hashtag', self.instance.task_id)
         month = data.get('new_month', self.instance.month)
         week = data.get('new_week', self.instance.week)
         current_year = DateTimeUtils.get_current_utc_time().year

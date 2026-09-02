@@ -4,6 +4,7 @@ All view modules import from this file.
 """
 import uuid
 
+from django.utils import timezone
 from django.utils.text import slugify
 from rest_framework import serializers
 
@@ -438,6 +439,30 @@ class EventDetailSerializer(serializers.ModelSerializer):
         return None
 
 
+class PublicEventDetailSerializer(EventDetailSerializer):
+    """
+    Detail serializer for fully anonymous callers (GET /api/v1/public/events/<id>/).
+
+    Drops ``created_by``/``updated_by``/``co_owners`` from EventDetailSerializer —
+    those expose internal user PII (id, full_name, muid, profile_pic) that has
+    always required a valid JWT to reach via the dashboard EventDetailAPI.
+    """
+
+    class Meta(EventDetailSerializer.Meta):
+        fields = [
+            f for f in EventDetailSerializer.Meta.fields
+            if f not in ('created_by', 'updated_by', 'co_owners')
+        ]
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if not data.get('viewer_can_access_registration'):
+            data['registration_url'] = None
+            if isinstance(data.get('venue'), dict):
+                data['venue']['venue_online_link'] = None
+        return data
+
+
 # ─────────────────────────────────────────────────────────────
 # EVENT WRITE  (create / update input)
 # ─────────────────────────────────────────────────────────────
@@ -711,6 +736,23 @@ class EventLogSerializer(serializers.ModelSerializer):
 def get_live_events():
     """Base queryset: non-deleted events."""
     return Event.objects.filter(deleted_at__isnull=True)
+
+
+def get_active_events():
+    """
+    Non-deleted events that are published/ongoing AND haven't ended yet.
+
+    Use this — not get_live_events() plus a hand-written status/end_datetime
+    filter — for any "browse events" feed. The daily status-transition cron
+    (mu_celery/event_cron.py) only flips ONGOING -> COMPLETED once a day, so
+    `status` alone can lag up to ~24h behind an event's real end time; every
+    feed that should never show an ended event needs the live end_datetime
+    check too, not just the status filter.
+    """
+    return get_live_events().filter(
+        status__in=[Event.Status.PUBLISHED, Event.Status.ONGOING],
+        end_datetime__gte=timezone.now(),
+    )
 
 
 def can_manage_event(user_id, event):
