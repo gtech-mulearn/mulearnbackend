@@ -56,12 +56,12 @@ class Event(models.Model):
         CONFERENCE      = 'CONFERENCE',      'Conference'
         COMPETITION     = 'COMPETITION',     'Competition'
         IDEATHON        = 'IDEATHON',        'Ideathon'
-        CULTURAL_EVENT  = 'CULTURAL_EVENT',  'Cultural_Event'
-        SPORTS_EVENT    = 'SPORTS_EVENT',    'Sports_Event'
-        COMMUNITY_EVENT = 'COMMUNITY_EVENT', 'Community_Event'
+        CULTURAL_EVENT  = 'CULTURAL_EVENT',  'Cultural Event'
+        SPORTS_EVENT    = 'SPORTS_EVENT',    'Sports Event'
+        COMMUNITY_EVENT = 'COMMUNITY_EVENT', 'Community Event'
         EXPO            = 'EXPO',            'Expo'
-        NETWORKING_EVENT= 'NETWORKING_EVENT','Networking_Event'
-        TECH_TALK       = 'TECH_TALK',       'Tech_Talk'
+        NETWORKING_EVENT= 'NETWORKING_EVENT','Networking Event'
+        TECH_TALK       = 'TECH_TALK',       'Tech Talk'
         OTHERS          = 'OTHERS',          'Others'
 
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
