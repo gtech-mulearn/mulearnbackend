@@ -10,59 +10,65 @@ from .organization import Organization
 
 class Event(models.Model):
 
+    # NOTE: these values must match the MySQL ENUM definitions exactly.
+    # The columns use a case-insensitive collation, so a casing mismatch is
+    # accepted on write and read back lowercased — every Python-side
+    # comparison against the constant then silently goes false.
+    # api/dashboard/events/tests/test_enum_db_parity.py guards this.
     class Status(models.TextChoices):
-        DRAFT = 'DRAFT', 'Draft'
-        PENDING_CAMPUS_APPROVAL = 'PENDING_CAMPUS_APPROVAL', 'Pending_Campus_Approval'
-        PENDING_APPROVAL = 'PENDING_APPROVAL', 'Pending_Approval'
-        PENDING_MENTOR_APPROVAL = 'PENDING_MENTOR_APPROVAL', 'Pending_Mentor_Approval'
-        PUBLISHED = 'PUBLISHED', 'Published'
-        ONGOING = 'ONGOING', 'Ongoing'
-        COMPLETED = 'COMPLETED', 'Completed'
-        CANCELLED = 'CANCELLED', 'Cancelled'
-        REJECTED = 'REJECTED', 'Rejected'
+        DRAFT = 'draft', 'Draft'
+        PENDING_CAMPUS_APPROVAL = 'pending_campus_approval', 'Pending Campus Approval'
+        PENDING_APPROVAL = 'pending_approval', 'Pending Approval'
+        PENDING_MENTOR_APPROVAL = 'pending_mentor_approval', 'Pending Mentor Approval'
+        PUBLISHED = 'published', 'Published'
+        ONGOING = 'ongoing', 'Ongoing'
+        COMPLETED = 'completed', 'Completed'
+        CANCELLED = 'cancelled', 'Cancelled'
+        REJECTED = 'rejected', 'Rejected'
 
     class VenueType(models.TextChoices):
-        PHYSICAL = 'PHYSICAL', 'Physical'
-        ONLINE = 'ONLINE', 'Online'
-        HYBRID = 'HYBRID', 'Hybrid'
+        PHYSICAL = 'physical', 'Physical'
+        ONLINE = 'online', 'Online'
+        HYBRID = 'hybrid', 'Hybrid'
 
     class Scope(models.TextChoices):
-        GLOBAL = 'GLOBAL', 'Global'
-        CAMPUS = 'CAMPUS', 'Campus'
-        IG = 'IG', 'Interest Group'
-        CAMPUS_IG = 'CAMPUS_IG', 'Campus_IG'
-        COMPANY = 'COMPANY', 'Company'
+        GLOBAL = 'global', 'Global'
+        CAMPUS = 'campus', 'Campus'
+        IG = 'ig', 'Interest Group'
+        CAMPUS_IG = 'campus_ig', 'Campus IG'
+        COMPANY = 'company', 'Company'
 
     class OrganiserType(models.TextChoices):
-        GLOBAL_IG = 'GLOBAL_IG', 'Global_IG'
-        CAMPUS_IG = 'CAMPUS_IG', 'Campus_IG'
-        CAMPUS = 'CAMPUS', 'Campus'
-        COMPANY = 'COMPANY', 'Company'
-        ADMIN = 'ADMIN', 'Admin'
+        GLOBAL_IG = 'global_ig', 'Global IG'
+        CAMPUS_IG = 'campus_ig', 'Campus IG'
+        CAMPUS = 'campus', 'Campus'
+        COMPANY = 'company', 'Company'
+        ADMIN = 'admin', 'Admin'
+        PARTNER = 'partner', 'Partner'
 
     class EventScope(models.TextChoices):
-        MAKER = 'MAKER', 'Maker'
-        CODER = 'CODER', 'Coder'
-        MANAGER = 'MANAGER', 'Manager'
-        CREATIVE = 'CREATIVE', 'Creative'
+        MAKER = 'maker', 'Maker'
+        CODER = 'coder', 'Coder'
+        MANAGER = 'manager', 'Manager'
+        CREATIVE = 'creative', 'Creative'
 
     class EventType(models.TextChoices):
-        HACKATHON       = 'HACKATHON',       'Hackathon'
-        WORKSHOP        = 'WORKSHOP',        'Workshop'
-        WEBINAR         = 'WEBINAR',         'Webinar'
-        SEMINAR         = 'SEMINAR',         'Seminar'
-        BOOTCAMP        = 'BOOTCAMP',        'Bootcamp'
-        MEETUP          = 'MEETUP',          'Meetup'
-        CONFERENCE      = 'CONFERENCE',      'Conference'
-        COMPETITION     = 'COMPETITION',     'Competition'
-        IDEATHON        = 'IDEATHON',        'Ideathon'
-        CULTURAL_EVENT  = 'CULTURAL_EVENT',  'Cultural Event'
-        SPORTS_EVENT    = 'SPORTS_EVENT',    'Sports Event'
-        COMMUNITY_EVENT = 'COMMUNITY_EVENT', 'Community Event'
-        EXPO            = 'EXPO',            'Expo'
-        NETWORKING_EVENT= 'NETWORKING_EVENT','Networking Event'
-        TECH_TALK       = 'TECH_TALK',       'Tech Talk'
-        OTHERS          = 'OTHERS',          'Others'
+        HACKATHON       = 'hackathon',       'Hackathon'
+        WORKSHOP        = 'workshop',        'Workshop'
+        WEBINAR         = 'webinar',         'Webinar'
+        SEMINAR         = 'seminar',         'Seminar'
+        BOOTCAMP        = 'bootcamp',        'Bootcamp'
+        MEETUP          = 'meetup',          'Meetup'
+        CONFERENCE      = 'conference',      'Conference'
+        COMPETITION     = 'competition',     'Competition'
+        IDEATHON        = 'ideathon',        'Ideathon'
+        CULTURAL_EVENT  = 'cultural_event',  'Cultural Event'
+        SPORTS_EVENT    = 'sports_event',    'Sports Event'
+        COMMUNITY_EVENT = 'community_event', 'Community Event'
+        EXPO            = 'expo',            'Expo'
+        NETWORKING_EVENT= 'networking_event','Networking Event'
+        TECH_TALK       = 'tech_talk',       'Tech Talk'
+        OTHERS          = 'others',          'Others'
 
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     title = models.CharField(max_length=200)
@@ -168,12 +174,13 @@ class EventConnection(models.Model):
     """
 
     class EntityType(models.TextChoices):
-        USER_TICKET = 'USER_TICKET', 'User_Ticket'
-        CO_OWNER = 'CO_OWNER', 'Co-owner'
-        COLLAB_IG = 'COLLAB_IG', 'Collaborating_IG'
-        COLLAB_CAMPUS = 'COLLAB_CAMPUS', 'Collaborating_Campus'
-        COLLAB_CAMPUS_IG = 'COLLAB_CAMPUS_IG', 'Collaborating_Campus_IG'
-        COLLAB_COMPANY = 'COLLAB_COMPANY', 'Collaborating_Company'
+        USER_TICKET = 'user_ticket', 'User Ticket'
+        CO_OWNER = 'co_owner', 'Co-owner'
+        COLLAB_IG = 'collab_ig', 'Collaborating IG'
+        COLLAB_CAMPUS = 'collab_campus', 'Collaborating Campus'
+        COLLAB_CAMPUS_IG = 'collab_campus_ig', 'Collaborating Campus IG'
+        COLLAB_COMPANY = 'collab_company', 'Collaborating Company'
+        COLLAB_PARTNER = 'collab_partner', 'Collaborating Partner'
 
     COLLABORATOR_TYPES = [
         EntityType.COLLAB_IG,
@@ -183,16 +190,16 @@ class EventConnection(models.Model):
     ]
 
     class InviteStatus(models.TextChoices):
-        PENDING = 'PENDING', 'Pending'
-        ACCEPTED = 'ACCEPTED', 'Accepted'
-        REJECTED = 'REJECTED', 'Rejected'
+        PENDING = 'pending', 'Pending'
+        ACCEPTED = 'accepted', 'Accepted'
+        REJECTED = 'rejected', 'Rejected'
 
     class TicketStatus(models.TextChoices):
-        PENDING = 'PENDING', 'Pending'
-        ACTIVE = 'ACTIVE', 'Active'
-        REMOVED = 'REMOVED', 'Removed'
-        REJECTED = 'REJECTED', 'Rejected'
-        WITHDRAWN = 'WITHDRAWN', 'Withdrawn'
+        PENDING = 'pending', 'Pending'
+        ACTIVE = 'active', 'Active'
+        REMOVED = 'removed', 'Removed'
+        REJECTED = 'rejected', 'Rejected'
+        WITHDRAWN = 'withdrawn', 'Withdrawn'
 
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     event = models.ForeignKey(
