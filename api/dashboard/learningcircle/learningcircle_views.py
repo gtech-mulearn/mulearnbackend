@@ -25,7 +25,7 @@ from api.notification.types import NotificationType
 from api.notification.audience import Audience
 from utils.karma import add_karma, remove_karma
 from utils.utils import CommonUtils
-from utils.permission import CustomizePermission, JWTUtils
+from utils.permission import CustomizePermission, JWTUtils, OptionalAuthentication
 from utils.response import CustomResponse
 from utils.types import Lc
 from utils.utils import DateTimeUtils, generate_code
@@ -250,6 +250,8 @@ class LearningCircleMeetingInfoAPI(APIView):
 
 
 class LearningCircleMeetingListView(APIView):
+    authentication_classes = [OptionalAuthentication]
+
     @extend_schema(
         tags=['Dashboard - Learningcircle'],
         description="Retrieve Learning Circle Meeting List.",
