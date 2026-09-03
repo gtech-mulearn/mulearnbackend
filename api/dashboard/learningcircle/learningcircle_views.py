@@ -253,6 +253,7 @@ class LearningCircleMeetingListView(APIView):
         responses={200: CircleMeetupMinSerializer},
     )
     def get(self, request, circle_id: str):
+        user_id = JWTUtils.fetch_user_id(request) if JWTUtils.is_logged_in(request) else None
         learning_circle = LearningCircle.objects.filter(id=circle_id).first()
         if not learning_circle:
             return CustomResponse(
@@ -268,7 +269,7 @@ class LearningCircleMeetingListView(APIView):
             circle_meetings, request, search_fields=["title"]
         )
         serializer = CircleMeetupMinSerializer(
-            paginated_queryset.get("queryset"), many=True
+            paginated_queryset.get("queryset"), many=True, context={"user_id": user_id}
         )
         return CustomResponse().paginated_response(
             data=serializer.data, pagination=paginated_queryset.get("pagination")
