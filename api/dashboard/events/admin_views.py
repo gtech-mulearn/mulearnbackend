@@ -3,7 +3,6 @@ Admin Events API views.
 All endpoints require the 'Admins' role.
 """
 from rest_framework.views import APIView
-from django.utils import timezone
 
 from db.events import Event, EventLog
 from db.user import User
@@ -16,6 +15,7 @@ from api.notification.broadcast_utils import BroadcastUtils
 
 from .serializers import EventListItemSerializer, EventDetailSerializer, get_live_events
 from .event_logger import log_event_action
+from .publish_policy import resolve_terminal_status, should_announce
 from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
 from rest_framework import serializers as s
 
@@ -51,9 +51,10 @@ class AdminEventListAPI(APIView):
     def get(self, request):
         events = Event.objects.all().select_related('category', 'organiser_ig', 'organiser_org')
 
-        events = events.exclude(
-            status__in=PENDING_STATUSES, start_datetime__lt=timezone.now()
-        )
+        # Past-dated pending events are deliberately NOT hidden: approving one
+        # now resolves it to completed/ongoing rather than publishing something
+        # that already happened, so an approver has to be able to see it. The
+        # old exclusion left those events permanently unreachable.
 
         params = request.query_params
         if status := params.get('status'):
@@ -125,14 +126,16 @@ class AdminEventApproveAPI(APIView):
 
         old_status = event.status
         new_status = APPROVAL_TRANSITIONS[event.status]
-        # Campus events scoped to their own campus have no admin stage —
-        # campus-level approval publishes them directly.
+        # Campus events have no admin stage at any scope — campus-level
+        # approval publishes them directly.
         if (
             old_status == Event.Status.PENDING_CAMPUS_APPROVAL
             and event.organiser_type == Event.OrganiserType.CAMPUS
-            and event.scope == Event.Scope.CAMPUS
         ):
             new_status = Event.Status.PUBLISHED
+        # Settle against the clock so an event whose date passed during review
+        # is recorded as completed rather than published into the past.
+        new_status = resolve_terminal_status(event, new_status)
         event.status = new_status
         event.updated_by_id = user_id
         event.save()
@@ -148,7 +151,16 @@ class AdminEventApproveAPI(APIView):
         actor = User.objects.filter(id=user_id).first()
         creator = event.created_by
         if creator and actor:
-            if new_status == Event.Status.PUBLISHED:
+            if new_status == Event.Status.COMPLETED:
+                NotificationUtils.insert_notification(
+                    user=creator,
+                    title='Event Recorded',
+                    description=f'Your past event "{event.title}" has been approved and is now on record.',
+                    button='View',
+                    url=f'/events/{event.id}/',
+                    created_by=actor,
+                )
+            elif new_status in (Event.Status.PUBLISHED, Event.Status.ONGOING):
                 NotificationUtils.insert_notification(
                     user=creator,
                     title='Event Published',
@@ -167,8 +179,8 @@ class AdminEventApproveAPI(APIView):
                     created_by=actor,
                 )
 
-        # Fire audience broadcast when the event reaches PUBLISHED
-        if new_status == Event.Status.PUBLISHED and actor:
+        # Announce only events an audience can still attend
+        if should_announce(new_status) and actor:
             if event.organiser_type == Event.OrganiserType.CAMPUS_IG:
                 BroadcastUtils.create_broadcast(
                     title='New Event Published',

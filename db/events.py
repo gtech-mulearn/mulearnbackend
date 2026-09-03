@@ -10,6 +10,11 @@ from .organization import Organization
 
 class Event(models.Model):
 
+    # NOTE: these values must match the MySQL ENUM definitions exactly.
+    # The columns use a case-insensitive collation, so a casing mismatch is
+    # accepted on write and read back lowercased — every Python-side
+    # comparison against the constant then silently goes false.
+    # api/dashboard/events/tests/test_enum_db_parity.py guards this.
     class Status(models.TextChoices):
         DRAFT = 'draft', 'Draft'
         PENDING_CAMPUS_APPROVAL = 'pending_campus_approval', 'Pending Campus Approval'
@@ -39,6 +44,7 @@ class Event(models.Model):
         CAMPUS = 'campus', 'Campus'
         COMPANY = 'company', 'Company'
         ADMIN = 'admin', 'Admin'
+        PARTNER = 'partner', 'Partner'
 
     class EventScope(models.TextChoices):
         MAKER = 'maker', 'Maker'
@@ -174,6 +180,7 @@ class EventConnection(models.Model):
         COLLAB_CAMPUS = 'collab_campus', 'Collaborating Campus'
         COLLAB_CAMPUS_IG = 'collab_campus_ig', 'Collaborating Campus IG'
         COLLAB_COMPANY = 'collab_company', 'Collaborating Company'
+        COLLAB_PARTNER = 'collab_partner', 'Collaborating Partner'
 
     COLLABORATOR_TYPES = [
         EntityType.COLLAB_IG,
