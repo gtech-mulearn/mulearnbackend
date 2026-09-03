@@ -2,7 +2,9 @@
 Shared serializers for the Events system.
 All view modules import from this file.
 """
+import re
 import uuid
+from urllib.parse import urlparse
 
 from django.utils import timezone
 from django.utils.text import slugify
@@ -467,6 +469,31 @@ class PublicEventDetailSerializer(EventDetailSerializer):
 # EVENT WRITE  (create / update input)
 # ─────────────────────────────────────────────────────────────
 
+# A scheme, per RFC 3986, followed by the '//' of a hierarchical URL. The
+# '//' matters: without it 'localhost:3000/x' would read as scheme 'localhost'
+# and be waved through as complete when it is not.
+_URL_SCHEME_RE = re.compile(r'^[a-zA-Z][a-zA-Z0-9+.-]*://')
+
+
+def _require_full_url(value, example):
+    """Reject a link that is missing its scheme.
+
+    'mulearn.org/register' is the common slip: it stores fine, then renders
+    as a path relative to whatever page shows it, so the link is silently
+    dead. The value is returned untouched — the message says what to fix
+    rather than rewriting what someone typed.
+    """
+    if not value:
+        return value
+
+    candidate = value.strip()
+    if not _URL_SCHEME_RE.match(candidate) or not urlparse(candidate).netloc:
+        raise serializers.ValidationError(
+            f'Enter a full link starting with https:// (e.g. {example}).'
+        )
+    return value
+
+
 class EventWriteSerializer(serializers.ModelSerializer):
     """Input serializer for POST /manage/ and PUT/PATCH /manage/<id>/."""
 
@@ -512,23 +539,19 @@ class EventWriteSerializer(serializers.ModelSerializer):
             'event_type': {'required': False},
         }
 
+    def validate_registration_url(self, value):
+        return _require_full_url(value, 'https://mulearn.org/register')
+
+    def validate_venue_online_link(self, value):
+        return _require_full_url(value, 'https://meet.google.com/abc-defg-hij')
+
     def validate_venue_maps_url(self, value):
         """Ensure venue_maps_url is a valid Google Maps URL when provided."""
-        import re
-        from urllib.parse import urlparse
-
         if not value:
             return value
 
-        # Basic URL structure check
-        try:
-            parsed = urlparse(value)
-            if not parsed.scheme or not parsed.netloc:
-                raise serializers.ValidationError(
-                    'Enter a valid URL (e.g. https://maps.google.com/...).'
-                )
-        except Exception:
-            raise serializers.ValidationError('Enter a valid URL.')
+        _require_full_url(value, 'https://maps.google.com/...')
+        parsed = urlparse(value.strip())
 
         # Only accept recognised Google Maps hostnames
         # Allowed patterns:
