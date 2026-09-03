@@ -25,7 +25,7 @@ from api.notification.types import NotificationType
 from api.notification.audience import Audience
 from utils.karma import add_karma, remove_karma
 from utils.utils import CommonUtils
-from utils.permission import CustomizePermission, JWTUtils
+from utils.permission import CustomizePermission, JWTUtils, OptionalAuthentication
 from utils.response import CustomResponse
 from utils.types import Lc
 from utils.utils import DateTimeUtils, generate_code
@@ -250,12 +250,15 @@ class LearningCircleMeetingInfoAPI(APIView):
 
 
 class LearningCircleMeetingListView(APIView):
+    authentication_classes = [OptionalAuthentication]
+
     @extend_schema(
         tags=['Dashboard - Learningcircle'],
         description="Retrieve Learning Circle Meeting List.",
         responses={200: CircleMeetupMinSerializer},
     )
     def get(self, request, circle_id: str):
+        user_id = JWTUtils.fetch_user_id(request) if JWTUtils.is_logged_in(request) else None
         learning_circle = LearningCircle.objects.filter(id=circle_id).first()
         if not learning_circle:
             return CustomResponse(
@@ -271,7 +274,7 @@ class LearningCircleMeetingListView(APIView):
             circle_meetings, request, search_fields=["title"]
         )
         serializer = CircleMeetupMinSerializer(
-            paginated_queryset.get("queryset"), many=True
+            paginated_queryset.get("queryset"), many=True, context={"user_id": user_id}
         )
         return CustomResponse().paginated_response(
             data=serializer.data, pagination=paginated_queryset.get("pagination")
