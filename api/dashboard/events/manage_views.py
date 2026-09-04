@@ -104,6 +104,24 @@ def _get_user_company_org_ids(user_id, roles):
     return list(company_org_ids)
 
 
+def _is_active_campus_member(user_id, org_id):
+    """True if user_id has a non-alumni UserOrganizationLink to org_id.
+
+    A graduated user keeps their UserOrganizationLink row (graduation_year
+    stays on record) with is_alumni flipped to True by
+    mu_celery.alumni_cron.update_alumni_status_cron — that cron only updates
+    is_alumni, it does not revoke any role the user still holds. A stale
+    CampusLead-type role for a graduated user must not keep counting as
+    authority over that campus's events, so every campus-membership check
+    goes through here rather than a bare .exists().
+    """
+    from django.db.models import Q
+    from db.organization import UserOrganizationLink
+    return UserOrganizationLink.objects.filter(
+        user_id=user_id, org_id=org_id
+    ).filter(Q(is_alumni=False) | Q(is_alumni__isnull=True)).exists()
+
+
 def _validate_campus_event_ownership(user_id, roles, organiser_type, organiser_org_id):
     """Tenancy guard for Campus (campus-wide) events.
 
@@ -126,11 +144,7 @@ def _validate_campus_event_ownership(user_id, roles, organiser_type, organiser_o
     if not organiser_org_id:
         return 'A target campus is required for campus events.'
 
-    from db.organization import UserOrganizationLink
-    is_member = UserOrganizationLink.objects.filter(
-        user_id=user_id, org_id=organiser_org_id
-    ).exists()
-    if not is_member:
+    if not _is_active_campus_member(user_id, organiser_org_id):
         return 'You are not authorized to create events for this campus.'
     return None
 
@@ -149,12 +163,9 @@ def _resolve_publish_authority(user_id, roles, event):
     is_company_owner = False
 
     if event.organiser_type == Event.OrganiserType.CAMPUS:
-        from db.organization import UserOrganizationLink
         is_campus_authority = bool(
             CAMPUS_AUTHORITY_ROLES.intersection(roles)
-        ) and UserOrganizationLink.objects.filter(
-            user_id=user_id, org_id=event.organiser_org_id
-        ).exists()
+        ) and _is_active_campus_member(user_id, event.organiser_org_id)
     elif event.organiser_type == Event.OrganiserType.CAMPUS_IG:
         from db.user import MentorScopeGrant
         from api.dashboard.mentor.dash_mentor_helper import has_scope
@@ -1842,12 +1853,7 @@ class CampusEventApproveAPI(APIView):
 
         # Verify campus lead matches the campus of the event (event.scope_org_id)
         if RoleType.ADMIN.value not in roles:
-            from db.organization import UserOrganizationLink
-            is_member = UserOrganizationLink.objects.filter(
-                user_id=user_id,
-                org_id=event.scope_org_id
-            ).exists()
-            if not is_member:
+            if not _is_active_campus_member(user_id, event.scope_org_id):
                 return CustomResponse(general_message='You are not authorized to approve events for this campus.').get_failure_response()
 
         # A campus is the final authority on its own events at any scope, so
@@ -1942,12 +1948,7 @@ class CampusEventRejectAPI(APIView):
 
         # Verify campus lead matches the campus of the event (event.scope_org_id)
         if RoleType.ADMIN.value not in roles:
-            from db.organization import UserOrganizationLink
-            is_member = UserOrganizationLink.objects.filter(
-                user_id=user_id,
-                org_id=event.scope_org_id
-            ).exists()
-            if not is_member:
+            if not _is_active_campus_member(user_id, event.scope_org_id):
                 return CustomResponse(general_message='You are not authorized to reject events for this campus.').get_failure_response()
 
         reason = request.data.get('reason', '').strip()
