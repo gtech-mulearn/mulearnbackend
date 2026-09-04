@@ -256,6 +256,26 @@ def delete_stale_event_media(old_path: str | None, new_path: str | None) -> None
             pass
 
 
+def delete_event_media_paths(paths) -> None:
+    """Remove files this request wrote to disk that never ended up committed.
+
+    save_uploaded_event_image / fetch_event_image_from_url write to
+    MEDIA_ROOT before the caller has validated the rest of the payload or
+    saved the row, so a failure anywhere after that point (validation, a
+    permission check, a rolled-back transaction) must not leave the file
+    behind with nothing in the DB pointing at it.
+    """
+    for path in paths:
+        if not path or not path.startswith('events/'):
+            continue
+        full = os.path.join(settings.MEDIA_ROOT, path.replace('/', os.sep))
+        if os.path.isfile(full):
+            try:
+                os.remove(full)
+            except OSError:
+                pass
+
+
 def resolve_event_image_url(value: str | None, request=None) -> str | None:
     """
     Build an absolute URL for API responses.
@@ -290,12 +310,20 @@ def _querydict_to_plain_dict(data) -> dict:
     return out
 
 
-def merge_event_write_payload(request, *, partial: bool, event=None) -> tuple[dict | None, str | None]:
+def merge_event_write_payload(request, *, partial: bool, event=None) -> tuple[dict | None, list[str], str | None]:
     """
     Merge multipart/JSON body with resolved cover_image / banner_image paths.
-    Returns (payload_dict, error_message).
+    Returns (payload_dict, new_media_paths, error_message).
+
+    `new_media_paths` lists any cover_image/banner_image paths this call
+    wrote to disk (upload or remote fetch) — as opposed to a path merely
+    passed through unchanged. If the caller doesn't end up committing this
+    payload (validation fails, a permission check rejects it, the save
+    rolls back), it must pass these to delete_event_media_paths() so the
+    file doesn't orphan under MEDIA_ROOT with nothing in the DB pointing at it.
     """
     payload = _querydict_to_plain_dict(request.data)
+    new_media_paths: list[str] = []
 
     if 'tags' in payload and isinstance(payload['tags'], str):
         raw_tags = payload['tags'].strip()
@@ -305,7 +333,7 @@ def merge_event_write_payload(request, *, partial: bool, event=None) -> tuple[di
             try:
                 payload['tags'] = json.loads(raw_tags)
             except json.JSONDecodeError:
-                return None, 'Invalid JSON for tags'
+                return None, new_media_paths, 'Invalid JSON for tags'
 
     for field, subdir in (
         ('cover_image', 'covers'),
@@ -315,8 +343,9 @@ def merge_event_write_payload(request, *, partial: bool, event=None) -> tuple[di
         if upload:
             rel, err = save_uploaded_event_image(upload, subdir)
             if err:
-                return None, err
+                return None, new_media_paths, err
             payload[field] = rel
+            new_media_paths.append(rel)
             continue
 
         if partial:
@@ -351,9 +380,10 @@ def merge_event_write_payload(request, *, partial: bool, event=None) -> tuple[di
         if raw.lower().startswith(('http://', 'https://')):
             rel, err = fetch_event_image_from_url(raw, subdir)
             if err:
-                return None, err
+                return None, new_media_paths, err
             payload[field] = rel
+            new_media_paths.append(rel)
         else:
             payload[field] = raw
 
-    return payload, None
+    return payload, new_media_paths, None
