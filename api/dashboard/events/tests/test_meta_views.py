@@ -48,7 +48,9 @@ def test_event_types_scopes_api(api_client):
         # Label should exactly match original
         expected_label = original_type_map[val]
         assert lbl == expected_label, f"Expected label '{expected_label}', got '{lbl}'"
-        assert desc == expected_type_descriptions.get(val, "")
+        assert desc, f"Description for event_type '{val}' must not be empty."
+        if val in expected_type_descriptions:
+            assert desc == expected_type_descriptions[val]
     assert "event_scope" in data["response"]
     event_scopes = data["response"]["event_scope"]
     assert len(event_scopes) > 0
@@ -65,4 +67,6 @@ def test_event_types_scopes_api(api_client):
         desc = item.get("description")
         assert val in original_scope_map
         assert lbl == original_scope_map[val]
-        assert desc == expected_descriptions.get(val, "")
+        assert desc, f"Description for event_scope '{val}' must not be empty."
+        if val in expected_descriptions:
+            assert desc == expected_descriptions[val]
