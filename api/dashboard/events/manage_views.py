@@ -597,10 +597,6 @@ class ManageEventDetailAPI(APIView):
         if not serializer.is_valid():
             return CustomResponse(general_message=serializer.errors).get_failure_response()
 
-        serializer.save()
-        delete_stale_event_media(old_cover, event.cover_image)
-        delete_stale_event_media(old_banner, event.banner_image)
-
         # `status` isn't a writable field on EventWriteSerializer, so an edit
         # that reschedules a live event's dates leaves its lifecycle status
         # stale (e.g. a COMPLETED event moved back into the future would stay
@@ -618,24 +614,35 @@ class ManageEventDetailAPI(APIView):
         # way to relaunch an event live without renewed review (e.g. a
         # company owner rescheduling a completed event straight back to
         # PUBLISHED, bypassing the admin sign-off a fresh publish requires).
-        _TERMINAL_ORDER = {Event.Status.PUBLISHED: 0, Event.Status.ONGOING: 1, Event.Status.COMPLETED: 2}
-        if event.status in _TERMINAL_ORDER:
-            resettled_status = resolve_terminal_status(event, Event.Status.PUBLISHED)
-            if _TERMINAL_ORDER[resettled_status] < _TERMINAL_ORDER[event.status]:
-                is_campus_authority, is_campus_mentor, is_ig_mentor_assigned, is_company_owner = \
-                    _resolve_publish_authority(user_id, roles, event)
-                resettled_status = resolve_terminal_status(event, decide_publish_status(
-                    organiser_type=event.organiser_type,
-                    scope=event.scope,
-                    is_admin=RoleType.ADMIN.value in roles,
-                    is_campus_authority=is_campus_authority,
-                    is_campus_mentor=is_campus_mentor,
-                    is_ig_mentor_assigned=is_ig_mentor_assigned,
-                    is_company_owner=is_company_owner,
-                ))
-            if resettled_status != event.status:
-                event.status = resettled_status
-                event.save(update_fields=['status'])
+        #
+        # Both writes below must land together: if the resettle save failed
+        # after the field save committed, a revived event would sit at its
+        # old terminal status (e.g. COMPLETED) with future dates instead of
+        # either its old state or its correctly re-routed one.
+        with transaction.atomic():
+            serializer.save()
+
+            _TERMINAL_ORDER = {Event.Status.PUBLISHED: 0, Event.Status.ONGOING: 1, Event.Status.COMPLETED: 2}
+            if event.status in _TERMINAL_ORDER:
+                resettled_status = resolve_terminal_status(event, Event.Status.PUBLISHED)
+                if _TERMINAL_ORDER[resettled_status] < _TERMINAL_ORDER[event.status]:
+                    is_campus_authority, is_campus_mentor, is_ig_mentor_assigned, is_company_owner = \
+                        _resolve_publish_authority(user_id, roles, event)
+                    resettled_status = resolve_terminal_status(event, decide_publish_status(
+                        organiser_type=event.organiser_type,
+                        scope=event.scope,
+                        is_admin=RoleType.ADMIN.value in roles,
+                        is_campus_authority=is_campus_authority,
+                        is_campus_mentor=is_campus_mentor,
+                        is_ig_mentor_assigned=is_ig_mentor_assigned,
+                        is_company_owner=is_company_owner,
+                    ))
+                if resettled_status != event.status:
+                    event.status = resettled_status
+                    event.save(update_fields=['status'])
+
+        delete_stale_event_media(old_cover, event.cover_image)
+        delete_stale_event_media(old_banner, event.banner_image)
 
         return CustomResponse(
             general_message='Event updated successfully.',

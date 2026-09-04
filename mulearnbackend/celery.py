@@ -7,7 +7,11 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "mulearnbackend.settings")
 
 app = Celery(
     "mulearnbackend",
-    include=["mu_celery.alumni_cron", "mu_celery.org_aggregates_cron"],
+    include=[
+        "mu_celery.alumni_cron",
+        "mu_celery.org_aggregates_cron",
+        "mu_celery.learning_circle_aggregates_cron",
+    ],
 )
 
 # Using a string here means the worker doesn't have to serialize
