@@ -9,7 +9,6 @@ from types import SimpleNamespace
 from django.utils import timezone
 
 from db.events import Event
-from utils.types import RoleType
 from api.dashboard.events.publish_policy import (
     decide_publish_status,
     is_editable,
@@ -65,27 +64,26 @@ def test_admin_publishes_directly():
     assert decide_publish_status(
         organiser_type=Event.OrganiserType.COMPANY,
         scope=Event.Scope.GLOBAL,
-        roles=[RoleType.ADMIN.value],
         is_admin=True,
     ) == Event.Status.PUBLISHED
 
 
-def test_campus_lead_publishes_own_campus_event_directly():
+def test_campus_authority_for_this_campus_publishes_directly():
     assert decide_publish_status(
         organiser_type=Event.OrganiserType.CAMPUS,
         scope=Event.Scope.CAMPUS,
-        roles=[RoleType.CAMPUS_LEAD.value],
         is_admin=False,
+        is_campus_authority=True,
     ) == Event.Status.PUBLISHED
 
 
-def test_campus_lead_publishes_globally_scoped_campus_event_without_admin():
+def test_campus_authority_for_this_campus_publishes_globally_scoped_event_without_admin():
     """Campus is the final authority for its own events at any scope."""
     assert decide_publish_status(
         organiser_type=Event.OrganiserType.CAMPUS,
         scope=Event.Scope.GLOBAL,
-        roles=[RoleType.CAMPUS_LEAD.value],
         is_admin=False,
+        is_campus_authority=True,
     ) == Event.Status.PUBLISHED
 
 
@@ -93,25 +91,28 @@ def test_campus_member_without_lead_role_goes_to_campus_review():
     assert decide_publish_status(
         organiser_type=Event.OrganiserType.CAMPUS,
         scope=Event.Scope.CAMPUS,
-        roles=[RoleType.ENABLER.value],
         is_admin=False,
+        is_campus_authority=False,
     ) == Event.Status.PENDING_CAMPUS_APPROVAL
 
 
-def test_zonal_campus_lead_counts_as_campus_authority():
+def test_campus_authority_role_for_a_DIFFERENT_campus_does_not_publish():
+    """The security bug this guards: holding a campus-authority role
+    somewhere is not enough — the caller resolves is_campus_authority against
+    *this event's* organiser campus (see ManageEventPublishAPI.post), so a
+    lead of campus B passes False here for campus A's event."""
     assert decide_publish_status(
         organiser_type=Event.OrganiserType.CAMPUS,
         scope=Event.Scope.CAMPUS,
-        roles=[RoleType.ZONAL_CAMPUS_LEAD.value],
         is_admin=False,
-    ) == Event.Status.PUBLISHED
+        is_campus_authority=False,
+    ) == Event.Status.PENDING_CAMPUS_APPROVAL
 
 
 def test_campus_ig_event_by_campus_mentor_goes_to_campus_review():
     assert decide_publish_status(
         organiser_type=Event.OrganiserType.CAMPUS_IG,
         scope=Event.Scope.CAMPUS_IG,
-        roles=[RoleType.MENTOR.value],
         is_admin=False,
         is_campus_mentor=True,
     ) == Event.Status.PENDING_CAMPUS_APPROVAL
@@ -121,7 +122,6 @@ def test_campus_ig_event_by_non_mentor_goes_to_mentor_review():
     assert decide_publish_status(
         organiser_type=Event.OrganiserType.CAMPUS_IG,
         scope=Event.Scope.CAMPUS_IG,
-        roles=[RoleType.IG_LEAD.value],
         is_admin=False,
         is_campus_mentor=False,
     ) == Event.Status.PENDING_MENTOR_APPROVAL
@@ -131,7 +131,6 @@ def test_global_ig_event_by_assigned_ig_mentor_goes_to_admin_review():
     assert decide_publish_status(
         organiser_type=Event.OrganiserType.GLOBAL_IG,
         scope=Event.Scope.IG,
-        roles=[RoleType.MENTOR.value],
         is_admin=False,
         is_ig_mentor_assigned=True,
     ) == Event.Status.PENDING_APPROVAL
@@ -141,7 +140,6 @@ def test_global_ig_event_by_unassigned_user_goes_to_mentor_review():
     assert decide_publish_status(
         organiser_type=Event.OrganiserType.GLOBAL_IG,
         scope=Event.Scope.IG,
-        roles=[RoleType.IG_LEAD.value],
         is_admin=False,
         is_ig_mentor_assigned=False,
     ) == Event.Status.PENDING_MENTOR_APPROVAL
@@ -151,7 +149,6 @@ def test_company_event_by_owner_still_needs_admin_review():
     assert decide_publish_status(
         organiser_type=Event.OrganiserType.COMPANY,
         scope=Event.Scope.GLOBAL,
-        roles=[RoleType.COMPANY.value],
         is_admin=False,
         is_company_owner=True,
     ) == Event.Status.PENDING_APPROVAL
@@ -161,7 +158,6 @@ def test_company_event_by_non_owner_goes_to_mentor_review():
     assert decide_publish_status(
         organiser_type=Event.OrganiserType.COMPANY,
         scope=Event.Scope.GLOBAL,
-        roles=[RoleType.MENTOR.value],
         is_admin=False,
         is_company_owner=False,
     ) == Event.Status.PENDING_MENTOR_APPROVAL
@@ -171,7 +167,6 @@ def test_unrecognised_organiser_type_falls_back_to_admin_review():
     assert decide_publish_status(
         organiser_type="partner",
         scope=Event.Scope.GLOBAL,
-        roles=[RoleType.IG_LEAD.value],
         is_admin=False,
     ) == Event.Status.PENDING_APPROVAL
 
@@ -229,8 +224,8 @@ def test_campus_lead_publishing_a_past_event_gets_completed():
     routed = decide_publish_status(
         organiser_type=Event.OrganiserType.CAMPUS,
         scope=Event.Scope.CAMPUS,
-        roles=[RoleType.CAMPUS_LEAD.value],
         is_admin=False,
+        is_campus_authority=True,
     )
     assert resolve_terminal_status(event, routed) == Event.Status.COMPLETED
 
@@ -240,7 +235,7 @@ def test_campus_member_publishing_a_past_event_still_needs_campus_review():
     routed = decide_publish_status(
         organiser_type=Event.OrganiserType.CAMPUS,
         scope=Event.Scope.CAMPUS,
-        roles=[RoleType.ENABLER.value],
         is_admin=False,
+        is_campus_authority=False,
     )
     assert resolve_terminal_status(event, routed) == Event.Status.PENDING_CAMPUS_APPROVAL

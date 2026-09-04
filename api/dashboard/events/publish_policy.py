@@ -13,7 +13,9 @@ from utils.types import RoleType
 
 
 # Roles that speak for a campus. A campus is the final authority on its own
-# events, so any of these publishes a campus event outright.
+# events, so any of these publishes a campus event outright — but only for
+# the campus the role-holder actually belongs to (see is_campus_authority
+# below); the role name alone carries no campus binding.
 CAMPUS_AUTHORITY_ROLES = frozenset({
     RoleType.CAMPUS_LEAD.value,
     RoleType.ZONAL_CAMPUS_LEAD.value,
@@ -25,8 +27,8 @@ def decide_publish_status(
     *,
     organiser_type,
     scope,
-    roles,
     is_admin,
+    is_campus_authority=False,
     is_campus_mentor=False,
     is_ig_mentor_assigned=False,
     is_company_owner=False,
@@ -36,6 +38,10 @@ def decide_publish_status(
     `scope` is part of the context but is deliberately *not* consulted for
     campus events: a campus owns its events at every scope, so widening the
     audience no longer diverts them to admin review.
+
+    `is_campus_authority` must already be scoped to *this event's own*
+    campus by the caller (role held AND membership in event.organiser_org) —
+    a campus-authority role held for a different campus must not satisfy it.
     """
     if is_admin:
         return Event.Status.PUBLISHED
@@ -49,7 +55,7 @@ def decide_publish_status(
                 else Event.Status.PENDING_MENTOR_APPROVAL)
 
     if organiser_type == Event.OrganiserType.CAMPUS:
-        return (Event.Status.PUBLISHED if CAMPUS_AUTHORITY_ROLES.intersection(roles)
+        return (Event.Status.PUBLISHED if is_campus_authority
                 else Event.Status.PENDING_CAMPUS_APPROVAL)
 
     if organiser_type == Event.OrganiserType.COMPANY:
