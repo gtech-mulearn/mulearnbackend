@@ -497,6 +497,26 @@ def _require_full_url(value, example):
     return value
 
 
+# Any RFC 3986 scheme prefix, not just http(s) -- used only to tell "no scheme
+# at all" apart from "an actual (possibly unsafe) scheme" below.
+_ANY_SCHEME_RE = re.compile(r'^[a-zA-Z][a-zA-Z0-9+.-]*://')
+
+
+def _is_grandfatherable(value):
+    """Whether an unchanged stored value may skip re-validation.
+
+    Only a legacy value with *no* scheme at all (e.g. 'mulearn.org/register',
+    saved before this field was validated) is exempt -- it's inert, just a
+    dead link. A value that carries an actual non-http(s) scheme (e.g. a
+    stored 'javascript://...') must never be grandfathered: leaving it alone
+    because it "didn't change" is exactly how a stored-XSS link would survive
+    every future edit indefinitely.
+    """
+    if not value:
+        return True
+    return not _ANY_SCHEME_RE.match(value.strip())
+
+
 class EventWriteSerializer(serializers.ModelSerializer):
     """Input serializer for POST /manage/ and PUT/PATCH /manage/<id>/."""
 
@@ -547,13 +567,14 @@ class EventWriteSerializer(serializers.ModelSerializer):
         # fields the user never touched. Grandfather in a value that's
         # unchanged from what's already stored, so pre-existing bad data
         # doesn't block an edit to something unrelated -- only a value the
-        # user is actually setting gets held to the stricter format.
-        if self.instance and value == self.instance.registration_url:
+        # user is actually setting gets held to the stricter format. See
+        # _is_grandfatherable: this never applies to a stored unsafe scheme.
+        if self.instance and value == self.instance.registration_url and _is_grandfatherable(value):
             return value
         return _require_full_url(value, 'https://mulearn.org/register')
 
     def validate_venue_online_link(self, value):
-        if self.instance and value == self.instance.venue_online_link:
+        if self.instance and value == self.instance.venue_online_link and _is_grandfatherable(value):
             return value
         return _require_full_url(value, 'https://meet.google.com/abc-defg-hij')
 
