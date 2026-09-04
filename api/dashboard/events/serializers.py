@@ -469,10 +469,13 @@ class PublicEventDetailSerializer(EventDetailSerializer):
 # EVENT WRITE  (create / update input)
 # ─────────────────────────────────────────────────────────────
 
-# A scheme, per RFC 3986, followed by the '//' of a hierarchical URL. The
-# '//' matters: without it 'localhost:3000/x' would read as scheme 'localhost'
-# and be waved through as complete when it is not.
-_URL_SCHEME_RE = re.compile(r'^[a-zA-Z][a-zA-Z0-9+.-]*://')
+# http(s) only, followed by the '//' of a hierarchical URL. The '//' matters:
+# without it 'localhost:3000/x' would read as scheme 'localhost' and be waved
+# through as complete when it is not. Restricted to http/https rather than
+# any RFC 3986 scheme -- these values get rendered back as clickable links,
+# so accepting e.g. 'javascript://' would let a stored value execute script
+# in a client that renders it as an href.
+_URL_SCHEME_RE = re.compile(r'^https?://', re.IGNORECASE)
 
 
 def _require_full_url(value, example):
@@ -540,9 +543,18 @@ class EventWriteSerializer(serializers.ModelSerializer):
         }
 
     def validate_registration_url(self, value):
+        # A full PUT (or a PATCH that resends the whole form) re-submits
+        # fields the user never touched. Grandfather in a value that's
+        # unchanged from what's already stored, so pre-existing bad data
+        # doesn't block an edit to something unrelated -- only a value the
+        # user is actually setting gets held to the stricter format.
+        if self.instance and value == self.instance.registration_url:
+            return value
         return _require_full_url(value, 'https://mulearn.org/register')
 
     def validate_venue_online_link(self, value):
+        if self.instance and value == self.instance.venue_online_link:
+            return value
         return _require_full_url(value, 'https://meet.google.com/abc-defg-hij')
 
     def validate_venue_maps_url(self, value):
