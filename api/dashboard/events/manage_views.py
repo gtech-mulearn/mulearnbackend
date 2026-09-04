@@ -31,6 +31,7 @@ from .serializers import (
 from .event_logger import log_event_action
 from .event_image_utils import delete_stale_event_media, merge_event_write_payload
 from .publish_policy import (
+    CAMPUS_AUTHORITY_ROLES,
     decide_publish_status,
     is_editable,
     resolve_terminal_status,
@@ -540,6 +541,19 @@ class ManageEventDetailAPI(APIView):
         delete_stale_event_media(old_cover, event.cover_image)
         delete_stale_event_media(old_banner, event.banner_image)
 
+        # `status` isn't a writable field on EventWriteSerializer, so an edit
+        # that reschedules a live event's dates leaves its lifecycle status
+        # stale (e.g. a COMPLETED event moved back into the future would stay
+        # COMPLETED forever, hidden from active feeds and interest actions).
+        # Re-settle it against the clock, same as the publish endpoint does —
+        # events still in the approval pipeline (draft/pending/cancelled) are
+        # untouched.
+        if event.status in (Event.Status.PUBLISHED, Event.Status.ONGOING, Event.Status.COMPLETED):
+            resettled_status = resolve_terminal_status(event, Event.Status.PUBLISHED)
+            if resettled_status != event.status:
+                event.status = resettled_status
+                event.save(update_fields=['status'])
+
         return CustomResponse(
             general_message='Event updated successfully.',
             response=EventDetailSerializer(
@@ -654,11 +668,25 @@ class ManageEventPublishAPI(APIView):
         # Resolve the caller's standing for whichever organiser this event has,
         # then let the policy decide. Past-dated events are allowed through:
         # resolve_terminal_status settles them against the clock below.
+        is_campus_authority = False
         is_campus_mentor = False
         is_ig_mentor_assigned = False
         is_company_owner = False
 
-        if event.organiser_type == Event.OrganiserType.CAMPUS_IG:
+        if event.organiser_type == Event.OrganiserType.CAMPUS:
+            # A campus-authority role only counts for the campus it was
+            # granted for — a Campus Lead of campus B must not be able to
+            # publish campus A's event just by holding the role name and
+            # being added as a co-owner. Bind the role to event.organiser_org,
+            # the same field _validate_campus_event_ownership checks at
+            # creation time.
+            from db.organization import UserOrganizationLink
+            is_campus_authority = bool(
+                CAMPUS_AUTHORITY_ROLES.intersection(roles)
+            ) and UserOrganizationLink.objects.filter(
+                user_id=user_id, org_id=event.organiser_org_id
+            ).exists()
+        elif event.organiser_type == Event.OrganiserType.CAMPUS_IG:
             from db.user import MentorScopeGrant
             from api.dashboard.mentor.dash_mentor_helper import has_scope
             is_campus_mentor = has_scope(
@@ -689,8 +717,8 @@ class ManageEventPublishAPI(APIView):
         new_status = resolve_terminal_status(event, decide_publish_status(
             organiser_type=event.organiser_type,
             scope=event.scope,
-            roles=roles,
             is_admin=RoleType.ADMIN.value in roles,
+            is_campus_authority=is_campus_authority,
             is_campus_mentor=is_campus_mentor,
             is_ig_mentor_assigned=is_ig_mentor_assigned,
             is_company_owner=is_company_owner,
