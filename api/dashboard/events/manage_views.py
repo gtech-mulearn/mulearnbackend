@@ -31,6 +31,13 @@ from .serializers import (
 )
 from .event_logger import log_event_action
 from .event_image_utils import delete_stale_event_media, merge_event_write_payload
+from .publish_policy import (
+    CAMPUS_AUTHORITY_ROLES,
+    decide_publish_status,
+    is_editable,
+    resolve_terminal_status,
+    should_announce,
+)
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers as s
 
@@ -97,6 +104,24 @@ def _get_user_company_org_ids(user_id, roles):
     return list(company_org_ids)
 
 
+def _is_active_campus_member(user_id, org_id):
+    """True if user_id has a non-alumni UserOrganizationLink to org_id.
+
+    A graduated user keeps their UserOrganizationLink row (graduation_year
+    stays on record) with is_alumni flipped to True by
+    mu_celery.alumni_cron.update_alumni_status_cron — that cron only updates
+    is_alumni, it does not revoke any role the user still holds. A stale
+    CampusLead-type role for a graduated user must not keep counting as
+    authority over that campus's events, so every campus-membership check
+    goes through here rather than a bare .exists().
+    """
+    from django.db.models import Q
+    from db.organization import UserOrganizationLink
+    return UserOrganizationLink.objects.filter(
+        user_id=user_id, org_id=org_id
+    ).filter(Q(is_alumni=False) | Q(is_alumni__isnull=True)).exists()
+
+
 def _validate_campus_event_ownership(user_id, roles, organiser_type, organiser_org_id):
     """Tenancy guard for Campus (campus-wide) events.
 
@@ -119,13 +144,55 @@ def _validate_campus_event_ownership(user_id, roles, organiser_type, organiser_o
     if not organiser_org_id:
         return 'A target campus is required for campus events.'
 
-    from db.organization import UserOrganizationLink
-    is_member = UserOrganizationLink.objects.filter(
-        user_id=user_id, org_id=organiser_org_id
-    ).exists()
-    if not is_member:
+    if not _is_active_campus_member(user_id, organiser_org_id):
         return 'You are not authorized to create events for this campus.'
     return None
+
+
+def _resolve_publish_authority(user_id, roles, event):
+    """Resolve the caller's standing to publish/republish `event` right now.
+
+    Shared by the publish endpoint and the reschedule-revival path in
+    ManageEventDetailAPI._update, so authority is always evaluated fresh
+    against the event's own organiser/campus rather than assumed to still
+    hold from whenever it was last approved.
+    """
+    is_campus_authority = False
+    is_campus_mentor = False
+    is_ig_mentor_assigned = False
+    is_company_owner = False
+
+    if event.organiser_type == Event.OrganiserType.CAMPUS:
+        is_campus_authority = bool(
+            CAMPUS_AUTHORITY_ROLES.intersection(roles)
+        ) and _is_active_campus_member(user_id, event.organiser_org_id)
+    elif event.organiser_type == Event.OrganiserType.CAMPUS_IG:
+        from db.user import MentorScopeGrant
+        from api.dashboard.mentor.dash_mentor_helper import has_scope
+        is_campus_mentor = has_scope(
+            user_id, MentorScopeGrant.ScopeType.CAMPUS_MENTOR, event.scope_org_id
+        )
+    elif event.organiser_type == Event.OrganiserType.GLOBAL_IG:
+        from db.user import MentorScopeGrant
+        from db.task import UserIgLink
+        from api.dashboard.mentor.dash_mentor_helper import get_scope_ids
+        is_ig_mentor_assigned = bool(
+            get_scope_ids(user_id, MentorScopeGrant.ScopeType.IG_MENTOR)
+        ) and UserIgLink.objects.filter(
+            user_id=user_id,
+            ig_id=event.organiser_ig_id,
+            assignment_type=UserIgLink.AssignmentType.MENTOR,
+            is_active=True
+        ).exists()
+    elif event.organiser_type == Event.OrganiserType.COMPANY:
+        from db.company import Company
+        from api.dashboard.company.company_views import is_company_owner_or_admin
+        company = Company.objects.filter(
+            org_id=event.organiser_org_id, status='verified'
+        ).first()
+        is_company_owner = is_company_owner_or_admin(user_id, company)
+
+    return is_campus_authority, is_campus_mentor, is_ig_mentor_assigned, is_company_owner
 
 
 def _resolve_creator_campus_id(user_id):
@@ -466,7 +533,7 @@ class ManageEventDetailAPI(APIView):
         if error:
             return CustomResponse(general_message=error).get_failure_response()
 
-        if event.status in (Event.Status.CANCELLED, Event.Status.COMPLETED):
+        if not is_editable(event.status):
             return CustomResponse(
                 general_message=f'Cannot edit a {event.status} event.'
             ).get_failure_response()
@@ -564,6 +631,42 @@ class ManageEventDetailAPI(APIView):
         serializer.save()
         delete_stale_event_media(old_cover, event.cover_image)
         delete_stale_event_media(old_banner, event.banner_image)
+
+        # `status` isn't a writable field on EventWriteSerializer, so an edit
+        # that reschedules a live event's dates leaves its lifecycle status
+        # stale (e.g. a COMPLETED event moved back into the future would stay
+        # COMPLETED forever, hidden from active feeds and interest actions).
+        # Re-settle it against the clock — events still in the approval
+        # pipeline (draft/pending/cancelled) are untouched.
+        #
+        # Forward drift (published -> ongoing -> completed, as real time
+        # passes) needs no re-approval: it doesn't grant anything the editor
+        # didn't already have. A REVIVAL — dates pushed out so a completed or
+        # ongoing event becomes published/ongoing again — is different: it
+        # must be routed through the same organiser-authority check a fresh
+        # publish would use, not assumed to still carry whatever approval it
+        # had at some point in the past. Otherwise editing dates becomes a
+        # way to relaunch an event live without renewed review (e.g. a
+        # company owner rescheduling a completed event straight back to
+        # PUBLISHED, bypassing the admin sign-off a fresh publish requires).
+        _TERMINAL_ORDER = {Event.Status.PUBLISHED: 0, Event.Status.ONGOING: 1, Event.Status.COMPLETED: 2}
+        if event.status in _TERMINAL_ORDER:
+            resettled_status = resolve_terminal_status(event, Event.Status.PUBLISHED)
+            if _TERMINAL_ORDER[resettled_status] < _TERMINAL_ORDER[event.status]:
+                is_campus_authority, is_campus_mentor, is_ig_mentor_assigned, is_company_owner = \
+                    _resolve_publish_authority(user_id, roles, event)
+                resettled_status = resolve_terminal_status(event, decide_publish_status(
+                    organiser_type=event.organiser_type,
+                    scope=event.scope,
+                    is_admin=RoleType.ADMIN.value in roles,
+                    is_campus_authority=is_campus_authority,
+                    is_campus_mentor=is_campus_mentor,
+                    is_ig_mentor_assigned=is_ig_mentor_assigned,
+                    is_company_owner=is_company_owner,
+                ))
+            if resettled_status != event.status:
+                event.status = resettled_status
+                event.save(update_fields=['status'])
 
         return CustomResponse(
             general_message='Event updated successfully.',
@@ -664,7 +767,7 @@ class ManageEventPublishAPI(APIView):
                 general_message='You do not have permission to manage this event.'
             ).get_failure_response()
 
-        if event.status.upper() not in (Event.Status.DRAFT, Event.Status.REJECTED):
+        if event.status not in (Event.Status.DRAFT, Event.Status.REJECTED):
             return CustomResponse(
                 general_message=f'Only draft or rejected events can be published (current: {event.status}).'
             ).get_failure_response()
@@ -676,72 +779,21 @@ class ManageEventPublishAPI(APIView):
                 general_message=f'Cannot publish: missing fields: {", ".join(missing)}.'
             ).get_failure_response()
 
-        # Must be in the future
-        if event.start_datetime and event.start_datetime <= timezone.now():
-            return CustomResponse(
-                general_message='Cannot publish: start_datetime must be in the future.'
-            ).get_failure_response()
+        # Resolve the caller's standing for whichever organiser this event has,
+        # then let the policy decide. Past-dated events are allowed through:
+        # resolve_terminal_status settles them against the clock below.
+        is_campus_authority, is_campus_mentor, is_ig_mentor_assigned, is_company_owner = \
+            _resolve_publish_authority(user_id, roles, event)
 
-        # Determine next status based on organiser type
-        if RoleType.ADMIN.value in roles:
-            new_status = Event.Status.PUBLISHED
-        elif event.organiser_type == Event.OrganiserType.CAMPUS_IG:
-            # Check if creator holds an active CAMPUS_MENTOR grant for this campus
-            from db.user import MentorScopeGrant
-            from api.dashboard.mentor.dash_mentor_helper import has_scope
-            is_campus_mentor = has_scope(user_id, MentorScopeGrant.ScopeType.CAMPUS_MENTOR, event.scope_org_id)
-            if is_campus_mentor:
-                new_status = Event.Status.PENDING_CAMPUS_APPROVAL
-            else:
-                new_status = Event.Status.PENDING_MENTOR_APPROVAL
-        elif event.organiser_type == Event.OrganiserType.GLOBAL_IG:
-            # Check if creator holds an active IG_MENTOR grant (any IG) and
-            # is specifically assigned (via UserIgLink) to this one.
-            from db.user import MentorScopeGrant
-            from db.task import UserIgLink
-            from api.dashboard.mentor.dash_mentor_helper import get_scope_ids
-            is_mentor = bool(get_scope_ids(user_id, MentorScopeGrant.ScopeType.IG_MENTOR))
-            is_assigned = UserIgLink.objects.filter(
-                user_id=user_id,
-                ig_id=event.organiser_ig_id,
-                assignment_type=UserIgLink.AssignmentType.MENTOR,
-                is_active=True
-            ).exists()
-            if is_mentor and is_assigned:
-                new_status = Event.Status.PENDING_APPROVAL
-            else:
-                new_status = Event.Status.PENDING_MENTOR_APPROVAL
-        elif event.organiser_type == Event.OrganiserType.CAMPUS:
-            # Campus events scoped to the organiser's own campus never require
-            # admin approval: the campus lead is the approving authority, so
-            # their own events publish directly. Any wider scope still goes
-            # through admin approval.
-            campus_authority = {
-                RoleType.CAMPUS_LEAD.value,
-                RoleType.ZONAL_CAMPUS_LEAD.value,
-                RoleType.DISTRICT_CAMPUS_LEAD.value,
-            }
-            if event.scope != Event.Scope.CAMPUS:
-                new_status = Event.Status.PENDING_APPROVAL
-            elif set(roles) & campus_authority:
-                new_status = Event.Status.PUBLISHED
-            else:
-                new_status = Event.Status.PENDING_CAMPUS_APPROVAL
-        elif event.organiser_type == Event.OrganiserType.COMPANY:
-            # Company events always need both the owner's leg and admin's
-            # (PRD §3.1 — no direct-publish fast path even for the owner,
-            # unlike campus/IG). Owner-created events skip only their own
-            # leg by starting one stage further along.
-            from db.company import Company
-            from api.dashboard.company.company_views import is_company_owner_or_admin
-            company = Company.objects.filter(org_id=event.organiser_org_id, status='verified').first()
-            is_owner = is_company_owner_or_admin(user_id, company)
-            if is_owner:
-                new_status = Event.Status.PENDING_APPROVAL
-            else:
-                new_status = Event.Status.PENDING_MENTOR_APPROVAL
-        else:
-            new_status = Event.Status.PENDING_APPROVAL
+        new_status = resolve_terminal_status(event, decide_publish_status(
+            organiser_type=event.organiser_type,
+            scope=event.scope,
+            is_admin=RoleType.ADMIN.value in roles,
+            is_campus_authority=is_campus_authority,
+            is_campus_mentor=is_campus_mentor,
+            is_ig_mentor_assigned=is_ig_mentor_assigned,
+            is_company_owner=is_company_owner,
+        ))
 
         old_status = event.status
         event.status = new_status
@@ -756,8 +808,9 @@ class ManageEventPublishAPI(APIView):
             details={'new_status': new_status},
         )
 
-        # Fire a broadcast when the event is directly published (admin fast-path)
-        if new_status == Event.Status.PUBLISHED:
+        # Announce the event when it goes live without a review stage. A
+        # backdated event resolves straight to COMPLETED and is not announced.
+        if should_announce(new_status):
             actor = User.objects.filter(id=user_id).first()
             if actor:
                 if event.organiser_type == Event.OrganiserType.CAMPUS_IG:
@@ -1800,19 +1853,14 @@ class CampusEventApproveAPI(APIView):
 
         # Verify campus lead matches the campus of the event (event.scope_org_id)
         if RoleType.ADMIN.value not in roles:
-            from db.organization import UserOrganizationLink
-            is_member = UserOrganizationLink.objects.filter(
-                user_id=user_id,
-                org_id=event.scope_org_id
-            ).exists()
-            if not is_member:
+            if not _is_active_campus_member(user_id, event.scope_org_id):
                 return CustomResponse(general_message='You are not authorized to approve events for this campus.').get_failure_response()
 
-        # Campus events scoped to their own campus publish on campus approval
-        # (no admin step); campus IG events and wider-scoped events continue
-        # to the next approval stage.
-        if event.organiser_type == Event.OrganiserType.CAMPUS and event.scope == Event.Scope.CAMPUS:
-            new_status = Event.Status.PUBLISHED
+        # A campus is the final authority on its own events at any scope, so
+        # campus approval publishes them outright with no admin step. Campus
+        # IG events still continue to the next approval stage.
+        if event.organiser_type == Event.OrganiserType.CAMPUS:
+            new_status = resolve_terminal_status(event, Event.Status.PUBLISHED)
         else:
             new_status = Event.Status.PENDING_APPROVAL
 
@@ -1837,7 +1885,16 @@ class CampusEventApproveAPI(APIView):
         actor = User.objects.filter(id=user_id).first()
         creator = event.created_by
         if creator and actor:
-            if new_status == Event.Status.PUBLISHED:
+            if new_status == Event.Status.COMPLETED:
+                NotificationUtils.insert_notification(
+                    user=creator,
+                    title='Event Recorded',
+                    description=f'Your past event "{event.title}" was approved by the campus and is now on record.',
+                    button='View',
+                    url=f'/events/{event.id}/',
+                    created_by=actor,
+                )
+            elif new_status in (Event.Status.PUBLISHED, Event.Status.ONGOING):
                 NotificationUtils.insert_notification(
                     user=creator,
                     title='Event Published',
@@ -1856,8 +1913,8 @@ class CampusEventApproveAPI(APIView):
                     created_by=actor,
                 )
 
-        # Fire audience broadcast when the event reaches PUBLISHED
-        if new_status == Event.Status.PUBLISHED and actor:
+        # Announce only events an audience can still attend
+        if should_announce(new_status) and actor:
             BroadcastUtils.create_broadcast(
                 title='New Event Published',
                 description=f'A new Campus event "{event.title}" is now live!',
@@ -1891,12 +1948,7 @@ class CampusEventRejectAPI(APIView):
 
         # Verify campus lead matches the campus of the event (event.scope_org_id)
         if RoleType.ADMIN.value not in roles:
-            from db.organization import UserOrganizationLink
-            is_member = UserOrganizationLink.objects.filter(
-                user_id=user_id,
-                org_id=event.scope_org_id
-            ).exists()
-            if not is_member:
+            if not _is_active_campus_member(user_id, event.scope_org_id):
                 return CustomResponse(general_message='You are not authorized to reject events for this campus.').get_failure_response()
 
         reason = request.data.get('reason', '').strip()
