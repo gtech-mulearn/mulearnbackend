@@ -30,7 +30,7 @@ from .serializers import (
     get_live_events,
 )
 from .event_logger import log_event_action
-from .event_image_utils import delete_stale_event_media, merge_event_write_payload
+from .event_image_utils import delete_event_media_paths, delete_stale_event_media, merge_event_write_payload
 from .publish_policy import (
     CAMPUS_AUTHORITY_ROLES,
     decide_publish_status,
@@ -389,81 +389,94 @@ class ManageEventListCreateAPI(APIView):
             else:
                 return CustomResponse(general_message='This mentor tier is not authorized to create events yet.').get_failure_response()
 
-        payload, merge_error = merge_event_write_payload(
+        payload, new_media_paths, merge_error = merge_event_write_payload(
             request, partial=False, event=None,
         )
         if merge_error:
+            delete_event_media_paths(new_media_paths)
             return CustomResponse(general_message=merge_error).get_failure_response()
 
-        # Enforce organiser_org for Company events
-        if payload.get('organiser_type') == Event.OrganiserType.COMPANY.value:
-            payload_organiser_org = payload.get('organiser_org')
-            if not payload_organiser_org:
-                return CustomResponse(general_message='organiser_org is required for Company events.').get_failure_response()
-            
-            if RoleType.ADMIN.value not in roles:
-                valid_org_ids = set(_get_user_company_org_ids(user_id, roles))
-                if str(payload_organiser_org) not in [str(o) for o in valid_org_ids]:
-                    return CustomResponse(general_message='You are not authorized to create events for this company.').get_failure_response()
+        # save_uploaded_event_image/fetch_event_image_from_url above already
+        # wrote any new cover/banner to disk. `committed` only flips to True
+        # right before the one success return below -- every other exit from
+        # here on (a validation failure, an unhandled exception) must clean
+        # those files up, or they orphan under MEDIA_ROOT with nothing in the
+        # DB pointing at them.
+        committed = False
+        try:
+            # Enforce organiser_org for Company events
+            if payload.get('organiser_type') == Event.OrganiserType.COMPANY.value:
+                payload_organiser_org = payload.get('organiser_org')
+                if not payload_organiser_org:
+                    return CustomResponse(general_message='organiser_org is required for Company events.').get_failure_response()
 
-            # PRD §15 — rate/abuse limit: cap how many not-yet-published
-            # company events can be open at once, mirroring
-            # job_views.MAX_PENDING_JOBS_PER_MENTOR.
-            open_count = _get_manageable_events().filter(
-                organiser_type=Event.OrganiserType.COMPANY,
-                organiser_org_id=payload_organiser_org,
-                status__in=[
-                    Event.Status.DRAFT, Event.Status.PENDING_MENTOR_APPROVAL, Event.Status.PENDING_APPROVAL,
-                ],
-            ).count()
-            if open_count >= MAX_OPEN_COMPANY_EVENTS:
-                return CustomResponse(
-                    general_message=f'This company already has {MAX_OPEN_COMPANY_EVENTS} draft/pending-approval events. Resolve those before creating more.'
-                ).get_failure_response(status_code=429)
+                if RoleType.ADMIN.value not in roles:
+                    valid_org_ids = set(_get_user_company_org_ids(user_id, roles))
+                    if str(payload_organiser_org) not in [str(o) for o in valid_org_ids]:
+                        return CustomResponse(general_message='You are not authorized to create events for this company.').get_failure_response()
 
-        # Enforce campus tenancy for Campus events
-        ownership_error = _validate_campus_event_ownership(
-            user_id, roles,
-            payload.get('organiser_type'),
-            payload.get('organiser_org'),
-        )
-        if ownership_error:
-            return CustomResponse(general_message=ownership_error).get_failure_response()
-
-        # Campus IG events: stamp the owning campus (scope_org) from the creator.
-        # The wizard only sends the IG (scope_ci_id); the campus is implicit and
-        # required downstream for mentor/campus approval routing and scoping.
-        # Non-admins are pinned to their own campus (blocks cross-campus
-        # targeting); admins may target a campus explicitly via scope_org.
-        if payload.get('organiser_type') == Event.OrganiserType.CAMPUS_IG.value:
-            if RoleType.ADMIN.value in roles:
-                if not payload.get('scope_org'):
-                    payload['scope_org'] = _resolve_creator_campus_id(user_id)
-            else:
-                campus_id = _resolve_creator_campus_id(user_id)
-                if not campus_id:
+                # PRD §15 — rate/abuse limit: cap how many not-yet-published
+                # company events can be open at once, mirroring
+                # job_views.MAX_PENDING_JOBS_PER_MENTOR.
+                open_count = _get_manageable_events().filter(
+                    organiser_type=Event.OrganiserType.COMPANY,
+                    organiser_org_id=payload_organiser_org,
+                    status__in=[
+                        Event.Status.DRAFT, Event.Status.PENDING_MENTOR_APPROVAL, Event.Status.PENDING_APPROVAL,
+                    ],
+                ).count()
+                if open_count >= MAX_OPEN_COMPANY_EVENTS:
                     return CustomResponse(
-                        general_message='You are not associated with a campus.'
-                    ).get_failure_response()
-                payload['scope_org'] = campus_id
+                        general_message=f'This company already has {MAX_OPEN_COMPANY_EVENTS} draft/pending-approval events. Resolve those before creating more.'
+                    ).get_failure_response(status_code=429)
 
-        serializer = EventWriteSerializer(
-            data=payload,
-            context={'user_id': user_id},
-        )
-        if not serializer.is_valid():
+            # Enforce campus tenancy for Campus events
+            ownership_error = _validate_campus_event_ownership(
+                user_id, roles,
+                payload.get('organiser_type'),
+                payload.get('organiser_org'),
+            )
+            if ownership_error:
+                return CustomResponse(general_message=ownership_error).get_failure_response()
+
+            # Campus IG events: stamp the owning campus (scope_org) from the creator.
+            # The wizard only sends the IG (scope_ci_id); the campus is implicit and
+            # required downstream for mentor/campus approval routing and scoping.
+            # Non-admins are pinned to their own campus (blocks cross-campus
+            # targeting); admins may target a campus explicitly via scope_org.
+            if payload.get('organiser_type') == Event.OrganiserType.CAMPUS_IG.value:
+                if RoleType.ADMIN.value in roles:
+                    if not payload.get('scope_org'):
+                        payload['scope_org'] = _resolve_creator_campus_id(user_id)
+                else:
+                    campus_id = _resolve_creator_campus_id(user_id)
+                    if not campus_id:
+                        return CustomResponse(
+                            general_message='You are not associated with a campus.'
+                        ).get_failure_response()
+                    payload['scope_org'] = campus_id
+
+            serializer = EventWriteSerializer(
+                data=payload,
+                context={'user_id': user_id},
+            )
+            if not serializer.is_valid():
+                return CustomResponse(
+                    general_message=serializer.errors,
+                ).get_failure_response()
+
+            event = serializer.save()
+            committed = True
+
             return CustomResponse(
-                general_message=serializer.errors,
-            ).get_failure_response()
-
-        event = serializer.save()
-
-        return CustomResponse(
-            general_message='Event created successfully.',
-            response=EventDetailSerializer(
-                event, context={'user_id': user_id, 'request': request},
-            ).data,
-        ).get_success_response()
+                general_message='Event created successfully.',
+                response=EventDetailSerializer(
+                    event, context={'user_id': user_id, 'request': request},
+                ).data,
+            ).get_success_response()
+        finally:
+            if not committed:
+                delete_event_media_paths(new_media_paths)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -541,139 +554,160 @@ class ManageEventDetailAPI(APIView):
         old_cover = event.cover_image
         old_banner = event.banner_image
 
-        payload, merge_error = merge_event_write_payload(
+        payload, new_media_paths, merge_error = merge_event_write_payload(
             request, partial=partial, event=event,
         )
         if merge_error:
+            delete_event_media_paths(new_media_paths)
             return CustomResponse(general_message=merge_error).get_failure_response()
 
-        # Enforce Mentor Update Scopes
-        roles = JWTUtils.fetch_role(request)
-        if RoleType.MENTOR.value in roles and not (set(roles) & MANAGEABLE_ROLES - {RoleType.MENTOR.value}):
-            # User is ONLY a mentor. Check the requested organiser_type
-            # against whichever scopes they actually hold (multi-tier
-            # mentors can manage events for any tier they hold), instead of
-            # pinning them to one arbitrary tier via .first().
-            from db.user import MentorScopeGrant
-            from api.dashboard.mentor.dash_mentor_helper import get_mentor_scopes
-            scopes = get_mentor_scopes(user_id)
-            if not scopes:
-                return CustomResponse(general_message='Active mentor profile not found.').get_failure_response()
+        # save_uploaded_event_image/fetch_event_image_from_url above already
+        # wrote any new cover/banner to disk. `committed` only flips to True
+        # right before the one success return below -- every other exit from
+        # here on (a validation failure, a rolled-back transaction, an
+        # unhandled exception) must clean those files up, or they orphan
+        # under MEDIA_ROOT with nothing in the DB pointing at them.
+        committed = False
+        try:
+            # Enforce Mentor Update Scopes
+            roles = JWTUtils.fetch_role(request)
+            if RoleType.MENTOR.value in roles and not (set(roles) & MANAGEABLE_ROLES - {RoleType.MENTOR.value}):
+                # User is ONLY a mentor. Check the requested organiser_type
+                # against whichever scopes they actually hold (multi-tier
+                # mentors can manage events for any tier they hold), instead of
+                # pinning them to one arbitrary tier via .first().
+                from db.user import MentorScopeGrant
+                from api.dashboard.mentor.dash_mentor_helper import get_mentor_scopes
+                scopes = get_mentor_scopes(user_id)
+                if not scopes:
+                    return CustomResponse(general_message='Active mentor profile not found.').get_failure_response()
 
-            has_campus = any(st == MentorScopeGrant.ScopeType.CAMPUS_MENTOR for st, _ in scopes)
-            has_company = any(st == MentorScopeGrant.ScopeType.COMPANY_MENTOR for st, _ in scopes)
-            has_ig = any(st == MentorScopeGrant.ScopeType.IG_MENTOR for st, _ in scopes)
+                has_campus = any(st == MentorScopeGrant.ScopeType.CAMPUS_MENTOR for st, _ in scopes)
+                has_company = any(st == MentorScopeGrant.ScopeType.COMPANY_MENTOR for st, _ in scopes)
+                has_ig = any(st == MentorScopeGrant.ScopeType.IG_MENTOR for st, _ in scopes)
 
-            payload_organiser_type = payload.get('organiser_type', event.organiser_type)
+                payload_organiser_type = payload.get('organiser_type', event.organiser_type)
 
-            if payload_organiser_type == Event.OrganiserType.CAMPUS_IG.value:
-                if not has_campus:
-                    return CustomResponse(general_message='Campus Mentors can only manage Campus IG events.').get_failure_response()
-            elif payload_organiser_type == Event.OrganiserType.COMPANY.value:
-                if not has_company:
-                    return CustomResponse(general_message='Company Mentors can only manage Company events.').get_failure_response()
-            elif payload_organiser_type == Event.OrganiserType.GLOBAL_IG.value:
-                if not has_ig:
-                    return CustomResponse(general_message='IG Mentors can only manage Global IG events.').get_failure_response()
-                # Verify that the IG being updated/requested is one they mentor
-                payload_organiser_ig = payload.get('organiser_ig', event.organiser_ig_id)
-                if not payload_organiser_ig:
-                    return CustomResponse(general_message='organiser_ig is required.').get_failure_response()
-                from db.task import UserIgLink
-                is_assigned = UserIgLink.objects.filter(
-                    user_id=user_id,
-                    ig_id=payload_organiser_ig,
-                    assignment_type=UserIgLink.AssignmentType.MENTOR,
-                    is_active=True
-                ).exists()
-                if not is_assigned:
-                    return CustomResponse(general_message='You are not authorized to manage events for this Interest Group.').get_failure_response()
-            else:
-                return CustomResponse(general_message='This mentor tier is not authorized to manage events yet.').get_failure_response()
+                if payload_organiser_type == Event.OrganiserType.CAMPUS_IG.value:
+                    if not has_campus:
+                        return CustomResponse(general_message='Campus Mentors can only manage Campus IG events.').get_failure_response()
+                elif payload_organiser_type == Event.OrganiserType.COMPANY.value:
+                    if not has_company:
+                        return CustomResponse(general_message='Company Mentors can only manage Company events.').get_failure_response()
+                elif payload_organiser_type == Event.OrganiserType.GLOBAL_IG.value:
+                    if not has_ig:
+                        return CustomResponse(general_message='IG Mentors can only manage Global IG events.').get_failure_response()
+                    # Verify that the IG being updated/requested is one they mentor
+                    payload_organiser_ig = payload.get('organiser_ig', event.organiser_ig_id)
+                    if not payload_organiser_ig:
+                        return CustomResponse(general_message='organiser_ig is required.').get_failure_response()
+                    from db.task import UserIgLink
+                    is_assigned = UserIgLink.objects.filter(
+                        user_id=user_id,
+                        ig_id=payload_organiser_ig,
+                        assignment_type=UserIgLink.AssignmentType.MENTOR,
+                        is_active=True
+                    ).exists()
+                    if not is_assigned:
+                        return CustomResponse(general_message='You are not authorized to manage events for this Interest Group.').get_failure_response()
+                else:
+                    return CustomResponse(general_message='This mentor tier is not authorized to manage events yet.').get_failure_response()
 
-        # Enforce organiser_org for Company events
-        if payload.get('organiser_type', event.organiser_type) == Event.OrganiserType.COMPANY.value:
-            payload_organiser_org = payload.get('organiser_org', event.organiser_org_id)
-            if not payload_organiser_org:
-                return CustomResponse(general_message='organiser_org is required for Company events.').get_failure_response()
-            
-            if RoleType.ADMIN.value not in roles:
-                valid_org_ids = set(_get_user_company_org_ids(user_id, roles))
-                if str(payload_organiser_org) not in [str(o) for o in valid_org_ids]:
-                    return CustomResponse(general_message='You are not authorized to manage events for this company.').get_failure_response()
+            # Enforce organiser_org for Company events
+            if payload.get('organiser_type', event.organiser_type) == Event.OrganiserType.COMPANY.value:
+                payload_organiser_org = payload.get('organiser_org', event.organiser_org_id)
+                if not payload_organiser_org:
+                    return CustomResponse(general_message='organiser_org is required for Company events.').get_failure_response()
 
-        # Enforce campus tenancy for Campus events
-        ownership_error = _validate_campus_event_ownership(
-            user_id, roles,
-            payload.get('organiser_type', event.organiser_type),
-            payload.get('organiser_org', event.organiser_org_id),
-        )
-        if ownership_error:
-            return CustomResponse(general_message=ownership_error).get_failure_response()
+                if RoleType.ADMIN.value not in roles:
+                    valid_org_ids = set(_get_user_company_org_ids(user_id, roles))
+                    if str(payload_organiser_org) not in [str(o) for o in valid_org_ids]:
+                        return CustomResponse(general_message='You are not authorized to manage events for this company.').get_failure_response()
 
-        # Campus IG events: keep scope_org pinned to the owning campus (derived
-        # from the original creator). Prevents tampering and backfills legacy
-        # events that were created without a campus.
-        effective_organiser_type = payload.get('organiser_type', event.organiser_type)
-        if effective_organiser_type == Event.OrganiserType.CAMPUS_IG.value:
-            campus_id = _resolve_creator_campus_id(event.created_by_id)
-            if campus_id:
-                payload['scope_org'] = campus_id
+            # Enforce campus tenancy for Campus events
+            ownership_error = _validate_campus_event_ownership(
+                user_id, roles,
+                payload.get('organiser_type', event.organiser_type),
+                payload.get('organiser_org', event.organiser_org_id),
+            )
+            if ownership_error:
+                return CustomResponse(general_message=ownership_error).get_failure_response()
 
-        serializer = EventWriteSerializer(
-            event, data=payload,
-            partial=partial,
-            context={'user_id': user_id},
-        )
-        if not serializer.is_valid():
-            return CustomResponse(general_message=serializer.errors).get_failure_response()
+            # Campus IG events: keep scope_org pinned to the owning campus (derived
+            # from the original creator). Prevents tampering and backfills legacy
+            # events that were created without a campus.
+            effective_organiser_type = payload.get('organiser_type', event.organiser_type)
+            if effective_organiser_type == Event.OrganiserType.CAMPUS_IG.value:
+                campus_id = _resolve_creator_campus_id(event.created_by_id)
+                if campus_id:
+                    payload['scope_org'] = campus_id
 
-        serializer.save()
-        delete_stale_event_media(old_cover, event.cover_image)
-        delete_stale_event_media(old_banner, event.banner_image)
+            serializer = EventWriteSerializer(
+                event, data=payload,
+                partial=partial,
+                context={'user_id': user_id},
+            )
+            if not serializer.is_valid():
+                return CustomResponse(general_message=serializer.errors).get_failure_response()
 
-        # `status` isn't a writable field on EventWriteSerializer, so an edit
-        # that reschedules a live event's dates leaves its lifecycle status
-        # stale (e.g. a COMPLETED event moved back into the future would stay
-        # COMPLETED forever, hidden from active feeds and interest actions).
-        # Re-settle it against the clock — events still in the approval
-        # pipeline (draft/pending/cancelled) are untouched.
-        #
-        # Forward drift (published -> ongoing -> completed, as real time
-        # passes) needs no re-approval: it doesn't grant anything the editor
-        # didn't already have. A REVIVAL — dates pushed out so a completed or
-        # ongoing event becomes published/ongoing again — is different: it
-        # must be routed through the same organiser-authority check a fresh
-        # publish would use, not assumed to still carry whatever approval it
-        # had at some point in the past. Otherwise editing dates becomes a
-        # way to relaunch an event live without renewed review (e.g. a
-        # company owner rescheduling a completed event straight back to
-        # PUBLISHED, bypassing the admin sign-off a fresh publish requires).
-        _TERMINAL_ORDER = {Event.Status.PUBLISHED: 0, Event.Status.ONGOING: 1, Event.Status.COMPLETED: 2}
-        if event.status in _TERMINAL_ORDER:
-            resettled_status = resolve_terminal_status(event, Event.Status.PUBLISHED)
-            if _TERMINAL_ORDER[resettled_status] < _TERMINAL_ORDER[event.status]:
-                is_campus_authority, is_campus_mentor, is_ig_mentor_assigned, is_company_owner = \
-                    _resolve_publish_authority(user_id, roles, event)
-                resettled_status = resolve_terminal_status(event, decide_publish_status(
-                    organiser_type=event.organiser_type,
-                    scope=event.scope,
-                    is_admin=RoleType.ADMIN.value in roles,
-                    is_campus_authority=is_campus_authority,
-                    is_campus_mentor=is_campus_mentor,
-                    is_ig_mentor_assigned=is_ig_mentor_assigned,
-                    is_company_owner=is_company_owner,
-                ))
-            if resettled_status != event.status:
-                event.status = resettled_status
-                event.save(update_fields=['status'])
+            # `status` isn't a writable field on EventWriteSerializer, so an edit
+            # that reschedules a live event's dates leaves its lifecycle status
+            # stale (e.g. a COMPLETED event moved back into the future would stay
+            # COMPLETED forever, hidden from active feeds and interest actions).
+            # Re-settle it against the clock — events still in the approval
+            # pipeline (draft/pending/cancelled) are untouched.
+            #
+            # Forward drift (published -> ongoing -> completed, as real time
+            # passes) needs no re-approval: it doesn't grant anything the editor
+            # didn't already have. A REVIVAL — dates pushed out so a completed or
+            # ongoing event becomes published/ongoing again — is different: it
+            # must be routed through the same organiser-authority check a fresh
+            # publish would use, not assumed to still carry whatever approval it
+            # had at some point in the past. Otherwise editing dates becomes a
+            # way to relaunch an event live without renewed review (e.g. a
+            # company owner rescheduling a completed event straight back to
+            # PUBLISHED, bypassing the admin sign-off a fresh publish requires).
+            #
+            # Both writes below must land together: if the resettle save failed
+            # after the field save committed, a revived event would sit at its
+            # old terminal status (e.g. COMPLETED) with future dates instead of
+            # either its old state or its correctly re-routed one.
+            with transaction.atomic():
+                serializer.save()
 
-        return CustomResponse(
-            general_message='Event updated successfully.',
-            response=EventDetailSerializer(
-                event, context={'user_id': user_id, 'request': request},
-            ).data,
-        ).get_success_response()
+                _TERMINAL_ORDER = {Event.Status.PUBLISHED: 0, Event.Status.ONGOING: 1, Event.Status.COMPLETED: 2}
+                if event.status in _TERMINAL_ORDER:
+                    resettled_status = resolve_terminal_status(event, Event.Status.PUBLISHED)
+                    if _TERMINAL_ORDER[resettled_status] < _TERMINAL_ORDER[event.status]:
+                        is_campus_authority, is_campus_mentor, is_ig_mentor_assigned, is_company_owner = \
+                            _resolve_publish_authority(user_id, roles, event)
+                        resettled_status = resolve_terminal_status(event, decide_publish_status(
+                            organiser_type=event.organiser_type,
+                            scope=event.scope,
+                            is_admin=RoleType.ADMIN.value in roles,
+                            is_campus_authority=is_campus_authority,
+                            is_campus_mentor=is_campus_mentor,
+                            is_ig_mentor_assigned=is_ig_mentor_assigned,
+                            is_company_owner=is_company_owner,
+                        ))
+                    if resettled_status != event.status:
+                        event.status = resettled_status
+                        event.save(update_fields=['status'])
+
+            committed = True
+
+            delete_stale_event_media(old_cover, event.cover_image)
+            delete_stale_event_media(old_banner, event.banner_image)
+
+            return CustomResponse(
+                general_message='Event updated successfully.',
+                response=EventDetailSerializer(
+                    event, context={'user_id': user_id, 'request': request},
+                ).data,
+            ).get_success_response()
+        finally:
+            if not committed:
+                delete_event_media_paths(new_media_paths)
 
     @extend_schema(tags=['Dashboard - Events'], description="Delete Manage Event Detail.",
         responses={200: EventDetailSerializer},
