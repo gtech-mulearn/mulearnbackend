@@ -500,12 +500,20 @@ class UserRoleLinkSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         user_id = self.context.get("user_id")
-        validated_data["created_by_id"] = user_id
-        validated_data["id"] = uuid.uuid4()
-        validated_data["verified"] = True
 
-        user_role_link = UserRoleLink.objects.create(**validated_data)
-        return user_role_link
+        link, created = UserRoleLink.objects.get_or_create(
+            user=validated_data["user"],
+            role=validated_data["role"],
+            defaults={
+                "id": str(uuid.uuid4()),
+                "created_by_id": user_id,
+                "verified": True,
+            }
+        )
+        if not created:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError("User already has this role.")
+        return link
 
 
 class CampusEventListSerializer(serializers.ModelSerializer):
