@@ -285,26 +285,47 @@ class CampusExecomAPI(APIView):
                 general_message="User is not a member of your campus"
             ).get_failure_response()
 
-        # Fetch role by title
-        role = Role.objects.filter(title=role_title).first()
-        if role is not None and not role.is_execom_role:
+        if role_title in [RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value]:
             return CustomResponse(
-                general_message=f"'{role_title}' is already in use by another feature and cannot be assigned as an execom role"
+                general_message=f"Cannot assign '{role_title}' via this endpoint. Please use the transfer-lead-role or transfer-enabler-role endpoint."
             ).get_failure_response()
-        if role is None:
-            role = Role.objects.create(
-                id=str(uuid.uuid4()),
-                title=role_title,
-                created_by_id=user_id,
-                updated_by_id=user_id,
-                is_execom_role=True,
-            )
-            # Link auto-created role to this campus
-            CampusExecomRole.objects.get_or_create(
-                org=org,
-                role=role,
-                defaults={"created_by_id": user_id, "updated_by_id": user_id}
-            )
+
+        # Fetch role by title
+        role = Role.objects.filter(title=role_title, is_execom_role=True).first()
+        if not role:
+            return CustomResponse(
+                general_message=f"Role '{role_title}' does not exist as an Execom role. Please create the role first."
+            ).get_failure_response()
+
+        # Check if role is an allowed standard default role, active IG chapter role, or linked to this campus
+        GENERAL_EXECOM_DEFAULT_ROLES = [
+            RoleType.ENABLER.value,
+            RoleType.IG_LEAD.value,
+        ]
+
+        active_ig_codes = CampusIGChapter.objects.filter(
+            org=org, is_active=True
+        ).values_list("ig__code", flat=True)
+
+        allowed_ig_roles = set()
+        for code in active_ig_codes:
+            allowed_ig_roles.add(f"{code} CampusLead")
+            allowed_ig_roles.add(f"{code} IGLead")
+
+        is_campus_custom_role = CampusExecomRole.objects.filter(
+            org=org, role=role, is_active=True
+        ).exists()
+
+        is_valid_role = (
+            role_title in GENERAL_EXECOM_DEFAULT_ROLES
+            or role_title in allowed_ig_roles
+            or is_campus_custom_role
+        )
+
+        if not is_valid_role:
+            return CustomResponse(
+                general_message=f"Role '{role_title}' is not active or available for your campus. Please create/enable it first."
+            ).get_failure_response()
 
 
         # Assign new role — follows UserRoleLinkSerializer pattern
