@@ -138,6 +138,27 @@ class TaskModifySerializer(serializers.ModelSerializer):
 
         return value
 
+    def validate(self, attrs):
+        # `event` is a legacy free-text field, separate from the real event
+        # link (`event_id` -> event_fk). Every "tasks for this event" query
+        # reads only event_fk, so a real event's id typed into `event` by
+        # mistake (instead of `event_id`) silently links to nothing. If that
+        # happens, redirect it to the real field instead of failing the
+        # request or leaving the task unlinked.
+        event_text = attrs.get("event")
+        if event_text and not attrs.get("event_fk_id"):
+            try:
+                uuid.UUID(str(event_text))
+            except (ValueError, TypeError):
+                pass
+            else:
+                from db.events import Event
+                if Event.objects.filter(id=event_text).exists():
+                    attrs["event_fk_id"] = event_text
+                    attrs["event"] = None
+
+        return attrs
+
 
 class TaskImportSerializer(serializers.ModelSerializer):
     created_by_id = serializers.CharField(required=True, allow_null=False)
