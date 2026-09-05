@@ -25,6 +25,12 @@ class LearningCircle(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Denormalised, refreshed by mu_celery/learning_circle_aggregates_cron.py.
+    # A circle's rank is a comparison against every other circle's karma, so it
+    # can't be computed cheaply per-request -- see that cron's docstring.
+    cached_total_karma = models.IntegerField(default=0)
+    cached_rank = models.IntegerField(default=0)
+
     class Meta:
         managed = False
         db_table = "learning_circle"

@@ -2,7 +2,9 @@
 Shared serializers for the Events system.
 All view modules import from this file.
 """
+import re
 import uuid
+from urllib.parse import urlparse
 
 from django.utils import timezone
 from django.utils.text import slugify
@@ -467,6 +469,54 @@ class PublicEventDetailSerializer(EventDetailSerializer):
 # EVENT WRITE  (create / update input)
 # ─────────────────────────────────────────────────────────────
 
+# http(s) only, followed by the '//' of a hierarchical URL. The '//' matters:
+# without it 'localhost:3000/x' would read as scheme 'localhost' and be waved
+# through as complete when it is not. Restricted to http/https rather than
+# any RFC 3986 scheme -- these values get rendered back as clickable links,
+# so accepting e.g. 'javascript://' would let a stored value execute script
+# in a client that renders it as an href.
+_URL_SCHEME_RE = re.compile(r'^https?://', re.IGNORECASE)
+
+
+def _require_full_url(value, example):
+    """Reject a link that is missing its scheme.
+
+    'mulearn.org/register' is the common slip: it stores fine, then renders
+    as a path relative to whatever page shows it, so the link is silently
+    dead. The value is returned untouched — the message says what to fix
+    rather than rewriting what someone typed.
+    """
+    if not value:
+        return value
+
+    candidate = value.strip()
+    if not _URL_SCHEME_RE.match(candidate) or not urlparse(candidate).netloc:
+        raise serializers.ValidationError(
+            f'Enter a full link starting with https:// (e.g. {example}).'
+        )
+    return value
+
+
+# Any RFC 3986 scheme prefix, not just http(s) -- used only to tell "no scheme
+# at all" apart from "an actual (possibly unsafe) scheme" below.
+_ANY_SCHEME_RE = re.compile(r'^[a-zA-Z][a-zA-Z0-9+.-]*://')
+
+
+def _is_grandfatherable(value):
+    """Whether an unchanged stored value may skip re-validation.
+
+    Only a legacy value with *no* scheme at all (e.g. 'mulearn.org/register',
+    saved before this field was validated) is exempt -- it's inert, just a
+    dead link. A value that carries an actual non-http(s) scheme (e.g. a
+    stored 'javascript://...') must never be grandfathered: leaving it alone
+    because it "didn't change" is exactly how a stored-XSS link would survive
+    every future edit indefinitely.
+    """
+    if not value:
+        return True
+    return not _ANY_SCHEME_RE.match(value.strip())
+
+
 class EventWriteSerializer(serializers.ModelSerializer):
     """Input serializer for POST /manage/ and PUT/PATCH /manage/<id>/."""
 
@@ -512,23 +562,29 @@ class EventWriteSerializer(serializers.ModelSerializer):
             'event_type': {'required': False},
         }
 
+    def validate_registration_url(self, value):
+        # A full PUT (or a PATCH that resends the whole form) re-submits
+        # fields the user never touched. Grandfather in a value that's
+        # unchanged from what's already stored, so pre-existing bad data
+        # doesn't block an edit to something unrelated -- only a value the
+        # user is actually setting gets held to the stricter format. See
+        # _is_grandfatherable: this never applies to a stored unsafe scheme.
+        if self.instance and value == self.instance.registration_url and _is_grandfatherable(value):
+            return value
+        return _require_full_url(value, 'https://mulearn.org/register')
+
+    def validate_venue_online_link(self, value):
+        if self.instance and value == self.instance.venue_online_link and _is_grandfatherable(value):
+            return value
+        return _require_full_url(value, 'https://meet.google.com/abc-defg-hij')
+
     def validate_venue_maps_url(self, value):
         """Ensure venue_maps_url is a valid Google Maps URL when provided."""
-        import re
-        from urllib.parse import urlparse
-
         if not value:
             return value
 
-        # Basic URL structure check
-        try:
-            parsed = urlparse(value)
-            if not parsed.scheme or not parsed.netloc:
-                raise serializers.ValidationError(
-                    'Enter a valid URL (e.g. https://maps.google.com/...).'
-                )
-        except Exception:
-            raise serializers.ValidationError('Enter a valid URL.')
+        _require_full_url(value, 'https://maps.google.com/...')
+        parsed = urlparse(value.strip())
 
         # Only accept recognised Google Maps hostnames
         # Allowed patterns:
