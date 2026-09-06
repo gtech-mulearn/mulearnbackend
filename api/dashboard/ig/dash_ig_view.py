@@ -269,38 +269,11 @@ class InterestGroupAPI(APIView):
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        request_data = request.data.copy()
-
-        # Validate MUIDs for leads/mentors before serializing
-        is_valid, error_msg = _validate_muids(request_data)
-        if not is_valid:
-            return CustomResponse(general_message=error_msg).get_failure_response()
-
-        # Validate any inline images up front, before creating anything —
-        # a bad file must not leave a half-created IG behind.
-        cover_file = request.FILES.get("cover_image")
-        icon_file = request.FILES.get("icon_image")
-        for image in (cover_file, icon_file):
-            if image is not None:
-                error = _validate_ig_image(image)
-                if error:
-                    return CustomResponse(general_message=error).get_failure_response()
-
-        # serialize JSON-able fields to strings for DB storage
-        for fld in [
-            "prerequisites",
-            "career_opportunities",
-            "top_blogs",
-            "people_to_follow",
-            "leads",
-            "mentors",
-            "thinktank",
-        ]:
-            if fld in request_data and not isinstance(request_data.get(fld), str):
-                try:
-                    request_data[fld] = json.dumps(request_data.get(fld))
-                except Exception:
-                    pass
+        request_data = (
+            request.data.copy()
+            if hasattr(request.data, "copy")
+            else request.data
+        )
 
         request_data["created_by"] = request_data["updated_by"] = user_id
 
@@ -383,27 +356,11 @@ class InterestGroupAPI(APIView):
         ig_old_name = ig.name
         ig_old_code = ig.code
 
-        request_data = request.data
-
-        # Validate MUIDs for leads/mentors before serializing
-        is_valid, error_msg = _validate_muids(request_data)
-        if not is_valid:
-            return CustomResponse(general_message=error_msg).get_failure_response()
-
-        for fld in [
-            "prerequisites",
-            "career_opportunities",
-            "top_blogs",
-            "people_to_follow",
-            "leads",
-            "mentors",
-            "thinktank",
-        ]:
-            if fld in request_data and not isinstance(request_data.get(fld), str):
-                try:
-                    request_data[fld] = json.dumps(request_data.get(fld))
-                except Exception:
-                    pass
+        request_data = (
+            request.data.copy()
+            if hasattr(request.data, "copy")
+            else request.data
+        )
         request_data["updated_by"] = user_id
 
         serializer = InterestGroupCreateUpdateSerializer(
@@ -465,6 +422,10 @@ class InterestGroupAPI(APIView):
 
         if ig is None:
             return CustomResponse(general_message="invalid ig").get_success_response()
+
+        if ig.banner_image:
+            ig.banner_image.delete(save=False)
+
         ig_role = Role.objects.filter(title=ig.name).first()
         if ig_role:
             ig_role.delete()
