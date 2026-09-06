@@ -1,5 +1,6 @@
 from collections import Counter
 
+from django.db import transaction
 from django.db.models import Q
 from rest_framework.views import APIView
 
@@ -285,70 +286,50 @@ class CampusExecomAPI(APIView):
                 general_message="User is not a member of your campus"
             ).get_failure_response()
 
-        if role_title in [RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value]:
-            return CustomResponse(
-                general_message=f"Cannot assign '{role_title}' via this endpoint. Please use the transfer-lead-role or transfer-enabler-role endpoint."
-            ).get_failure_response()
+        # Wrap multi-table mutation in a single atomic transaction
+        with transaction.atomic():
+            # Fetch role by title
+            role = Role.objects.filter(title=role_title).first()
+            if role is not None and not role.is_execom_role:
+                return CustomResponse(
+                    general_message=f"'{role_title}' is already in use by another feature and cannot be assigned as an execom role"
+                ).get_failure_response()
+            if role is None:
+                role = Role.objects.create(
+                    id=str(uuid.uuid4()),
+                    title=role_title,
+                    created_by_id=user_id,
+                    updated_by_id=user_id,
+                    is_execom_role=True,
+                )
+                # Link auto-created role to this campus
+                CampusExecomRole.objects.get_or_create(
+                    org=org,
+                    role=role,
+                    defaults={"created_by_id": user_id, "updated_by_id": user_id}
+                )
 
-        # Fetch role by title
-        role = Role.objects.filter(title=role_title, is_execom_role=True).first()
-        if not role:
-            return CustomResponse(
-                general_message=f"Role '{role_title}' does not exist as an Execom role. Please create the role first."
-            ).get_failure_response()
+            # Assign new role — follows UserRoleLinkSerializer pattern
+            serializer = campus_serializers.UserRoleLinkSerializer(
+                data={"user": new_user.id, "role": role.id},
+                context={"user_id": user_id},
+            )
+            if serializer.is_valid():
+                serializer.save()
 
-        # Check if role is an allowed standard default role, active IG chapter role, or linked to this campus
-        GENERAL_EXECOM_DEFAULT_ROLES = [
-            RoleType.ENABLER.value,
-            RoleType.IG_LEAD.value,
-        ]
+                if role_title.endswith("CampusLead") and role_title not in [RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value]:
+                    ig_code = role_title.replace("CampusLead", "").strip()
+                    chapter = CampusIGChapter.objects.filter(org=org, ig__code=ig_code, is_active=True).first()
+                    if chapter:
+                        chapter.lead = new_user
+                        chapter.updated_by_id = user_id
+                        chapter.save()
 
-        active_ig_codes = CampusIGChapter.objects.filter(
-            org=org, is_active=True
-        ).values_list("ig__code", flat=True)
+                return CustomResponse(
+                    general_message="Role assigned successfully"
+                ).get_success_response()
 
-        allowed_ig_roles = set()
-        for code in active_ig_codes:
-            allowed_ig_roles.add(f"{code} CampusLead")
-            allowed_ig_roles.add(f"{code} IGLead")
-
-        is_campus_custom_role = CampusExecomRole.objects.filter(
-            org=org, role=role, is_active=True
-        ).exists()
-
-        is_valid_role = (
-            role_title in GENERAL_EXECOM_DEFAULT_ROLES
-            or role_title in allowed_ig_roles
-            or is_campus_custom_role
-        )
-
-        if not is_valid_role:
-            return CustomResponse(
-                general_message=f"Role '{role_title}' is not active or available for your campus. Please create/enable it first."
-            ).get_failure_response()
-
-
-        # Assign new role — follows UserRoleLinkSerializer pattern
-        serializer = campus_serializers.UserRoleLinkSerializer(
-            data={"user": new_user.id, "role": role.id},
-            context={"user_id": user_id},
-        )
-        if serializer.is_valid():
-            serializer.save()
-
-            if role_title.endswith("CampusLead") and role_title not in [RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value]:
-                ig_code = role_title.replace("CampusLead", "").strip()
-                chapter = CampusIGChapter.objects.filter(org=org, ig__code=ig_code, is_active=True).first()
-                if chapter:
-                    chapter.lead = new_user
-                    chapter.updated_by_id = user_id
-                    chapter.save()
-
-            return CustomResponse(
-                general_message="Role assigned successfully"
-            ).get_success_response()
-
-        return CustomResponse(message=serializer.errors).get_failure_response()
+            return CustomResponse(message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.CAMPUS_LEAD.value,RoleType.LEAD_ENABLER.value])
     @extend_schema(tags=['Dashboard - Campus'], description="Delete Campus Execom.",
@@ -524,31 +505,32 @@ class CampusExecomRoleAPI(APIView):
         if org is None:
             return CustomResponse(general_message="Campus lead has no college").get_failure_response()
 
-        # Global case-insensitive lookup — reuse existing role if title matches
-        role = Role.objects.filter(title__iexact=role_title).first()
+        with transaction.atomic():
+            # Global case-insensitive lookup — reuse existing role if title matches
+            role = Role.objects.filter(title__iexact=role_title).first()
 
-        if role:
-            if not role.is_execom_role:
-                return CustomResponse(
-                    general_message=f"'{role_title}' is already in use by another feature and cannot be created as an execom role"
-                ).get_failure_response()
-        else:
-            role = Role.objects.create(
-                id=str(uuid.uuid4()),
-                title=role_title,
-                created_by_id=user_id,
-                updated_by_id=user_id,
-                is_execom_role=True,
+            if role:
+                if not role.is_execom_role:
+                    return CustomResponse(
+                        general_message=f"'{role_title}' is already in use by another feature and cannot be created as an execom role"
+                    ).get_failure_response()
+            else:
+                role = Role.objects.create(
+                    id=str(uuid.uuid4()),
+                    title=role_title,
+                    created_by_id=user_id,
+                    updated_by_id=user_id,
+                    is_execom_role=True,
+                )
+
+            # Link role to this campus (no-op if already linked)
+            _, created = CampusExecomRole.objects.get_or_create(
+                org=org,
+                role=role,
+                defaults={"created_by_id": user_id, "updated_by_id": user_id}
             )
-
-        # Link role to this campus (no-op if already linked)
-        _, created = CampusExecomRole.objects.get_or_create(
-            org=org,
-            role=role,
-            defaults={"created_by_id": user_id, "updated_by_id": user_id}
-        )
-        message = "Role created successfully" if created else "Role already linked to this campus"
-        return CustomResponse(general_message=message).get_success_response()
+            message = "Role created successfully" if created else "Role already linked to this campus"
+            return CustomResponse(general_message=message).get_success_response()
 
 
 class CampusUserSearchAPI(APIView):
