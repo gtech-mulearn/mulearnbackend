@@ -1,7 +1,7 @@
 import uuid
 
 from db.organization import UserOrganizationLink
-from db.campus import CampusIGChapter
+from db.campus import CampusIGChapter, CampusExecomRole
 from db.user import Role, UserRoleLink
 from utils.types import OrganizationType, RoleType
 
@@ -97,6 +97,73 @@ def get_campus_context(request):
     return link.org, None
 
 
+def normalize_role_title(raw_title):
+    """
+    Collapse whitespace and Title Case a brand-new execom role title.
+    Only call this when actually creating a new CampusExecomRole row — an
+    existing row's stored casing should always win over re-normalizing it
+    (str.title() mis-cases things like "IG Lead" -> "Ig Lead" on repeat submits).
+    """
+    return " ".join(raw_title.strip().split()).title()
+
+
+def ig_synthetic_titles_for_org(org):
+    """
+    The dynamically-computed set of IG-derived execom-assignable titles valid for this campus —
+    a CampusIGLead + CampusIGCoLead pair per active CampusIGChapter. This is the single source of
+    truth both CampusExecomRoleAPI.get (merge) and CampusExecomAPI.post (validation) use, so the
+    two never drift apart.
+
+    Deliberately excludes "{code} IGLead" — that title is a plain, non-execom IG membership role
+    (is_execom_role=False, see assign_ig_campus_lead) and must never appear in an execom roles
+    fetcher response.
+    """
+    titles = set()
+    for chapter in CampusIGChapter.objects.filter(org=org, is_active=True).select_related("ig"):
+        if chapter.ig:
+            titles.add(RoleType.IG_CAMPUS_LEAD_ROLE(chapter.ig.code))
+            titles.add(RoleType.IG_CAMPUS_COLEAD_ROLE(chapter.ig.code))
+    return titles
+
+
+def match_ig_code_from_title(title):
+    """
+    If `title` exactly matches one of the IG-synthetic patterns for a REAL InterestGroup code
+    ("{code} CampusIGLead" / "{code} IGLead" / "{code} CampusIGCoLead"), return that code
+    (case-insensitive); else None. Used to keep campus_execom_role's global catalog free of
+    IG-scoped titles, which must stay campus-filtered rather than shown to every campus.
+    """
+    from db.task import InterestGroup
+
+    for suffix in ("CampusIGLead", "IGLead", "CampusIGCoLead"):
+        if title.lower().endswith(f" {suffix.lower()}"):
+            code = title[: -(len(suffix) + 1)].strip()
+            if InterestGroup.objects.filter(code__iexact=code).exists():
+                return code
+    return None
+
+
+def ensure_ig_execom_catalog_entries(ig_code, ig_name, acting_user_id):
+    """
+    Ensure this IG's execom-assignable titles (CampusIGLead, CampusIGCoLead — never the plain,
+    non-execom "{code} IGLead") exist in the global campus_execom_role directory (case-insensitive,
+    no duplicates). Called whenever an IG chapter is created or its lead is (re)assigned, so the
+    roles are immediately visible/reusable once relevant.
+    """
+    for title in (
+        RoleType.IG_CAMPUS_LEAD_ROLE(ig_code),
+        RoleType.IG_CAMPUS_COLEAD_ROLE(ig_code),
+    ):
+        if not CampusExecomRole.objects.filter(title__iexact=title).exists():
+            CampusExecomRole.objects.create(
+                id=str(uuid.uuid4()),
+                title=title,
+                description=f"{ig_name} Interest Group role",
+                created_by_id=acting_user_id,
+                updated_by_id=acting_user_id,
+            )
+
+
 def validate_campus_member(user_id, org_id):
     """Confirm that a user is an active member of the given campus (not alumni)."""
     return UserOrganizationLink.objects.filter(
@@ -138,6 +205,11 @@ def assign_ig_campus_lead(chapter, new_lead, acting_user_id):
             "is_execom_role": True,
         },
         {
+            "title": RoleType.IG_CAMPUS_COLEAD_ROLE(ig_code),
+            "description": f"{ig_name} Interest Group Campus Co-Lead",
+            "is_execom_role": True,
+        },
+        {
             "title": RoleType.IG_LEAD_ROLE(ig_code),
             "description": f"{ig_name} Interest Group Lead",
             "is_execom_role": False,
@@ -155,6 +227,9 @@ def assign_ig_campus_lead(chapter, new_lead, acting_user_id):
                 "is_execom_role": role_data["is_execom_role"],
             }
         )
+
+    # Keep the global role directory in sync with this IG's assignable titles.
+    ensure_ig_execom_catalog_entries(ig_code, ig_name, acting_user_id)
 
     role = Role.objects.get(title=RoleType.IG_CAMPUS_LEAD_ROLE(ig_code))
 

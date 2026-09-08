@@ -20,6 +20,9 @@ from .dash_campus_helper import (
     get_campus_events_qs,
     validate_campus_member,
     campus_staff_required,
+    normalize_role_title,
+    ig_synthetic_titles_for_org,
+    match_ig_code_from_title,
 )
 from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
 from rest_framework import serializers as s
@@ -268,7 +271,7 @@ class CampusExecomAPI(APIView):
         
         all_system_igs = InterestGroup.objects.all()
         for ig in all_system_igs:
-            if role_title.startswith(f"{ig.code} ") or role_title.startswith(f"{ig.name} ") or role_title.startswith(f"{ig.code}_") or role_title.startswith(f"{ig.name}_") or role_title == f"{ig.code} CampusLead" or role_title == f"{ig.code}CampusLead":
+            if role_title.startswith(f"{ig.code} ") or role_title.startswith(f"{ig.name} ") or role_title.startswith(f"{ig.code}_") or role_title.startswith(f"{ig.name}_") or role_title == f"{ig.code} CampusIGLead" or role_title == f"{ig.code}CampusIGLead":
                 ig_active_in_campus = active_igs.filter(ig=ig).exists()
                 if ig_active_in_campus:
                     matched_active_ig = True
@@ -286,9 +289,25 @@ class CampusExecomAPI(APIView):
                 general_message="User is not a member of your campus"
             ).get_failure_response()
 
+        # Campus Lead has exactly one holder per campus and is reassigned only via
+        # transfer-lead-role — never through this generic roster/assign flow.
+        if role_title == RoleType.CAMPUS_LEAD.value:
+            return CustomResponse(
+                general_message="Campus Lead can't be assigned here. Use transfer-lead-role instead."
+            ).get_failure_response()
+
+        # role_title must already be a recognized execom role: either present in the
+        # global campus_execom_role directory, or an active IG-chapter-derived synthetic
+        # title for this campus. No auto-create here — create it via the roles directory first.
+        if role_title not in ig_synthetic_titles_for_org(org) and not CampusExecomRole.objects.filter(title__iexact=role_title).exists():
+            return CustomResponse(
+                general_message=f"'{role_title}' is not a recognized execom role. Create it in the role directory first."
+            ).get_failure_response()
+
         # Wrap multi-table mutation in a single atomic transaction
         with transaction.atomic():
-            # Fetch role by title
+            # Fetch (or bridge-create) the matching system Role — UserRoleLink.role is a hard
+            # FK to `role`, independent of the campus_execom_role directory above.
             role = Role.objects.filter(title=role_title).first()
             if role is not None and not role.is_execom_role:
                 return CustomResponse(
@@ -302,12 +321,6 @@ class CampusExecomAPI(APIView):
                     updated_by_id=user_id,
                     is_execom_role=True,
                 )
-                # Link auto-created role to this campus
-                CampusExecomRole.objects.get_or_create(
-                    org=org,
-                    role=role,
-                    defaults={"created_by_id": user_id, "updated_by_id": user_id}
-                )
 
             # Assign new role — follows UserRoleLinkSerializer pattern
             serializer = campus_serializers.UserRoleLinkSerializer(
@@ -317,11 +330,21 @@ class CampusExecomAPI(APIView):
             if serializer.is_valid():
                 serializer.save()
 
-                if role_title.endswith("CampusLead") and role_title not in [RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value]:
-                    ig_code = role_title.replace("CampusLead", "").strip()
-                    chapter = CampusIGChapter.objects.filter(org=org, ig__code=ig_code, is_active=True).first()
+                ig_code_for_chapter_field = None
+                chapter_field = None
+                if role_title.endswith("CampusIGLead"):
+                    ig_code_for_chapter_field = role_title[: -len("CampusIGLead")].strip()
+                    chapter_field = "lead"
+                elif role_title.endswith("CampusIGCoLead"):
+                    ig_code_for_chapter_field = role_title[: -len("CampusIGCoLead")].strip()
+                    chapter_field = "co_lead"
+
+                if ig_code_for_chapter_field:
+                    chapter = CampusIGChapter.objects.filter(
+                        org=org, ig__code=ig_code_for_chapter_field, is_active=True
+                    ).first()
                     if chapter:
-                        chapter.lead = new_user
+                        setattr(chapter, chapter_field, new_user)
                         chapter.updated_by_id = user_id
                         chapter.save()
 
@@ -390,11 +413,21 @@ class CampusExecomAPI(APIView):
         user_id_of_role = role_link.user_id
         role_link.delete()
 
-        if role_title.endswith("CampusLead") and role_title not in [RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value]:
-            ig_code = role_title.replace("CampusLead", "").strip()
-            chapter = CampusIGChapter.objects.filter(org=org, ig__code=ig_code, is_active=True).first()
-            if chapter and chapter.lead_id == user_id_of_role:
-                chapter.lead = None
+        ig_code_for_chapter_field = None
+        chapter_field = None
+        if role_title.endswith("CampusIGLead"):
+            ig_code_for_chapter_field = role_title[: -len("CampusIGLead")].strip()
+            chapter_field = "lead"
+        elif role_title.endswith("CampusIGCoLead"):
+            ig_code_for_chapter_field = role_title[: -len("CampusIGCoLead")].strip()
+            chapter_field = "co_lead"
+
+        if ig_code_for_chapter_field:
+            chapter = CampusIGChapter.objects.filter(
+                org=org, ig__code=ig_code_for_chapter_field, is_active=True
+            ).first()
+            if chapter and getattr(chapter, f"{chapter_field}_id") == user_id_of_role:
+                setattr(chapter, chapter_field, None)
                 chapter.updated_by_id = user_id
                 chapter.save()
 
@@ -437,38 +470,25 @@ class CampusExecomRoleAPI(APIView):
         if org is None:
             return CustomResponse(general_message="Campus lead has no college").get_failure_response()
 
+        # Per-campus IG-derived roles this org actually has active.
+        this_campus_ig_titles = ig_synthetic_titles_for_org(org)
+
+        # Global catalog, filtered so an IG-shaped title only shows for a campus that
+        # actually has that IG active — otherwise it silently leaks another campus's roles.
+        # "{code} IGLead" is never shown here at all — it's a plain, non-execom IG membership
+        # role, not an assignable execom role, regardless of whether a legacy row for it exists.
+        # "Campus Lead" is also never shown — it has exactly one holder per campus and must be
+        # assigned only through transfer-lead-role, never through this generic roster picker.
         roles = set()
-        roles.add(RoleType.CAMPUS_LEAD.value)
-        roles.add(RoleType.LEAD_ENABLER.value)
-        roles.add(RoleType.ENABLER.value)
-        roles.add(RoleType.IG_LEAD.value)
-        
+        for title in CampusExecomRole.objects.values_list("title", flat=True):
+            if title.lower().endswith(" iglead") or title == RoleType.CAMPUS_LEAD.value:
+                continue
+            if match_ig_code_from_title(title) is None or title in this_campus_ig_titles:
+                roles.add(title)
 
-        # Active IG roles for this campus
-        active_chapters = CampusIGChapter.objects.filter(org=org, is_active=True).select_related("ig")
-        for chapter in active_chapters:
-            if chapter.ig:
-                roles.add(f"{chapter.ig.code} CampusLead")
-                roles.add(f"{chapter.ig.code} IGLead")
+        roles.update(this_campus_ig_titles)
 
-
-        ig_campus_lead_titles = [
-            RoleType.IG_CAMPUS_LEAD_ROLE(code)
-            for code in InterestGroup.objects.values_list("code", flat=True)
-        ]
-        campus_role_ids = CampusExecomRole.objects.filter(
-            org=org, is_active=True
-        ).values_list("role_id", flat=True)
-
-        custom_execom_roles = Role.objects.filter(
-            id__in=campus_role_ids,
-            is_execom_role=True,
-        ).exclude(
-            title__in=ig_campus_lead_titles
-        ).values_list("title", flat=True)
-        roles.update(custom_execom_roles)
-
-        return CustomResponse(response={"data": sorted(list(roles))}).get_success_response()
+        return CustomResponse(response={"data": sorted(roles)}).get_success_response()
 
 
     @role_required([RoleType.CAMPUS_LEAD.value,RoleType.LEAD_ENABLER.value])
@@ -498,39 +518,30 @@ class CampusExecomRoleAPI(APIView):
         if role_title in blacklist:
             return CustomResponse(general_message=f"Cannot create highly privileged system role: {role_title}").get_failure_response()
 
-        # Resolve campus
-        if not (user_org_link := get_user_college_link(user_id)):
-            return CustomResponse(general_message="User has no organization").get_failure_response()
-        org = user_org_link.org
-        if org is None:
-            return CustomResponse(general_message="Campus lead has no college").get_failure_response()
+        if match_ig_code_from_title(role_title) is not None:
+            return CustomResponse(
+                general_message=f"'{role_title}' is an Interest-Group-specific role — it's managed automatically per campus and can't be added to the shared role directory."
+            ).get_failure_response()
 
         with transaction.atomic():
-            # Global case-insensitive lookup — reuse existing role if title matches
-            role = Role.objects.filter(title__iexact=role_title).first()
+            # Global, case-insensitive reuse check — never create a duplicate title.
+            existing = CampusExecomRole.objects.filter(title__iexact=role_title).first()
+            if existing:
+                return CustomResponse(
+                    general_message="Role already exists",
+                    response={"id": existing.id, "title": existing.title},
+                ).get_success_response()
 
-            if role:
-                if not role.is_execom_role:
-                    return CustomResponse(
-                        general_message=f"'{role_title}' is already in use by another feature and cannot be created as an execom role"
-                    ).get_failure_response()
-            else:
-                role = Role.objects.create(
-                    id=str(uuid.uuid4()),
-                    title=role_title,
-                    created_by_id=user_id,
-                    updated_by_id=user_id,
-                    is_execom_role=True,
-                )
-
-            # Link role to this campus (no-op if already linked)
-            _, created = CampusExecomRole.objects.get_or_create(
-                org=org,
-                role=role,
-                defaults={"created_by_id": user_id, "updated_by_id": user_id}
+            new_role = CampusExecomRole.objects.create(
+                id=str(uuid.uuid4()),
+                title=normalize_role_title(role_title),
+                created_by_id=user_id,
+                updated_by_id=user_id,
             )
-            message = "Role created successfully" if created else "Role already linked to this campus"
-            return CustomResponse(general_message=message).get_success_response()
+            return CustomResponse(
+                general_message="Role created successfully",
+                response={"id": new_role.id, "title": new_role.title},
+            ).get_success_response()
 
 
 class CampusUserSearchAPI(APIView):

@@ -17,6 +17,8 @@ class CampusIGChapter(models.Model):
     ig = models.ForeignKey(InterestGroup, on_delete=models.CASCADE, related_name='campus_ig_chapter_ig')
     lead = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='lead_id',
                              related_name='campus_ig_chapter_lead', blank=True, null=True)
+    co_lead = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='co_lead_id',
+                                related_name='campus_ig_chapter_co_lead', blank=True, null=True)
     description = models.TextField(blank=True, null=True)
     icon_link = models.URLField(max_length=500, blank=True, null=True)
     is_active = models.BooleanField(default=True)
@@ -50,18 +52,22 @@ class CampusSocialLink(models.Model):
 
 
 class CampusExecomRole(models.Model):
-    id         = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
-    org        = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='campus_execom_roles')
-    role       = models.ForeignKey('db.Role', on_delete=models.CASCADE, related_name='campus_execom_role_links')
-    is_active  = models.BooleanField(default=True)
-    created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID),
-                                   db_column='created_by', related_name='campus_execom_role_created_by')
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID),
-                                   db_column='updated_by', related_name='campus_execom_role_updated_by')
-    updated_at = models.DateTimeField(auto_now=True)
+    """Global, campus-agnostic catalog of execom role titles, reusable across all campuses.
+
+    Deliberately has no FK to Organization or the global Role table — a title here is just a
+    reusable name in the directory; the corresponding system Role (used by UserRoleLink) is
+    resolved/created independently at assignment time.
+    """
+    id          = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    title       = models.CharField(max_length=75, unique=True)
+    description = models.CharField(max_length=300, blank=True, null=True)
+    created_by  = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID),
+                                    db_column='created_by', related_name='campus_execom_role_created_by')
+    created_at  = models.DateTimeField(auto_now_add=True)
+    updated_by  = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID),
+                                    db_column='updated_by', related_name='campus_execom_role_updated_by')
+    updated_at  = models.DateTimeField(auto_now=True)
 
     class Meta:
         managed = False
         db_table = 'campus_execom_role'
-        unique_together = [('org', 'role')]
