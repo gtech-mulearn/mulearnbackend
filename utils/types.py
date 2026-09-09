@@ -51,7 +51,11 @@ class RoleType(Enum):
 
     @classmethod
     def IG_CAMPUS_LEAD_ROLE(cls, ig_code: str):
-        return f"{ig_code} CampusLead"
+        return f"{ig_code} CampusIGLead"
+
+    @classmethod
+    def IG_CAMPUS_COLEAD_ROLE(cls, ig_code: str):
+        return f"{ig_code} CampusIGCoLead"
 
     @classmethod
     def IG_LEAD_ROLE(cls, ig_code: str):

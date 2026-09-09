@@ -145,10 +145,10 @@ class OrganizerOptionsAPI(APIView):
             )
             options['can_create_as_ig'] = list(igs)
 
-        # Campus IG leads: roles like "WEBDEV CampusLead"
+        # Campus IG leads: roles like "WEBDEV CampusIGLead"
         ci_lead_codes = [
-            r.replace(' CampusLead', '')
-            for r in roles if r.endswith(' CampusLead')
+            r.replace(' CampusIGLead', '')
+            for r in roles if r.endswith(' CampusIGLead')
         ]
         if ci_lead_codes:
             igs = InterestGroup.objects.filter(code__in=ci_lead_codes).values(

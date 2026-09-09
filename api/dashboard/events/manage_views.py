@@ -62,8 +62,8 @@ def _can_create_event(roles):
     """True if user holds at least one event-creation role."""
     if MANAGEABLE_ROLES.intersection(set(roles)):
         return True
-    # Dynamic IG/campus roles: e.g. "WEBDEV IGLead", "WEBDEV CampusLead"
-    return any(r.endswith(' IGLead') or r.endswith(' CampusLead') for r in roles)
+    # Dynamic IG/campus roles: e.g. "WEBDEV IGLead", "WEBDEV CampusIGLead"
+    return any(r.endswith(' IGLead') or r.endswith(' CampusIGLead') for r in roles)
 
 
 def _get_manageable_events():
@@ -1142,7 +1142,7 @@ def _caller_can_respond(conn, user_id, roles):
         from db.task import InterestGroup
         ig = InterestGroup.objects.filter(id=conn.entity_id).first()
         if ig:
-            return f'{ig.code} CampusLead' in roles
+            return f'{ig.code} CampusIGLead' in roles
     return False
 
 
@@ -1475,7 +1475,7 @@ class MyEventInvitesAPI(APIView):
             if role.endswith(' IGLead'):
                 ig_code = role.replace(' IGLead', '')
                 auth_ig_codes.append(ig_code)
-            if role.endswith(' CampusLead') or role == RoleType.CAMPUS_LEAD.value:
+            if role.endswith(' CampusIGLead') or role == RoleType.CAMPUS_LEAD.value:
                 has_any_campus_lead_role = True
 
         from db.task import InterestGroup
@@ -1501,7 +1501,7 @@ class MyEventInvitesAPI(APIView):
             # Scope campus-IG invites to the specific IGs the user is a campus
             # lead for (entity_id on a campus_ig invite is the InterestGroup id).
             campus_ig_codes = [
-                r.replace(' CampusLead', '') for r in roles if r.endswith(' CampusLead')
+                r.replace(' CampusIGLead', '') for r in roles if r.endswith(' CampusIGLead')
             ]
             if campus_ig_codes:
                 ci_ig_ids = InterestGroup.objects.filter(

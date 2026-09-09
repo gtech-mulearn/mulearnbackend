@@ -120,7 +120,7 @@ def _resolve_ig_mentors(ig, mentor_links=None, mentor_socials_map=None, mentor_p
     if mentor_profiles_map is None:
         mentor_profiles = {
             m.user_id: m
-            for m in UserMentor.objects.filter(user_id__in=user_ids).select_related("org")
+            for m in UserMentor.objects.filter(user_id__in=user_ids)
         }
     else:
         mentor_profiles = mentor_profiles_map

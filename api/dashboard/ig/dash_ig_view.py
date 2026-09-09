@@ -5,6 +5,7 @@ from rest_framework.views import APIView
 from django.db import transaction
 from db.task import InterestGroup
 from db.user import User, Role
+from db.campus import CampusExecomRole
 from utils.permission import CustomizePermission
 from utils.permission import JWTUtils, role_required
 from utils.response import CustomResponse
@@ -427,11 +428,47 @@ class InterestGroupAPI(APIView):
             ).first()
 
             if ig_campus_lead_role:
-                ig_campus_lead_role.title = ig_new_code + " CampusLead"
+                ig_campus_lead_role.title = RoleType.IG_CAMPUS_LEAD_ROLE(ig_new_code)
                 ig_campus_lead_role.description = (
                     ig_new_name + " Interest Group Campus Lead"
                 )
                 ig_campus_lead_role.save()
+
+            # Co-Lead is a peer role to Campus Lead above and must be renamed the same way —
+            # otherwise its holder is silently orphaned under the old code (see PR history).
+            ig_campus_colead_role = Role.objects.filter(
+                title=RoleType.IG_CAMPUS_COLEAD_ROLE(ig_old_code)
+            ).first()
+
+            if ig_campus_colead_role:
+                ig_campus_colead_role.title = RoleType.IG_CAMPUS_COLEAD_ROLE(ig_new_code)
+                ig_campus_colead_role.description = (
+                    ig_new_name + " Interest Group Campus Co-Lead"
+                )
+                ig_campus_colead_role.save()
+
+            # The campus_execom_role catalog is a separate, decoupled directory (no FK to
+            # `Role`) that also stores these code-derived titles for the campus dashboard's
+            # role picker. Keep it in sync too, or the old-code titles linger there forever
+            # and leak into every campus's assignable-role list as if they were generic roles.
+            for old_title, new_title in (
+                (RoleType.IG_CAMPUS_LEAD_ROLE(ig_old_code), RoleType.IG_CAMPUS_LEAD_ROLE(ig_new_code)),
+                (RoleType.IG_CAMPUS_COLEAD_ROLE(ig_old_code), RoleType.IG_CAMPUS_COLEAD_ROLE(ig_new_code)),
+            ):
+                if old_title == new_title:
+                    continue
+                catalog_row = CampusExecomRole.objects.filter(title__iexact=old_title).first()
+                if catalog_row is None:
+                    continue
+                if CampusExecomRole.objects.filter(title__iexact=new_title).exclude(pk=catalog_row.pk).exists():
+                    # A row for the new-code title already exists (shouldn't normally
+                    # happen) — drop the stale old-code row instead of violating the
+                    # catalog's unique constraint on title.
+                    catalog_row.delete()
+                    continue
+                catalog_row.title = new_title
+                catalog_row.updated_by_id = user_id
+                catalog_row.save()
 
             ig_lead_role = Role.objects.filter(
                 title=RoleType.IG_LEAD_ROLE(ig_old_code)
