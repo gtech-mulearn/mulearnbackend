@@ -306,12 +306,40 @@ class CampusExecomAPI(APIView):
             ).get_failure_response()
 
         # role_title must already be a recognized execom role: either present in the
-        # global campus_execom_role directory, or an active IG-chapter-derived synthetic
-        # title for this campus. No auto-create here — create it via the roles directory first.
-        if role_title not in ig_synthetic_titles_for_org(org) and not CampusExecomRole.objects.filter(title__iexact=role_title).exists():
+        # global campus_execom_role directory, an active IG-chapter-derived synthetic
+        # title for this campus, or one of the always-assignable system roles below.
+        # No auto-create here — create it via the roles directory first.
+        #
+        # Both the synthetic-title check and the always-assignable check compare
+        # case-insensitively (via canonical_role_title), matching the catalog check's
+        # title__iexact and the DB's own case-insensitive collation — a differently-cased
+        # but otherwise valid title (e.g. "webdev campusiglead") must not be rejected while
+        # "WEBDEV CampusIGLead" is accepted.
+        ig_synthetic_titles_by_casefold = {
+            title.casefold(): title for title in ig_synthetic_titles_for_org(org)
+        }
+        # Enabler and Lead Enabler are core system roles a Campus Lead must always be able
+        # to grant from the campus dashboard, independent of whether the campus_execom_role
+        # catalog has been seeded with them.
+        ALWAYS_ASSIGNABLE_EXECOM_ROLES_BY_CASEFOLD = {
+            RoleType.ENABLER.value.casefold(): RoleType.ENABLER.value,
+            RoleType.LEAD_ENABLER.value.casefold(): RoleType.LEAD_ENABLER.value,
+        }
+        canonical_title_match = (
+            ig_synthetic_titles_by_casefold.get(canonical_role_title)
+            or ALWAYS_ASSIGNABLE_EXECOM_ROLES_BY_CASEFOLD.get(canonical_role_title)
+        )
+
+        if canonical_title_match is None and not CampusExecomRole.objects.filter(title__iexact=role_title).exists():
             return CustomResponse(
                 general_message=f"'{role_title}' is not a recognized execom role. Create it in the role directory first."
             ).get_failure_response()
+
+        # Normalize to the canonical casing so the chapter-field extraction below (which
+        # does an exact-case suffix match) and the Role row we resolve/create below stay
+        # consistent regardless of how the client cased the request.
+        if canonical_title_match is not None:
+            role_title = canonical_title_match
 
         # Wrap multi-table mutation in a single atomic transaction
         with transaction.atomic():
@@ -496,6 +524,12 @@ class CampusExecomRoleAPI(APIView):
                 roles.add(title)
 
         roles.update(this_campus_ig_titles)
+
+        # Enabler and Lead Enabler must always be offered as assignable roles from the
+        # campus dashboard, independent of whether the campus_execom_role catalog has
+        # been seeded with them — mirrors the always-assignable check in CampusExecomAPI.post.
+        roles.add(RoleType.ENABLER.value)
+        roles.add(RoleType.LEAD_ENABLER.value)
 
         return CustomResponse(response={"data": sorted(roles)}).get_success_response()
 
