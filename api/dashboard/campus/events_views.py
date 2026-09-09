@@ -229,6 +229,14 @@ class CampusExecomAPI(APIView):
                 general_message="muid and role_title are required"
             ).get_failure_response()
 
+        # Canonical form used for every privileged-role comparison below. The `role`
+        # table uses a case-insensitive DB collation (utf8mb4_0900_ai_ci), so a plain
+        # Python `==`/`in` check against the raw, attacker-supplied casing can be
+        # bypassed (e.g. "campus lead") while the later DB lookup still resolves to
+        # the real, privileged row. Casefold once and compare against that everywhere
+        # — never against the raw `role_title`.
+        canonical_role_title = " ".join(role_title.strip().split()).casefold()
+
         # System roles that are highly privileged and cannot be assigned by campus leads
         BLACKLIST_ROLES = [
             RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.APPRAISER.value,
@@ -239,8 +247,9 @@ class CampusExecomAPI(APIView):
             RoleType.INTERN.value, RoleType.PRE_MEMBER.value, RoleType.SUSPEND.value,
             RoleType.MULEARNER.value
         ]
-        
-        if role_title in BLACKLIST_ROLES:
+        BLACKLIST_ROLES_CASEFOLD = {r.casefold() for r in BLACKLIST_ROLES}
+
+        if canonical_role_title in BLACKLIST_ROLES_CASEFOLD:
             return CustomResponse(
                 general_message=f"Cannot assign highly privileged system role: {role_title}"
             ).get_failure_response()
@@ -291,7 +300,7 @@ class CampusExecomAPI(APIView):
 
         # Campus Lead has exactly one holder per campus and is reassigned only via
         # transfer-lead-role — never through this generic roster/assign flow.
-        if role_title == RoleType.CAMPUS_LEAD.value:
+        if canonical_role_title == RoleType.CAMPUS_LEAD.value.casefold():
             return CustomResponse(
                 general_message="Campus Lead can't be assigned here. Use transfer-lead-role instead."
             ).get_failure_response()
@@ -515,7 +524,7 @@ class CampusExecomRoleAPI(APIView):
             RoleType.MULEARNER.value
         ]
 
-        if role_title in blacklist:
+        if role_title.casefold() in {r.casefold() for r in blacklist}:
             return CustomResponse(general_message=f"Cannot create highly privileged system role: {role_title}").get_failure_response()
 
         if match_ig_code_from_title(role_title) is not None:
@@ -523,25 +532,23 @@ class CampusExecomRoleAPI(APIView):
                 general_message=f"'{role_title}' is an Interest-Group-specific role — it's managed automatically per campus and can't be added to the shared role directory."
             ).get_failure_response()
 
-        with transaction.atomic():
-            # Global, case-insensitive reuse check — never create a duplicate title.
-            existing = CampusExecomRole.objects.filter(title__iexact=role_title).first()
-            if existing:
-                return CustomResponse(
-                    general_message="Role already exists",
-                    response={"id": existing.id, "title": existing.title},
-                ).get_success_response()
-
-            new_role = CampusExecomRole.objects.create(
-                id=str(uuid.uuid4()),
-                title=normalize_role_title(role_title),
-                created_by_id=user_id,
-                updated_by_id=user_id,
-            )
-            return CustomResponse(
-                general_message="Role created successfully",
-                response={"id": new_role.id, "title": new_role.title},
-            ).get_success_response()
+        # Atomic get-or-create: the title column has a case-insensitive unique
+        # constraint, so a plain "check, then create" is racy — two concurrent
+        # requests can both pass the check and then one hits an IntegrityError
+        # on insert. get_or_create retries the lookup if create() raises that
+        # IntegrityError, so the loser reuses the winner's row instead of 500ing.
+        role, created = CampusExecomRole.objects.get_or_create(
+            title=normalize_role_title(role_title),
+            defaults={
+                "id": str(uuid.uuid4()),
+                "created_by_id": user_id,
+                "updated_by_id": user_id,
+            },
+        )
+        return CustomResponse(
+            general_message="Role created successfully" if created else "Role already exists",
+            response={"id": role.id, "title": role.title},
+        ).get_success_response()
 
 
 class CampusUserSearchAPI(APIView):

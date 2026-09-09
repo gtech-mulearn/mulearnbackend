@@ -427,7 +427,7 @@ class InterestGroupAPI(APIView):
             ).first()
 
             if ig_campus_lead_role:
-                ig_campus_lead_role.title = ig_new_code + " CampusLead"
+                ig_campus_lead_role.title = RoleType.IG_CAMPUS_LEAD_ROLE(ig_new_code)
                 ig_campus_lead_role.description = (
                     ig_new_name + " Interest Group Campus Lead"
                 )

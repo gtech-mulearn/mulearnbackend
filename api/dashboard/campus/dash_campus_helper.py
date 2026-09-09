@@ -154,14 +154,19 @@ def ensure_ig_execom_catalog_entries(ig_code, ig_name, acting_user_id):
         RoleType.IG_CAMPUS_LEAD_ROLE(ig_code),
         RoleType.IG_CAMPUS_COLEAD_ROLE(ig_code),
     ):
-        if not CampusExecomRole.objects.filter(title__iexact=title).exists():
-            CampusExecomRole.objects.create(
-                id=str(uuid.uuid4()),
-                title=title,
-                description=f"{ig_name} Interest Group role",
-                created_by_id=acting_user_id,
-                updated_by_id=acting_user_id,
-            )
+        # Atomic get-or-create: title has a case-insensitive unique constraint, so a
+        # separate check-then-create is racy under concurrent chapter creation — two
+        # requests can both pass the check and then one hits an IntegrityError on
+        # insert. get_or_create retries the lookup on that IntegrityError instead.
+        CampusExecomRole.objects.get_or_create(
+            title=title,
+            defaults={
+                "id": str(uuid.uuid4()),
+                "description": f"{ig_name} Interest Group role",
+                "created_by_id": acting_user_id,
+                "updated_by_id": acting_user_id,
+            },
+        )
 
 
 def validate_campus_member(user_id, org_id):
@@ -185,7 +190,7 @@ def get_campus_ig_chapters(org_id):
 def assign_ig_campus_lead(chapter, new_lead, acting_user_id):
     """
     Assign a new campus-level IG lead for a chapter.
-    - Removes the old lead's UserRoleLink for "{ig_code} CampusLead" at this campus.
+    - Removes the old lead's UserRoleLink for "{ig_code} CampusIGLead" at this campus.
     - Creates a new UserRoleLink for the new lead.
     - Updates the chapter's lead field.
     Mirrors the role-transfer logic in TransferIGRoleAPI.post().
