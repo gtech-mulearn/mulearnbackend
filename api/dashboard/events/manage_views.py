@@ -4,7 +4,7 @@ Organiser / co-owner access required for all endpoints.
 """
 import uuid
 from django.utils import timezone
-from django.db.models import Q
+from django.db.models import Q, Case, When, Value, CharField
 from django.db import transaction
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.views import APIView
@@ -317,9 +317,24 @@ class ManageEventListCreateAPI(APIView):
             else:
                 events = events.filter(status=status)
 
+        # Map admin events to 'mulearn' so ?search=mulearn finds them.
+        events = events.annotate(
+            organiser_display_name=Case(
+                When(organiser_type=Event.OrganiserType.ADMIN, then=Value('mulearn')),
+                default=Value(''),
+                output_field=CharField(),
+            )
+        )
+
         paginated = CommonUtils.get_paginated_queryset(
             events.select_related('category', 'organiser_ig', 'organiser_org'), request,
-            search_fields=['title', 'venue_city', 'organiser_org__title', 'organiser_ig__name'],
+            search_fields=[
+                'title',
+                'venue_city',
+                'organiser_org__title',
+                'organiser_ig__name',
+                'organiser_display_name',
+            ],
             sort_fields={'created_at': 'created_at', 'start_datetime': 'start_datetime'},
         )
         serializer = EventListItemSerializer(
