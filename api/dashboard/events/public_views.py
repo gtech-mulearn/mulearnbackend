@@ -4,7 +4,7 @@ endpoints benefit from an authenticated user context.
 """
 import uuid
 
-from django.db.models import F, Q, Exists, OuterRef
+from django.db.models import F, Q, Exists, OuterRef, Case, When, Value, IntegerField, CharField
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 
@@ -171,9 +171,46 @@ class EventListAPI(APIView):
     def get(self, request):
         events, user_id = _public_events_queryset(request, featured_only=False)
 
+        # Annotate admin events with 'mulearn' so ?search=mulearn finds them.
+        # All other events get an empty string so they never falsely match.
+        events = events.annotate(
+            organiser_display_name=Case(
+                When(organiser_type=Event.OrganiserType.ADMIN, then=Value('mulearn')),
+                default=Value(''),
+                output_field=CharField(),
+            )
+        )
+
+        # College-first sort: events organised by the viewer's own college float
+        # to the top (priority 0), all others follow (priority 1).
+        # Applied before pagination so every page respects the ordering.
+        # No-op for unauthenticated users or users with no college affiliation.
+        if user_id:
+            user_college_ids = list(
+                UserOrganizationLink.objects.filter(
+                    user_id=user_id,
+                    org__org_type='College',
+                ).values_list('org_id', flat=True)
+            )
+            if user_college_ids:
+                events = events.annotate(
+                    college_priority=Case(
+                        When(organiser_org_id__in=user_college_ids, then=Value(0)),
+                        default=Value(1),
+                        output_field=IntegerField(),
+                    )
+                ).order_by('college_priority', 'start_datetime', 'pk')
+
         paginated = CommonUtils.get_paginated_queryset(
             events, request,
-            search_fields=['title', 'description', 'venue_city'],
+            search_fields=[
+                'title',
+                'description',
+                'venue_city',
+                'organiser_org__title',      # campus & company organiser names
+                'organiser_ig__name',        # IG organiser names
+                'organiser_display_name',    # 'mulearn' for admin events
+            ],
             sort_fields=_PUBLIC_EVENT_SORT_FIELDS,
         )
 
