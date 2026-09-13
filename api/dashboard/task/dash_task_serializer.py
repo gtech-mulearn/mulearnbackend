@@ -126,6 +126,9 @@ class TaskModifySerializer(serializers.ModelSerializer):
             "bonus_time",
             "event_id",
         )
+        extra_kwargs = {
+            "channel": {"required": False, "allow_null": True},
+        }
 
     def validate_event_id(self, value):
         if not value:
