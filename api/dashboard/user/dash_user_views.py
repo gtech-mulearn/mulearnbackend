@@ -709,3 +709,158 @@ class UserPreferencesAPI(APIView):
         return CustomResponse(
             general_message="Preferences updated successfully"
         ).get_success_response()
+
+
+class UnverifiedOrgLinkUsersAPI(APIView):
+    """List users with unverified org links.
+
+    GET /api/v1/dashboard/user/unverified-org-links/
+
+    Access rules:
+    - Admins:        see all unverified links platform-wide.
+    - Campus Leads:  see only unverified links for their own campus/org.
+
+    Query params (all optional):
+        search    – matches full_name, muid, email, mobile, org title
+        sortBy    – full_name | muid | email | org_title | created_at
+        sortOrder – asc | desc
+        page / perPage – pagination
+    """
+
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, RoleType.CAMPUS_LEAD.value])
+    @extend_schema(
+        tags=["Dashboard - User"],
+        description=(
+            "Returns a paginated list of users whose UserOrganizationLink is not yet "
+            "verified. Admins see all records; Campus Leads see only their own campus."
+        ),
+        responses={200: dash_user_serializer.UnverifiedOrgLinkUsersSerializer},
+    )
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
+
+        base_qs = (
+            UserOrganizationLink.objects.select_related(
+                "user",
+                "org",
+            )
+            .filter(verified=False)
+            .only(
+                "id", "graduation_year", "is_alumni", "created_at", "verified",
+                "user__id", "user__full_name", "user__muid",
+                "user__email", "user__mobile", "user__created_at",
+                "org__id", "org__title", "org__org_type",
+            )
+        )
+
+        if RoleType.ADMIN.value in roles:
+            # Admins see everything
+            queryset = base_qs
+        else:
+            # Campus Lead — single query, fetch only org_id
+            campus_link = (
+                UserOrganizationLink.objects
+                .filter(
+                    user_id=user_id,
+                    org__org_type=OrganizationType.COLLEGE.value,
+                )
+                .only("org_id")
+                .order_by("-created_at", "-id")
+                .first()
+            )
+            if not campus_link:
+                return CustomResponse(
+                    general_message="You are not linked to any campus."
+                ).get_failure_response()
+            queryset = base_qs.filter(org_id=campus_link.org_id)
+
+        paginated = CommonUtils.get_paginated_queryset(
+            queryset,
+            request,
+            search_fields=[
+                "user__full_name",
+                "user__muid",
+                "user__email",
+                "user__mobile",
+                "org__title",
+            ],
+            sort_fields={
+                "full_name": "user__full_name",
+                "muid": "user__muid",
+                "email": "user__email",
+                "org_title": "org__title",
+                "created_at": "created_at",
+            },
+        )
+
+        serializer = dash_user_serializer.UnverifiedOrgLinkUsersSerializer(
+            paginated.get("queryset"), many=True
+        )
+
+        return CustomResponse().paginated_response(
+            data=serializer.data, pagination=paginated.get("pagination")
+        )
+
+    @role_required([RoleType.ADMIN.value, RoleType.CAMPUS_LEAD.value])
+    @extend_schema(
+        tags=["Dashboard - User"],
+        description=(
+            "Toggle the verified field of a UserOrganizationLink. "
+            "Admins can toggle any link; Campus Leads can only toggle links "
+            "that belong to their own campus."
+        ),
+        responses={
+            200: dash_user_serializer.UnverifiedOrgLinkUsersSerializer,
+        },
+    )
+    def patch(self, request, link_id):
+        link = UserOrganizationLink.objects.select_related(
+            "user", "org"
+        ).only(
+            "id", "verified", "graduation_year", "is_alumni", "created_at", "org_id",
+            "user__id", "user__full_name", "user__muid",
+            "user__email", "user__mobile", "user__created_at",
+            "org__id", "org__title", "org__org_type",
+        ).filter(id=link_id).first()
+
+        if link is None:
+            return CustomResponse(
+                general_message="Organization link not found."
+            ).get_failure_response()
+
+        roles = JWTUtils.fetch_role(request)
+
+        if RoleType.ADMIN.value not in roles:
+            # Campus Lead — single query, only need org_id for comparison
+            user_id = JWTUtils.fetch_user_id(request)
+            campus_link = (
+                UserOrganizationLink.objects
+                .filter(
+                    user_id=user_id,
+                    org__org_type=OrganizationType.COLLEGE.value,
+                )
+                .only("org_id")
+                .order_by("-created_at", "-id")
+                .first()
+            )
+            if not campus_link:
+                return CustomResponse(
+                    general_message="You are not linked to any campus."
+                ).get_failure_response()
+            if link.org_id != campus_link.org_id:
+                return CustomResponse(
+                    general_message="You can only manage links for your own campus."
+                ).get_failure_response()
+
+        # Toggle the verified flag
+        link.verified = not link.verified
+        link.save(update_fields=["verified"])
+
+        serializer = dash_user_serializer.UnverifiedOrgLinkUsersSerializer(link)
+        return CustomResponse(
+            general_message=f"Verification status set to {link.verified}.",
+            response=serializer.data,
+        ).get_success_response()

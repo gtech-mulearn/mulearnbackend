@@ -8,6 +8,16 @@ urlpatterns = [
     ),
     path("search/", dash_user_views.UserSearchAPI.as_view(), name="search-user"),
     path(
+        "unverified-org-links/",
+        dash_user_views.UnverifiedOrgLinkUsersAPI.as_view(),
+        name="unverified-org-link-users",
+    ),
+    path(
+        "unverified-org-links/<str:link_id>/",
+        dash_user_views.UnverifiedOrgLinkUsersAPI.as_view(),
+        name="toggle-org-link-verification",
+    ),
+    path(
         "verification/",
         dash_user_views.UserVerificationAPI.as_view(),
         name="list-verification",
