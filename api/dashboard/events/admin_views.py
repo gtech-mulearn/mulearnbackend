@@ -2,6 +2,7 @@
 Admin Events API views.
 All endpoints require the 'Admins' role.
 """
+from django.db.models import Case, When, Value, CharField
 from rest_framework.views import APIView
 
 from db.events import Event, EventLog
@@ -68,9 +69,25 @@ class AdminEventListAPI(APIView):
         if is_featured := params.get('is_featured'):
             events = events.filter(is_featured=is_featured.lower() == 'true')
 
+        # Map admin events to 'mulearn' so ?search=mulearn finds them.
+        events = events.annotate(
+            organiser_display_name=Case(
+                When(organiser_type=Event.OrganiserType.ADMIN, then=Value('mulearn')),
+                default=Value(''),
+                output_field=CharField(),
+            )
+        )
+
         paginated = CommonUtils.get_paginated_queryset(
             events, request,
-            search_fields=['title', 'description', 'venue_city'],
+            search_fields=[
+                'title',
+                'description',
+                'venue_city',
+                'organiser_org__title',
+                'organiser_ig__name',
+                'organiser_display_name',
+            ],
             sort_fields={
                 'created_at': 'created_at',
                 'start_datetime': 'start_datetime',
