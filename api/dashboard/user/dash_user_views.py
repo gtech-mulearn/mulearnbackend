@@ -712,15 +712,16 @@ class UserPreferencesAPI(APIView):
 
 
 class UnverifiedOrgLinkUsersAPI(APIView):
-    """List users with unverified org links.
+    """List users with unverified org links and update their verification status.
 
     GET /api/v1/dashboard/user/unverified-org-links/
+    PATCH /api/v1/dashboard/user/unverified-org-links/<link_id>/
 
     Access rules:
-    - Admins:        see all unverified links platform-wide.
-    - Campus Leads:  see only unverified links for their own campus/org.
+    - Admins:        see and update all unverified links platform-wide.
+    - Campus Leads:  see and update only unverified links for their verified campus.
 
-    Query params (all optional):
+    Query params for GET (all optional):
         search    – matches full_name, muid, email, mobile, org title
         sortBy    – full_name | muid | email | org_title | created_at
         sortOrder – asc | desc
@@ -736,9 +737,36 @@ class UnverifiedOrgLinkUsersAPI(APIView):
             "Returns a paginated list of users whose UserOrganizationLink is not yet "
             "verified. Admins see all records; Campus Leads see only their own campus."
         ),
-        responses={200: dash_user_serializer.UnverifiedOrgLinkUsersSerializer},
+        responses={
+            200: inline_serializer(
+                name="UnverifiedOrgLinkUsersPaginatedResponse",
+                fields={
+                    "hasError": s.BooleanField(),
+                    "statusCode": s.IntegerField(),
+                    "message": s.DictField(),
+                    "response": inline_serializer(
+                        name="UnverifiedOrgLinkUsersPaginatedData",
+                        fields={
+                            "data": dash_user_serializer.UnverifiedOrgLinkUsersSerializer(many=True),
+                            "pagination": inline_serializer(
+                                name="UnverifiedOrgLinkPaginationInfo",
+                                fields={
+                                    "count": s.IntegerField(),
+                                    "totalPages": s.IntegerField(),
+                                    "isNext": s.BooleanField(),
+                                    "isPrev": s.BooleanField(),
+                                    "nextPage": s.IntegerField(allow_null=True),
+                                },
+                            ),
+                        },
+                    ),
+                },
+            )
+        },
     )
     def get(self, request):
+        from api.dashboard.campus.dash_campus_helper import get_user_college_link
+
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
 
@@ -760,22 +788,13 @@ class UnverifiedOrgLinkUsersAPI(APIView):
             # Admins see everything
             queryset = base_qs
         else:
-            # Campus Lead — single query, fetch only org_id
-            campus_link = (
-                UserOrganizationLink.objects
-                .filter(
-                    user_id=user_id,
-                    org__org_type=OrganizationType.COLLEGE.value,
-                )
-                .only("org_id")
-                .order_by("-created_at", "-id")
-                .first()
-            )
-            if not campus_link:
+            # Campus Lead — resolve caller's verified campus
+            user_org_link = get_user_college_link(user_id)
+            if not user_org_link or not user_org_link.verified or user_org_link.org is None:
                 return CustomResponse(
-                    general_message="You are not linked to any campus."
+                    general_message="You do not have a verified campus organization."
                 ).get_failure_response()
-            queryset = base_qs.filter(org_id=campus_link.org_id)
+            queryset = base_qs.filter(org_id=user_org_link.org_id)
 
         paginated = CommonUtils.get_paginated_queryset(
             queryset,
@@ -808,15 +827,21 @@ class UnverifiedOrgLinkUsersAPI(APIView):
     @extend_schema(
         tags=["Dashboard - User"],
         description=(
-            "Toggle the verified field of a UserOrganizationLink. "
-            "Admins can toggle any link; Campus Leads can only toggle links "
+            "Update the verified field of a UserOrganizationLink. "
+            "Admins can update any link; Campus Leads can only update links "
             "that belong to their own campus."
+        ),
+        request=inline_serializer(
+            name="UnverifiedOrgLinkVerificationRequest",
+            fields={"verified": s.BooleanField(required=True)},
         ),
         responses={
             200: dash_user_serializer.UnverifiedOrgLinkUsersSerializer,
         },
     )
     def patch(self, request, link_id):
+        from api.dashboard.campus.dash_campus_helper import get_user_college_link
+
         link = UserOrganizationLink.objects.select_related(
             "user", "org"
         ).only(
@@ -834,29 +859,26 @@ class UnverifiedOrgLinkUsersAPI(APIView):
         roles = JWTUtils.fetch_role(request)
 
         if RoleType.ADMIN.value not in roles:
-            # Campus Lead — single query, only need org_id for comparison
+            # Campus Lead — resolve caller's verified campus
             user_id = JWTUtils.fetch_user_id(request)
-            campus_link = (
-                UserOrganizationLink.objects
-                .filter(
-                    user_id=user_id,
-                    org__org_type=OrganizationType.COLLEGE.value,
-                )
-                .only("org_id")
-                .order_by("-created_at", "-id")
-                .first()
-            )
-            if not campus_link:
+            user_org_link = get_user_college_link(user_id)
+            if not user_org_link or not user_org_link.verified or user_org_link.org is None:
                 return CustomResponse(
-                    general_message="You are not linked to any campus."
+                    general_message="You do not have a verified campus organization."
                 ).get_failure_response()
-            if link.org_id != campus_link.org_id:
+            if link.org_id != user_org_link.org_id:
                 return CustomResponse(
                     general_message="You can only manage links for your own campus."
                 ).get_failure_response()
 
-        # Toggle the verified flag
-        link.verified = not link.verified
+        verified = request.data.get("verified")
+        if verified is None or not isinstance(verified, bool):
+            return CustomResponse(
+                general_message="Please provide a valid boolean 'verified' value in the request body."
+            ).get_failure_response()
+
+        # Update the verified flag idempotently
+        link.verified = verified
         link.save(update_fields=["verified"])
 
         serializer = dash_user_serializer.UnverifiedOrgLinkUsersSerializer(link)
