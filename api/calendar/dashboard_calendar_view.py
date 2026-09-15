@@ -10,7 +10,6 @@ Role-based rules:
   Enabler       → global + IG + campus + company events
   Unauthenticated → global events + all IG-scoped events
 """
-
 from datetime import datetime, timedelta
 
 from django.db.models import Prefetch, Q
