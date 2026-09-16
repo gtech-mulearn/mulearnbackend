@@ -1,7 +1,5 @@
 import json
-import logging
 import uuid
-from django.core.cache import cache
 from django.db import transaction
 from django.db.models import Count, Exists, OuterRef, Q
 
@@ -33,8 +31,6 @@ from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiRespo
 from drf_spectacular.openapi import OpenApiTypes
 from rest_framework import serializers as s
 from utils.schema_utils import CustomResponseSerializer
-
-logger = logging.getLogger(__name__)
 
 
 # search_fields/sort_fields shared by TaskListAPI, TaskActiveListAPI, TaskInactiveListAPI,
@@ -88,9 +84,16 @@ TASK_SORT_FIELDS = {
 
 
 def _build_task_queryset(active_filter=None):
-    """Base TaskList queryset shared by TaskListAPI/TaskActiveListAPI/TaskInactiveListAPI.
+    """Base TaskList queryset shared by TaskListAPI/TaskActiveListAPI/TaskInactiveListAPI/TaskListCSV.
 
     active_filter: True/False to restrict to active/inactive tasks, or None for no filter.
+
+    Always excludes is_deleted=True. `is_deleted` is a separate soft-delete flag
+    from `active` (company task self-deletion, api/dashboard/company/task_views.py,
+    sets is_deleted without touching active), so filtering on active alone lets a
+    deleted task keep appearing here — in either the active or inactive list,
+    indistinguishable from a real one, since TaskListSerializer doesn't expose
+    is_deleted at all.
     """
     qs = TaskList.objects.select_related(
         "created_by", "updated_by", "channel", "type", "level", "ig", "org", "requested_by"
@@ -100,7 +103,7 @@ def _build_task_queryset(active_filter=None):
         total_karma_gainers_count=Count(
             "karma_activity_log_task", filter=Q(karma_activity_log_task__appraiser_approved=True)
         )
-    )
+    ).filter(is_deleted=False)
     if active_filter is not None:
         qs = qs.filter(active=active_filter)
     return qs
@@ -168,64 +171,33 @@ def _save_task_skills(task_id, skill_ids, user_id):
     ])
 
 
-# Level/Channel/TaskType/InterestGroup/Organization are small, low-churn reference
-# tables edited only via CRUD endpoints in other domains, so a fixed-TTL cache-aside
-# here doesn't need write-path invalidation wired across domains. 5 fixed keys — a
-# bounded key space, not the unbounded search/filter combinations task list/CSV
-# endpoints take (those are deliberately NOT cached).
-TASK_REFERENCE_DATA_CACHE_TTL_SECONDS = 300
-TASK_REFERENCE_DATA_CACHE_KEYS = {
-    "levels": "task:ref:levels",
-    "channels": "task:ref:channels",
-    "types": "task:ref:types",
-    "igs": "task:ref:igs",
-    "orgs": "task:ref:orgs",
-}
-
-
+# Deliberately NOT cached (was, briefly, cache-aside with a fixed TTL — dropped
+# after review): the write side for these 5 reference types is scattered and
+# inconsistent — TaskType is same-file, Channel has one CRUD class, IG has 5+
+# separate mutating endpoints, Organization has 6+ (create/update/delete, merge,
+# verify, transfer, bulk import) across a 900-line file in another domain, and
+# Level has no API write path at all (edited directly in the DB). Wiring
+# correct invalidation means finding and hooking every one of those scattered
+# mutation points; missing even one silently reintroduces the exact staleness
+# bug a TTL alone produced (up to 5 minutes of stale dropdown/template data
+# after an admin edit). Per CLAUDE.md's own caching guidance ("cache-aside,
+# not cache-and-hope"), uncached-but-correct beats cached-but-sometimes-stale
+# here — these are small tables, so the query cost of staying uncached is low.
 def _fetch_task_reference_data():
     """Level/Channel/TaskType/InterestGroup/Organization data, shared by the 5
     dropdown views and TaskBaseTemplateAPI — previously each fetched this
     independently (3 separate implementations of the same 5 queries).
-    Cached per-key with a fixed TTL; see TASK_REFERENCE_DATA_CACHE_TTL_SECONDS.
-
-    Fails open on cache errors: these endpoints worked directly against the DB
-    before caching was added, so a Redis blip degrading them back to that
-    (rather than a 500) is the right tradeoff — confirmed live, a transient
-    Redis connection error here took down all 5 dropdown endpoints plus
-    base-template until this fallback was added.
     """
-    result = {}
-    for key, cache_key in TASK_REFERENCE_DATA_CACHE_KEYS.items():
-        try:
-            cached = cache.get(cache_key)
-        except Exception:
-            logger.exception("Task reference-data cache read failed for %s, falling back to DB", cache_key)
-            cached = None
-
-        if cached is not None:
-            result[key] = cached
-            continue
-
-        if key == "levels":
-            value = list(Level.objects.values("id", "name", "level_order").order_by("level_order"))
-        elif key == "channels":
-            value = list(Channel.objects.values("id", "name"))
-        elif key == "types":
-            value = list(TaskType.objects.values("id", "title"))
-        elif key == "igs":
-            value = list(InterestGroup.objects.values("id", "name"))
-        else:  # orgs — both "title" (dropdown display) and "code" (excel
-            # template/import natural key — import resolves orgs by code, not
-            # title) are needed by different consumers of this same reference set.
-            value = list(Organization.objects.values("id", "title", "code"))
-
-        try:
-            cache.set(cache_key, value, TASK_REFERENCE_DATA_CACHE_TTL_SECONDS)
-        except Exception:
-            logger.exception("Task reference-data cache write failed for %s", cache_key)
-        result[key] = value
-    return result
+    return {
+        "levels": list(Level.objects.values("id", "name", "level_order").order_by("level_order")),
+        "channels": list(Channel.objects.values("id", "name")),
+        "types": list(TaskType.objects.values("id", "title")),
+        "igs": list(InterestGroup.objects.values("id", "name")),
+        # both "title" (dropdown display) and "code" (excel template/import
+        # natural key — import resolves orgs by code, not title) are needed by
+        # different consumers of this same reference set.
+        "orgs": list(Organization.objects.values("id", "title", "code")),
+    }
 
 
 class TaskPublicListAPI(APIView):
@@ -723,10 +695,20 @@ class TaskListCSV(APIView):
             is_pagination=False,
         )
 
-        # Hard cap, not pagination: CSV export stays unpaginated (matching sibling CSV
-        # endpoints elsewhere in the codebase), but an unbounded fetch on a large table
-        # can tie up a worker — this bounds it without changing the export's shape.
-        task_queryset = task_queryset[:MAX_CSV_EXPORT_ROWS]
+        # Fail loudly instead of silently truncating: a CSV that quietly drops
+        # rows past MAX_CSV_EXPORT_ROWS is worse than no cap at all — nothing in
+        # the downloaded file itself would tell the caller data is missing.
+        # Narrowing search/filter (or, longer-term, a proper off-request-path
+        # bulk export) is on the caller, not a silent partial file.
+        row_count = task_queryset.count()
+        if row_count > MAX_CSV_EXPORT_ROWS:
+            return CustomResponse(
+                general_message=(
+                    f"This export has {row_count} rows, over the {MAX_CSV_EXPORT_ROWS}-row "
+                    "CSV limit. Narrow your search/filter, or contact the backend team "
+                    "about a bulk export."
+                )
+            ).get_failure_response()
 
         task_serializer_data = TaskListSerializer(task_queryset, many=True).data
 
@@ -868,6 +850,14 @@ class ImportTaskListCSV(APIView):
         orgs_dict = {org["code"]: org["id"] for org in orgs}
         events = Events.get_all_values()
 
+        # bulk_create (below) inserts from raw ids and never runs
+        # TaskImportSerializer.to_representation, which is what used to turn
+        # channel_id/type_id/org_id/level_id/ig_id back into their display
+        # name/title/code for the response. Capture those display values here,
+        # while the original excel strings are still in scope, so success_data
+        # can report the same values as before instead of raw ids.
+        display_by_hashtag = {}
+
         for row in rows_to_validate:
             level = row.pop("level")
             channel = row.pop("channel")
@@ -913,11 +903,22 @@ class ImportTaskListCSV(APIView):
                 row["level_id"] = level_id or None
                 row["ig_id"] = ig_id or None
                 row["org_id"] = org_id or None
-                
+
+                # Same display values TaskImportSerializer.to_representation used
+                # to substitute in (name/title/code, not the id) — captured here
+                # since bulk_create below won't run that representation step.
+                display_by_hashtag[row["hashtag"]] = {
+                    "level": level,
+                    "channel": channel,
+                    "type": task_type,
+                    "ig": ig,
+                    "org": org,
+                }
+
                 valid_fields = [
-                    "id", "hashtag", "discord_link", "title", "description", 
-                    "karma", "channel_id", "type_id", "org_id", "event", "level_id", "ig_id", 
-                    "active", "variable_karma", "usage_count", "created_by_id", 
+                    "id", "hashtag", "discord_link", "title", "description",
+                    "karma", "channel_id", "type_id", "org_id", "event", "level_id", "ig_id",
+                    "active", "variable_karma", "usage_count", "created_by_id",
                     "updated_by_id", "created_at", "updated_at"
                 ]
                 clean_row = {k: v for k, v in row.items() if k in valid_fields}
@@ -936,6 +937,7 @@ class ImportTaskListCSV(APIView):
                     TaskList(**row) for row in task_list_serializer.validated_data
                 ])
             for task_data in task_list_serializer.validated_data:
+                display = display_by_hashtag.get(task_data.get("hashtag"), {})
                 success_data.append(
                     {
                         "hashtag": task_data.get("hashtag", ""),
@@ -944,11 +946,11 @@ class ImportTaskListCSV(APIView):
                         "karma": task_data.get("karma", ""),
                         "usage_count": task_data.get("usage_count", ""),
                         "variable_karma": task_data.get("variable_karma", ""),
-                        "level": task_data.get("level_id", ""),
-                        "channel": task_data.get("channel_id", ""),
-                        "type": task_data.get("type_id", ""),
-                        "ig": task_data.get("ig_id", ""),
-                        "org": task_data.get("org_id", ""),
+                        "level": display.get("level", ""),
+                        "channel": display.get("channel", ""),
+                        "type": display.get("type", ""),
+                        "ig": display.get("ig", ""),
+                        "org": display.get("org", ""),
                         "event": task_data.get("event", ""),
                     }
                 )
@@ -1302,9 +1304,13 @@ class AdminTaskApprovalAPI(APIView):
         if approval_status:
             queryset = queryset.filter(approval_status=approval_status)
 
-        # Only "source" is a real, currently-used param (the frontend never sends
-        # "role" — the old code aliased the two, which was confusing and unused).
-        source = request.query_params.get("source")
+        # "source" is what this app sends today; "role" is kept as an alias for
+        # any other existing caller — dropping it silently would leave a request
+        # like ?role=mentor (no "source") matching no branch below and falling
+        # through to an unfiltered list, which looks like a valid filtered
+        # response but isn't. Don't remove this without confirming no caller
+        # (mobile app, other admin tooling) still sends "role".
+        source = request.query_params.get("source") or request.query_params.get("role")
 
         if source == "mentor":
             queryset = queryset.filter(
