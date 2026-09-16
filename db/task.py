@@ -227,6 +227,10 @@ class TaskList(models.Model):
         indexes = [
             models.Index(fields=['event_fk'], name='idx_task_list_event_id'),
             models.Index(fields=['is_deleted'], name='idx_task_list_is_deleted'),
+            # Added in alter-scripts/alter-1.97.sql — this entry documents the
+            # schema for the managed=False model, it doesn't create the index
+            # itself.
+            models.Index(fields=['hashtag'], name='idx_task_list_hashtag'),
         ]
 
 

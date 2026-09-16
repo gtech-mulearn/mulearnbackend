@@ -1,4 +1,8 @@
+import json
+import logging
 import uuid
+from django.core.cache import cache
+from django.db import transaction
 from django.db.models import Count, Exists, OuterRef, Q
 
 from rest_framework import status
@@ -13,6 +17,7 @@ from utils.response import CustomResponse
 from utils.types import Events, OrganizationType, RoleType
 from utils.utils import CommonUtils, DateTimeUtils, ImportCSV
 from .dash_task_serializer import (
+    TaskAdminApprovalSerializer,
     TaskImportSerializer,
     TaskListPublicSerializer,
     TaskListSerializer,
@@ -22,13 +27,205 @@ from .dash_task_serializer import (
 )
 
 from openpyxl import load_workbook
-from tempfile import NamedTemporaryFile
 from io import BytesIO
 from django.http import FileResponse
 from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse, OpenApiParameter
 from drf_spectacular.openapi import OpenApiTypes
 from rest_framework import serializers as s
 from utils.schema_utils import CustomResponseSerializer
+
+logger = logging.getLogger(__name__)
+
+
+# search_fields/sort_fields shared by TaskListAPI, TaskActiveListAPI, TaskInactiveListAPI,
+# and TaskListCSV — kept in one place so all four stay in sync.
+TASK_SEARCH_FIELDS = [
+    "hashtag",
+    "title",
+    "description",
+    "karma",
+    "channel__name",
+    "type__title",
+    "active",
+    "variable_karma",
+    "usage_count",
+    "level__name",
+    "org__title",
+    "ig__name",
+    "event",
+    "updated_at",
+    "updated_by__full_name",
+    "created_by__full_name",
+    "created_at",
+]
+
+# Guards against a worker being tied up by an unbounded CSV export or an oversized
+# bulk-import upload. Not pagination — CSV export and import stay unpaginated by
+# design (matching sibling CSV endpoints elsewhere in the codebase); these are hard
+# ceilings, adjustable if the team wants a different number.
+MAX_CSV_EXPORT_ROWS = 10000
+MAX_IMPORT_ROWS = 5000
+
+TASK_SORT_FIELDS = {
+    "hashtag": "hashtag",
+    "title": "title",
+    "description": "description",
+    "karma": "karma",
+    "channels": "channel__name",
+    "type": "type__title",
+    "active": "active",
+    "variable_karma": "variable_karma",
+    "usage_count": "usage_count",
+    "level": "level__name",
+    "org": "org__title",
+    "ig": "ig__name",
+    "event": "event",
+    "updated_at": "updated_at",
+    "updated_by": "updated_by__full_name",
+    "created_by": "created_by__full_name",
+    "created_at": "created_at",
+}
+
+
+def _build_task_queryset(active_filter=None):
+    """Base TaskList queryset shared by TaskListAPI/TaskActiveListAPI/TaskInactiveListAPI.
+
+    active_filter: True/False to restrict to active/inactive tasks, or None for no filter.
+    """
+    qs = TaskList.objects.select_related(
+        "created_by", "updated_by", "channel", "type", "level", "ig", "org", "requested_by"
+    ).prefetch_related(
+        "skill_links__skill"
+    ).annotate(
+        total_karma_gainers_count=Count(
+            "karma_activity_log_task", filter=Q(karma_activity_log_task__appraiser_approved=True)
+        )
+    )
+    if active_filter is not None:
+        qs = qs.filter(active=active_filter)
+    return qs
+
+
+def _apply_task_source_filter(task_queryset, task_source):
+    """task_source branching shared by TaskListAPI/TaskActiveListAPI/TaskInactiveListAPI."""
+    if task_source == "company":
+        task_queryset = task_queryset.filter(
+            requested_by__isnull=False,
+            requested_by__company_profile__isnull=False,
+        )
+    elif task_source == "ig_mentor":
+        from db.user import MentorScopeGrant, MentorApplication
+        ig_mentor_user_ids = MentorScopeGrant.objects.filter(
+            scope_type=MentorScopeGrant.ScopeType.IG_MENTOR, is_active=True,
+            application__status=MentorApplication.Status.APPROVED,
+            application__user__mentor_profile__is_active=True,
+        ).values_list('application__user_id', flat=True)
+        task_queryset = task_queryset.filter(
+            requested_by__isnull=False,
+            requested_by_id__in=ig_mentor_user_ids,
+        ).distinct()
+    elif task_source == "campus_mentor":
+        from db.user import MentorScopeGrant, MentorApplication
+        campus_mentor_user_ids = MentorScopeGrant.objects.filter(
+            scope_type=MentorScopeGrant.ScopeType.CAMPUS_MENTOR, is_active=True,
+            application__status=MentorApplication.Status.APPROVED,
+            application__user__mentor_profile__is_active=True,
+        ).values_list('application__user_id', flat=True)
+        task_queryset = task_queryset.filter(
+            requested_by__isnull=False,
+            requested_by_id__in=campus_mentor_user_ids,
+        ).distinct()
+    elif task_source == "platform":
+        task_queryset = task_queryset.filter(requested_by__isnull=True)
+    return task_queryset
+
+
+def _parse_skill_ids(raw, default):
+    """Parse the skill_ids form field (JSON-encoded string, or already a list).
+
+    default is returned on missing/invalid input — callers pass a different default
+    for create ([], skip skill-link write) vs update (None, means "leave unchanged").
+    """
+    if raw is None:
+        return default
+    if isinstance(raw, str):
+        try:
+            return json.loads(raw)
+        except (TypeError, ValueError):
+            return default
+    return raw
+
+
+def _save_task_skills(task_id, skill_ids, user_id):
+    """Replace a task's skill links. Shared by TaskListAPI.post and TaskAPI.put."""
+    TaskSkillLink.objects.filter(task_id=task_id).delete()
+    valid_skill_ids = Skill.objects.filter(
+        id__in=skill_ids, is_active=True
+    ).values_list("id", flat=True)
+    TaskSkillLink.objects.bulk_create([
+        TaskSkillLink(id=str(uuid.uuid4()), task_id=task_id, skill_id=sid, created_by_id=user_id)
+        for sid in valid_skill_ids
+    ])
+
+
+# Level/Channel/TaskType/InterestGroup/Organization are small, low-churn reference
+# tables edited only via CRUD endpoints in other domains, so a fixed-TTL cache-aside
+# here doesn't need write-path invalidation wired across domains. 5 fixed keys — a
+# bounded key space, not the unbounded search/filter combinations task list/CSV
+# endpoints take (those are deliberately NOT cached).
+TASK_REFERENCE_DATA_CACHE_TTL_SECONDS = 300
+TASK_REFERENCE_DATA_CACHE_KEYS = {
+    "levels": "task:ref:levels",
+    "channels": "task:ref:channels",
+    "types": "task:ref:types",
+    "igs": "task:ref:igs",
+    "orgs": "task:ref:orgs",
+}
+
+
+def _fetch_task_reference_data():
+    """Level/Channel/TaskType/InterestGroup/Organization data, shared by the 5
+    dropdown views and TaskBaseTemplateAPI — previously each fetched this
+    independently (3 separate implementations of the same 5 queries).
+    Cached per-key with a fixed TTL; see TASK_REFERENCE_DATA_CACHE_TTL_SECONDS.
+
+    Fails open on cache errors: these endpoints worked directly against the DB
+    before caching was added, so a Redis blip degrading them back to that
+    (rather than a 500) is the right tradeoff — confirmed live, a transient
+    Redis connection error here took down all 5 dropdown endpoints plus
+    base-template until this fallback was added.
+    """
+    result = {}
+    for key, cache_key in TASK_REFERENCE_DATA_CACHE_KEYS.items():
+        try:
+            cached = cache.get(cache_key)
+        except Exception:
+            logger.exception("Task reference-data cache read failed for %s, falling back to DB", cache_key)
+            cached = None
+
+        if cached is not None:
+            result[key] = cached
+            continue
+
+        if key == "levels":
+            value = list(Level.objects.values("id", "name", "level_order").order_by("level_order"))
+        elif key == "channels":
+            value = list(Channel.objects.values("id", "name"))
+        elif key == "types":
+            value = list(TaskType.objects.values("id", "title"))
+        elif key == "igs":
+            value = list(InterestGroup.objects.values("id", "name"))
+        else:  # orgs — both "title" (dropdown display) and "code" (excel
+            # template/import natural key — import resolves orgs by code, not
+            # title) are needed by different consumers of this same reference set.
+            value = list(Organization.objects.values("id", "title", "code"))
+
+        try:
+            cache.set(cache_key, value, TASK_REFERENCE_DATA_CACHE_TTL_SECONDS)
+        except Exception:
+            logger.exception("Task reference-data cache write failed for %s", cache_key)
+        result[key] = value
+    return result
 
 
 class TaskPublicListAPI(APIView):
@@ -232,86 +429,14 @@ class TaskListAPI(APIView):
         })},
     )
     def get(self, request):
-        task_queryset = TaskList.objects.select_related(
-            "created_by", "updated_by", "channel", "type", "level", "ig", "org", "requested_by"
-        ).prefetch_related(
-            "skill_links__skill"
-        ).annotate(
-            total_karma_gainers_count=Count("karma_activity_log_task", filter=Q(karma_activity_log_task__appraiser_approved=True))
-        )
-
-        task_source = request.query_params.get("task_source")
-        if task_source == "company":
-            task_queryset = task_queryset.filter(
-                requested_by__isnull=False,
-                requested_by__company_profile__isnull=False,
-            )
-        elif task_source == "ig_mentor":
-            from db.user import MentorScopeGrant, MentorApplication
-            ig_mentor_user_ids = MentorScopeGrant.objects.filter(
-                scope_type=MentorScopeGrant.ScopeType.IG_MENTOR, is_active=True,
-                application__status=MentorApplication.Status.APPROVED,
-                application__user__mentor_profile__is_active=True,
-            ).values_list('application__user_id', flat=True)
-            task_queryset = task_queryset.filter(
-                requested_by__isnull=False,
-                requested_by_id__in=ig_mentor_user_ids,
-            ).distinct()
-        elif task_source == "campus_mentor":
-            from db.user import MentorScopeGrant, MentorApplication
-            campus_mentor_user_ids = MentorScopeGrant.objects.filter(
-                scope_type=MentorScopeGrant.ScopeType.CAMPUS_MENTOR, is_active=True,
-                application__status=MentorApplication.Status.APPROVED,
-                application__user__mentor_profile__is_active=True,
-            ).values_list('application__user_id', flat=True)
-            task_queryset = task_queryset.filter(
-                requested_by__isnull=False,
-                requested_by_id__in=campus_mentor_user_ids,
-            ).distinct()
-        elif task_source == "platform":
-            task_queryset = task_queryset.filter(requested_by__isnull=True)
+        task_queryset = _build_task_queryset()
+        task_queryset = _apply_task_source_filter(task_queryset, request.query_params.get("task_source"))
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             task_queryset,
             request,
-            search_fields=[
-                "hashtag",
-                "title",
-                "description",
-                "karma",
-                "channel__name",
-                "type__title",
-                "active",
-                "variable_karma",
-                "usage_count",
-                "level__name",
-                "org__title",
-                "ig__name",
-                "event",
-                "updated_at",
-                "updated_by__full_name",
-                "created_by__full_name",
-                "created_at",
-            ],
-            sort_fields={
-                "hashtag": "hashtag",
-                "title": "title",
-                "description": "description",
-                "karma": "karma",
-                "channels": "channel__name",
-                "type": "type__title",
-                "active": "active",
-                "variable_karma": "variable_karma",
-                "usage_count": "usage_count",
-                "level": "level__name",
-                "org": "org__title",
-                "ig": "ig__name",
-                "event": "event",
-                "updated_at": "updated_at",
-                "updated_by": "updated_by__full_name",
-                "created_by": "created_by__full_name",
-                "created_at": "created_at",
-            },
+            search_fields=TASK_SEARCH_FIELDS,
+            sort_fields=TASK_SORT_FIELDS,
         )
 
         task_serializer_data = TaskListSerializer(
@@ -342,15 +467,9 @@ class TaskListAPI(APIView):
         mutable_data = request.data.copy()  # Create a mutable copy of request.data
         mutable_data["created_by"] = user_id
         mutable_data["updated_by"] = user_id
-        
+
         # Extract skill_ids before serializer processing
-        skill_ids = mutable_data.pop("skill_ids", None)
-        if isinstance(skill_ids, str):
-            import json
-            try:
-                skill_ids = json.loads(skill_ids)
-            except:
-                skill_ids = []
+        skill_ids = _parse_skill_ids(mutable_data.pop("skill_ids", None), default=[])
 
         serializer = TaskModifySerializer(data=mutable_data, context={"request": request})
 
@@ -363,30 +482,16 @@ class TaskListAPI(APIView):
                 message={"event_id": ["Selected event does not exist or is not accessible."]}
             ).get_failure_response()
 
-        task = serializer.save()
-        
-        # Handle skill links
-        if skill_ids:
-            self._save_task_skills(task.id, skill_ids, user_id)
-        
+        with transaction.atomic():
+            task = serializer.save()
+
+            # Handle skill links
+            if skill_ids:
+                _save_task_skills(task.id, skill_ids, user_id)
+
         return CustomResponse(
             general_message="Task Created Successfully"
         ).get_success_response()
-    
-    def _save_task_skills(self, task_id, skill_ids, user_id):
-        """Save skill links for a task"""
-        # Clear existing links
-        TaskSkillLink.objects.filter(task_id=task_id).delete()
-        
-        # Create new links
-        for skill_id in skill_ids:
-            if Skill.objects.filter(id=skill_id, is_active=True).exists():
-                TaskSkillLink.objects.create(
-                    id=str(uuid.uuid4()),
-                    task_id=task_id,
-                    skill_id=skill_id,
-                    created_by_id=user_id,
-                )
 
 
 class TaskAPI(APIView):
@@ -430,15 +535,9 @@ class TaskAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         mutable_data = request.data.copy()  # Create a mutable copy of request.data
         mutable_data["updated_by"] = user_id
-        
+
         # Extract skill_ids before serializer processing
-        skill_ids = mutable_data.pop("skill_ids", None)
-        if isinstance(skill_ids, str):
-            import json
-            try:
-                skill_ids = json.loads(skill_ids)
-            except:
-                skill_ids = None
+        skill_ids = _parse_skill_ids(mutable_data.pop("skill_ids", None), default=None)
 
         try:
             task = TaskList.objects.get(pk=task_id)
@@ -461,28 +560,14 @@ class TaskAPI(APIView):
                     message={"event_id": ["Selected event does not exist or is not accessible."]}
                 ).get_failure_response()
 
-        serializer.save()
+        with transaction.atomic():
+            serializer.save()
 
-        # Handle skill links if provided
-        if skill_ids is not None:
-            self._save_task_skills(task_id, skill_ids, user_id)
+            # Handle skill links if provided
+            if skill_ids is not None:
+                _save_task_skills(task_id, skill_ids, user_id)
 
         return CustomResponse(general_message=serializer.data).get_success_response()
-    
-    def _save_task_skills(self, task_id, skill_ids, user_id):
-        """Save skill links for a task"""
-        # Clear existing links
-        TaskSkillLink.objects.filter(task_id=task_id).delete()
-        
-        # Create new links
-        for skill_id in skill_ids:
-            if Skill.objects.filter(id=skill_id, is_active=True).exists():
-                TaskSkillLink.objects.create(
-                    id=str(uuid.uuid4()),
-                    task_id=task_id,
-                    skill_id=skill_id,
-                    created_by_id=user_id,
-                )
 
     @role_required(
         [
@@ -502,11 +587,114 @@ class TaskAPI(APIView):
                 general_message="Task not found."
             ).get_failure_response(status_code=404, http_status_code=status.HTTP_404_NOT_FOUND)
 
-        task.delete()
+        with transaction.atomic():
+            task.delete()
 
         return CustomResponse(
             general_message="Task deleted successfully"
         ).get_success_response()
+
+
+class TaskActiveListAPI(APIView):
+    """GET /dashboard/task/active/ — tasks with active=True, paginated/searchable/sortable
+    the same way as TaskListAPI. Kept as a dedicated endpoint (rather than an active= filter
+    on TaskListAPI) so callers don't need a client-side re-filter step."""
+    authentication_classes = [CustomizePermission]
+
+    @role_required(
+        [
+            RoleType.ADMIN.value,
+            RoleType.FELLOW.value,
+            RoleType.ASSOCIATE.value,
+        ]
+    )
+    @extend_schema(
+        tags=['Dashboard - Task'],
+        description="Retrieve active Task List.",
+        parameters=[
+            OpenApiParameter(
+                "task_source",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                required=False,
+                enum=["company", "ig_mentor", "campus_mentor", "platform"],
+                description="Filter tasks by creator type — same semantics as TaskListAPI.",
+            ),
+        ],
+        responses={200: inline_serializer("TaskActiveListResponse", fields={
+            "data": s.ListField(child=s.DictField()),
+            "pagination": s.DictField(),
+        })},
+    )
+    def get(self, request):
+        task_queryset = _build_task_queryset(active_filter=True)
+        task_queryset = _apply_task_source_filter(task_queryset, request.query_params.get("task_source"))
+
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            task_queryset,
+            request,
+            search_fields=TASK_SEARCH_FIELDS,
+            sort_fields=TASK_SORT_FIELDS,
+        )
+
+        task_serializer_data = TaskListSerializer(
+            paginated_queryset.get("queryset"), many=True
+        ).data
+
+        return CustomResponse().paginated_response(
+            data=task_serializer_data,
+            pagination=paginated_queryset.get("pagination"),
+        )
+
+
+class TaskInactiveListAPI(APIView):
+    """GET /dashboard/task/inactive/ — tasks with active=False. See TaskActiveListAPI."""
+    authentication_classes = [CustomizePermission]
+
+    @role_required(
+        [
+            RoleType.ADMIN.value,
+            RoleType.FELLOW.value,
+            RoleType.ASSOCIATE.value,
+        ]
+    )
+    @extend_schema(
+        tags=['Dashboard - Task'],
+        description="Retrieve inactive Task List.",
+        parameters=[
+            OpenApiParameter(
+                "task_source",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                required=False,
+                enum=["company", "ig_mentor", "campus_mentor", "platform"],
+                description="Filter tasks by creator type — same semantics as TaskListAPI.",
+            ),
+        ],
+        responses={200: inline_serializer("TaskInactiveListResponse", fields={
+            "data": s.ListField(child=s.DictField()),
+            "pagination": s.DictField(),
+        })},
+    )
+    def get(self, request):
+        task_queryset = _build_task_queryset(active_filter=False)
+        task_queryset = _apply_task_source_filter(task_queryset, request.query_params.get("task_source"))
+
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            task_queryset,
+            request,
+            search_fields=TASK_SEARCH_FIELDS,
+            sort_fields=TASK_SORT_FIELDS,
+        )
+
+        task_serializer_data = TaskListSerializer(
+            paginated_queryset.get("queryset"), many=True
+        ).data
+
+        return CustomResponse().paginated_response(
+            data=task_serializer_data,
+            pagination=paginated_queryset.get("pagination"),
+        )
 
 
 class TaskListCSV(APIView):
@@ -525,57 +713,20 @@ class TaskListCSV(APIView):
         responses={200: OpenApiResponse(description="CSV file download of the task list")},
     )
     def get(self, request):
-        task_queryset = TaskList.objects.select_related(
-            "created_by", "updated_by", "channel", "type", "level", "ig", "org"
-        ).prefetch_related(
-            "skill_links__skill"
-        ).annotate(
-            total_karma_gainers_count=Count("karma_activity_log_task", filter=Q(karma_activity_log_task__appraiser_approved=True))
-        ).filter(active=True)
+        task_queryset = _build_task_queryset(active_filter=True)
 
         task_queryset = CommonUtils.get_paginated_queryset(
             task_queryset,
             request,
-            search_fields=[
-                "hashtag",
-                "title",
-                "description",
-                "karma",
-                "channel__name",
-                "type__title",
-                "active",
-                "variable_karma",
-                "usage_count",
-                "level__name",
-                "org__title",
-                "ig__name",
-                "event",
-                "updated_at",
-                "updated_by__full_name",
-                "created_by__full_name",
-                "created_at",
-            ],
-            sort_fields={
-                "hashtag": "hashtag",
-                "title": "title",
-                "description": "description",
-                "karma": "karma",
-                "channels": "channel__name",
-                "type": "type__title",
-                "active": "active",
-                "variable_karma": "variable_karma",
-                "usage_count": "usage_count",
-                "level": "level__name",
-                "org": "org__title",
-                "ig": "ig__name",
-                "event": "event",
-                "updated_at": "updated_at",
-                "updated_by": "updated_by__full_name",
-                "created_by": "created_by__full_name",
-                "created_at": "created_at",
-            },
+            search_fields=TASK_SEARCH_FIELDS,
+            sort_fields=TASK_SORT_FIELDS,
             is_pagination=False,
         )
+
+        # Hard cap, not pagination: CSV export stays unpaginated (matching sibling CSV
+        # endpoints elsewhere in the codebase), but an unbounded fetch on a large table
+        # can tie up a worker — this bounds it without changing the export's shape.
+        task_queryset = task_queryset[:MAX_CSV_EXPORT_ROWS]
 
         task_serializer_data = TaskListSerializer(task_queryset, many=True).data
 
@@ -635,12 +786,23 @@ class ImportTaskListCSV(APIView):
                 ).get_failure_response()
 
         excel_data = [row for row in excel_data if any(row.values())]
+
+        if len(excel_data) - 1 > MAX_IMPORT_ROWS:
+            return CustomResponse(
+                general_message=f"File has too many rows (max {MAX_IMPORT_ROWS})."
+            ).get_failure_response()
+
         valid_rows = []
         error_rows = []
         rows_to_validate = []
 
         hashtags_excel = set()
-        hashtags_db = TaskList.objects.values_list("hashtag", flat=True)
+        # Bounded by upload size, not table size: only check the hashtags actually
+        # present in this file, instead of pulling every hashtag in task_list.
+        uploaded_hashtags = {row.get("hashtag") for row in excel_data[1:] if row.get("hashtag")}
+        hashtags_db = set(
+            TaskList.objects.filter(hashtag__in=uploaded_hashtags).values_list("hashtag", flat=True)
+        )
         channels_to_fetch = set()
         task_types_to_fetch = set()
         levels_to_fetch = set()
@@ -764,8 +926,16 @@ class ImportTaskListCSV(APIView):
         task_list_serializer = TaskImportSerializer(data=valid_rows, many=True)
         success_data = []
         if task_list_serializer.is_valid():
-            task_list_serializer.save()
-            for task_data in task_list_serializer.data:
+            # bulk_create instead of ListSerializer.save() (which would call
+            # .create() once per row): one INSERT for the whole batch instead
+            # of N individual ones. validated_data field names already map
+            # 1:1 onto TaskList's constructor kwargs (verified against
+            # TaskImportSerializer.Meta.fields above).
+            with transaction.atomic():
+                TaskList.objects.bulk_create([
+                    TaskList(**row) for row in task_list_serializer.validated_data
+                ])
+            for task_data in task_list_serializer.validated_data:
                 success_data.append(
                     {
                         "hashtag": task_data.get("hashtag", ""),
@@ -809,7 +979,7 @@ class ChannelDropdownAPI(APIView):
         })},
     )
     def get(self, request):
-        channels = Channel.objects.values("id", "name")
+        channels = _fetch_task_reference_data()["channels"]
 
         return CustomResponse(response=channels).get_success_response()
 
@@ -833,7 +1003,7 @@ class IGDropdownAPI(APIView):
         })},
     )
     def get(self, request):
-        igs = InterestGroup.objects.values("id", "name")
+        igs = _fetch_task_reference_data()["igs"]
         return CustomResponse(response=igs).get_success_response()
 
 
@@ -856,7 +1026,13 @@ class OrganizationDropdownAPI(APIView):
         })},
     )
     def get(self, request):
-        organizations = Organization.objects.values("id", "title")
+        # Reference data is fetched with "code" too (for TaskBaseTemplateAPI/import,
+        # which key organizations by code) — strip it here so this endpoint's
+        # response shape (id, title) is unchanged.
+        organizations = [
+            {"id": org["id"], "title": org["title"]}
+            for org in _fetch_task_reference_data()["orgs"]
+        ]
         return CustomResponse(response=organizations).get_success_response()
 
 
@@ -884,7 +1060,7 @@ class LevelDropdownAPI(APIView):
         # eligibility "Min/Max Level" rules, which compare against a user's
         # level_order). Returning it lets clients store the order rather than an
         # opaque id/name.
-        levels = Level.objects.values("id", "name", "level_order").order_by("level_order")
+        levels = _fetch_task_reference_data()["levels"]
         return CustomResponse(response=levels).get_success_response()
 
 
@@ -904,7 +1080,7 @@ class TaskTypesDropDownAPI(APIView):
         responses={200: TasktypeSerializer},
     )
     def get(self, request):
-        task_types = TaskType.objects.values("id", "title")
+        task_types = _fetch_task_reference_data()["types"]
         return CustomResponse(response=task_types).get_success_response()
 
 
@@ -951,17 +1127,25 @@ class EventDropDownApi(APIView):
 class TaskBaseTemplateAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @role_required(
+        [
+            RoleType.ADMIN.value,
+            RoleType.FELLOW.value,
+            RoleType.ASSOCIATE.value,
+        ]
+    )
     @extend_schema(tags=['Dashboard - Task'], description="Retrieve Task Base Template.",
         responses={200: OpenApiResponse(description="Excel template file download (task_base_template.xlsx)")},
     )
     def get(self, request):
         wb = load_workbook("./excel-templates/task_base_template.xlsx")
         ws = wb["Data Definitions"]
-        levels = Level.objects.all().values_list("name", flat=True)
-        channels = Channel.objects.all().values_list("name", flat=True)
-        task_types = TaskType.objects.all().values_list("title", flat=True)
-        igs = InterestGroup.objects.all().values_list("name", flat=True)
-        orgs = Organization.objects.all().values_list("code", flat=True)
+        ref_data = _fetch_task_reference_data()
+        levels = [row["name"] for row in ref_data["levels"]]
+        channels = [row["name"] for row in ref_data["channels"]]
+        task_types = [row["title"] for row in ref_data["types"]]
+        igs = [row["name"] for row in ref_data["igs"]]
+        orgs = [row["code"] for row in ref_data["orgs"]]
         events = Events.get_all_values()
 
         data = {
@@ -976,15 +1160,14 @@ class TaskBaseTemplateAPI(APIView):
         for col_num, (col_name, col_values) in enumerate(data.items(), start=1):
             for row, value in enumerate(col_values, start=2):
                 ws.cell(row=row, column=col_num, value=value)
-        # Save the file
-        with NamedTemporaryFile() as tmp:
-            tmp.close()  # with statement opened tmp, close it so wb.save can open it
-            wb.save(tmp.name)
-            with open(tmp.name, "rb") as f:
-                f.seek(0)
-                new_file_object = f.read()
+        # Save directly to an in-memory buffer — openpyxl accepts any file-like
+        # object, so there's no need for the disk round trip a NamedTemporaryFile
+        # requires.
+        buffer = BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
         return FileResponse(
-            BytesIO(new_file_object),
+            buffer,
             as_attachment=True,
             filename="task_base_template.xlsx",
         )
@@ -1006,7 +1189,10 @@ class TaskTypeCrudAPI(APIView):
         responses={200: TasktypeSerializer},
     )
     def get(self, request):
-        taskType = TaskType.objects.all()
+        # select_related: TasktypeSerializer reads updated_by.full_name/created_by.full_name
+        # per row (source="updated_by.full_name") — without this, each row triggers 2 extra
+        # queries.
+        taskType = TaskType.objects.select_related("updated_by", "created_by")
         paginated_queryset = CommonUtils.get_paginated_queryset(
             taskType,
             request,
@@ -1106,8 +1292,6 @@ class AdminTaskApprovalAPI(APIView):
     )
     def get(self, request):
         """List tasks with filtering."""
-        from django.utils import timezone as tz
-
         queryset = (
             TaskList.objects
             .select_related("ig", "type", "requested_by", "requested_by__company_profile")
@@ -1118,20 +1302,21 @@ class AdminTaskApprovalAPI(APIView):
         if approval_status:
             queryset = queryset.filter(approval_status=approval_status)
 
+        # Only "source" is a real, currently-used param (the frontend never sends
+        # "role" — the old code aliased the two, which was confusing and unused).
         source = request.query_params.get("source")
-        role = request.query_params.get("role") or source
-        
-        if role == "mentor":
+
+        if source == "mentor":
             queryset = queryset.filter(
                 requested_by__isnull=False,
                 requested_by__user_role_link_user__role__title=RoleType.MENTOR.value
             )
-        elif role == "company":
+        elif source == "company":
             queryset = queryset.filter(
                 requested_by__isnull=False,
                 requested_by__user_role_link_user__role__title=RoleType.COMPANY.value
             )
-        elif role == "admin":
+        elif source == "admin":
             queryset = queryset.filter(requested_by__isnull=True)
 
         company_name = request.query_params.get("company_name")
@@ -1145,6 +1330,12 @@ class AdminTaskApprovalAPI(APIView):
                 requested_by__user_role_link_user__role__title=RoleType.MENTOR.value
             )
 
+        # The role-title filters above join through a reverse FK
+        # (requested_by__user_role_link_user__role__title); a user with more than
+        # one matching UserRoleLink row would otherwise fan out into duplicate
+        # TaskList rows here.
+        queryset = queryset.distinct()
+
         paginated = CommonUtils.get_paginated_queryset(
             queryset,
             request,
@@ -1157,26 +1348,7 @@ class AdminTaskApprovalAPI(APIView):
             is_pagination=True,
         )
 
-        data = []
-        for task in paginated["queryset"]:
-            company_profile = getattr(task.requested_by, "company_profile", None) if task.requested_by else None
-            data.append({
-                "id":                   str(task.id),
-                "title":                task.title,
-                "hashtag":              task.hashtag,
-                "description":          task.description,
-                "karma":                task.karma,
-                "approval_status":      task.approval_status,
-                "ig":                   {"id": str(task.ig.id), "name": task.ig.name} if task.ig else None,
-                "type":                 {"id": str(task.type.id), "title": task.type.title} if task.type else None,
-                "company_name":         company_profile.name if company_profile else None,
-                "requested_by": {
-                    "id":        str(task.requested_by.id),
-                    "full_name": task.requested_by.full_name,
-                } if task.requested_by else None,
-                "requested_at": task.requested_at.isoformat() if task.requested_at else None,
-                "created_at":   task.created_at.isoformat(),
-            })
+        data = TaskAdminApprovalSerializer(paginated["queryset"], many=True).data
 
         return CustomResponse(
             general_message="Tasks fetched successfully.",
@@ -1208,79 +1380,83 @@ class AdminTaskApprovalAPI(APIView):
                 message={"error_code": "INVALID_ACTION"},
             ).get_failure_response()
 
-        try:
-            task = TaskList.objects.get(id=task_id)
-        except TaskList.DoesNotExist:
-            return CustomResponse(
-                general_message="Task not found.",
-                message={"error_code": "TASK_NOT_FOUND"},
-            ).get_failure_response()
-
-        if task.approval_status != "pending":
-            return CustomResponse(
-                general_message=f"Only pending tasks can be reviewed. Current status: '{task.approval_status}'.",
-                message={"error_code": "INVALID_STATUS_TRANSITION"},
-            ).get_failure_response()
-
         admin_user_id = JWTUtils.fetch_user_id(request)
         from db.user import User as UserModel
         admin_user = UserModel.objects.filter(id=admin_user_id).first()
 
         now = tz.now()
 
-        if action == "approve":
-            task.approval_status = "approved"
-            task.active = True
-            task.rejection_reason = None
-            task.reviewed_by_admin = admin_user
-            task.reviewed_at = now
-            task.updated_by = admin_user
-            task.save(update_fields=[
-                "approval_status", "active", "rejection_reason",
-                "reviewed_by_admin", "reviewed_at", "updated_by", "updated_at",
-            ])
-            message = "Task approved and is now live."
-        elif action == "reject":
-            reason = (request.data.get("reason") or "").strip()
-            if not reason:
+        # select_for_update + atomic: without this, two concurrent PATCHes on the
+        # same pending task can both pass the "still pending" check below before
+        # either writes, double-processing the same task.
+        with transaction.atomic():
+            try:
+                task = TaskList.objects.select_for_update().get(id=task_id)
+            except TaskList.DoesNotExist:
                 return CustomResponse(
-                    general_message="A rejection reason is required.",
-                    message={"error_code": "REASON_REQUIRED"},
+                    general_message="Task not found.",
+                    message={"error_code": "TASK_NOT_FOUND"},
                 ).get_failure_response()
-            task.approval_status = "rejected"
-            task.active = False
-            task.rejection_reason = reason
-            task.reviewed_by_admin = admin_user
-            task.reviewed_at = now
-            task.updated_by = admin_user
-            task.save(update_fields=[
-                "approval_status", "active", "rejection_reason",
-                "reviewed_by_admin", "reviewed_at", "updated_by", "updated_at",
-            ])
-            message = "Task rejected."
-        else:
-            # PRD §6.3 — a lightweight "request changes" state distinct from
-            # outright rejection: the submitter can amend and resubmit
-            # (task_views.py's edit endpoints already reset approval_status
-            # to 'pending' on any edit, so no further plumbing is needed
-            # there) instead of having to start over from a rejection.
-            reason = (request.data.get("reason") or "").strip()
-            if not reason:
+
+            if task.approval_status != "pending":
                 return CustomResponse(
-                    general_message="A reason describing the requested changes is required.",
-                    message={"error_code": "REASON_REQUIRED"},
+                    general_message=f"Only pending tasks can be reviewed. Current status: '{task.approval_status}'.",
+                    message={"error_code": "INVALID_STATUS_TRANSITION"},
                 ).get_failure_response()
-            task.approval_status = "changes_requested"
-            task.active = False
-            task.rejection_reason = reason
-            task.reviewed_by_admin = admin_user
-            task.reviewed_at = now
-            task.updated_by = admin_user
-            task.save(update_fields=[
-                "approval_status", "active", "rejection_reason",
-                "reviewed_by_admin", "reviewed_at", "updated_by", "updated_at",
-            ])
-            message = "Changes requested."
+
+            if action == "approve":
+                task.approval_status = "approved"
+                task.active = True
+                task.rejection_reason = None
+                task.reviewed_by_admin = admin_user
+                task.reviewed_at = now
+                task.updated_by = admin_user
+                task.save(update_fields=[
+                    "approval_status", "active", "rejection_reason",
+                    "reviewed_by_admin", "reviewed_at", "updated_by", "updated_at",
+                ])
+                message = "Task approved and is now live."
+            elif action == "reject":
+                reason = (request.data.get("reason") or "").strip()
+                if not reason:
+                    return CustomResponse(
+                        general_message="A rejection reason is required.",
+                        message={"error_code": "REASON_REQUIRED"},
+                    ).get_failure_response()
+                task.approval_status = "rejected"
+                task.active = False
+                task.rejection_reason = reason
+                task.reviewed_by_admin = admin_user
+                task.reviewed_at = now
+                task.updated_by = admin_user
+                task.save(update_fields=[
+                    "approval_status", "active", "rejection_reason",
+                    "reviewed_by_admin", "reviewed_at", "updated_by", "updated_at",
+                ])
+                message = "Task rejected."
+            else:
+                # PRD §6.3 — a lightweight "request changes" state distinct from
+                # outright rejection: the submitter can amend and resubmit
+                # (task_views.py's edit endpoints already reset approval_status
+                # to 'pending' on any edit, so no further plumbing is needed
+                # there) instead of having to start over from a rejection.
+                reason = (request.data.get("reason") or "").strip()
+                if not reason:
+                    return CustomResponse(
+                        general_message="A reason describing the requested changes is required.",
+                        message={"error_code": "REASON_REQUIRED"},
+                    ).get_failure_response()
+                task.approval_status = "changes_requested"
+                task.active = False
+                task.rejection_reason = reason
+                task.reviewed_by_admin = admin_user
+                task.reviewed_at = now
+                task.updated_by = admin_user
+                task.save(update_fields=[
+                    "approval_status", "active", "rejection_reason",
+                    "reviewed_by_admin", "reviewed_at", "updated_by", "updated_at",
+                ])
+                message = "Changes requested."
 
         return CustomResponse(
             general_message=message,
