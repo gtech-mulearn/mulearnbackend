@@ -183,21 +183,36 @@ def _save_task_skills(task_id, skill_ids, user_id):
 # after an admin edit). Per CLAUDE.md's own caching guidance ("cache-aside,
 # not cache-and-hope"), uncached-but-correct beats cached-but-sometimes-stale
 # here — these are small tables, so the query cost of staying uncached is low.
-def _fetch_task_reference_data():
+_TASK_REFERENCE_DATA_KEYS = {"levels", "channels", "types", "igs", "orgs"}
+
+
+def _fetch_task_reference_data(keys=None):
     """Level/Channel/TaskType/InterestGroup/Organization data, shared by the 5
     dropdown views and TaskBaseTemplateAPI — previously each fetched this
     independently (3 separate implementations of the same 5 queries).
+
+    keys: which of {"levels","channels","types","igs","orgs"} to fetch — each
+    single-purpose dropdown view passes only its own key, so e.g.
+    ChannelDropdownAPI runs one query, not five. Omit (or pass None) to fetch
+    all five, which is what TaskBaseTemplateAPI needs since its Excel sheet
+    has a column for each.
     """
-    return {
-        "levels": list(Level.objects.values("id", "name", "level_order").order_by("level_order")),
-        "channels": list(Channel.objects.values("id", "name")),
-        "types": list(TaskType.objects.values("id", "title")),
-        "igs": list(InterestGroup.objects.values("id", "name")),
+    keys = _TASK_REFERENCE_DATA_KEYS if keys is None else set(keys)
+    result = {}
+    if "levels" in keys:
+        result["levels"] = list(Level.objects.values("id", "name", "level_order").order_by("level_order"))
+    if "channels" in keys:
+        result["channels"] = list(Channel.objects.values("id", "name"))
+    if "types" in keys:
+        result["types"] = list(TaskType.objects.values("id", "title"))
+    if "igs" in keys:
+        result["igs"] = list(InterestGroup.objects.values("id", "name"))
+    if "orgs" in keys:
         # both "title" (dropdown display) and "code" (excel template/import
         # natural key — import resolves orgs by code, not title) are needed by
         # different consumers of this same reference set.
-        "orgs": list(Organization.objects.values("id", "title", "code")),
-    }
+        result["orgs"] = list(Organization.objects.values("id", "title", "code"))
+    return result
 
 
 class TaskPublicListAPI(APIView):
@@ -981,7 +996,7 @@ class ChannelDropdownAPI(APIView):
         })},
     )
     def get(self, request):
-        channels = _fetch_task_reference_data()["channels"]
+        channels = _fetch_task_reference_data(keys=["channels"])["channels"]
 
         return CustomResponse(response=channels).get_success_response()
 
@@ -1005,7 +1020,7 @@ class IGDropdownAPI(APIView):
         })},
     )
     def get(self, request):
-        igs = _fetch_task_reference_data()["igs"]
+        igs = _fetch_task_reference_data(keys=["igs"])["igs"]
         return CustomResponse(response=igs).get_success_response()
 
 
@@ -1033,7 +1048,7 @@ class OrganizationDropdownAPI(APIView):
         # response shape (id, title) is unchanged.
         organizations = [
             {"id": org["id"], "title": org["title"]}
-            for org in _fetch_task_reference_data()["orgs"]
+            for org in _fetch_task_reference_data(keys=["orgs"])["orgs"]
         ]
         return CustomResponse(response=organizations).get_success_response()
 
@@ -1062,7 +1077,7 @@ class LevelDropdownAPI(APIView):
         # eligibility "Min/Max Level" rules, which compare against a user's
         # level_order). Returning it lets clients store the order rather than an
         # opaque id/name.
-        levels = _fetch_task_reference_data()["levels"]
+        levels = _fetch_task_reference_data(keys=["levels"])["levels"]
         return CustomResponse(response=levels).get_success_response()
 
 
@@ -1082,7 +1097,7 @@ class TaskTypesDropDownAPI(APIView):
         responses={200: TasktypeSerializer},
     )
     def get(self, request):
-        task_types = _fetch_task_reference_data()["types"]
+        task_types = _fetch_task_reference_data(keys=["types"])["types"]
         return CustomResponse(response=task_types).get_success_response()
 
 
