@@ -255,3 +255,36 @@ class TaskTypeCreateUpdateSerializer(serializers.ModelSerializer):
         instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.save()
         return instance
+
+
+class TaskAdminApprovalSerializer(serializers.ModelSerializer):
+    """Mirrors the response shape AdminTaskApprovalAPI.get previously built by hand,
+    so that endpoint goes through a ModelSerializer like every other read endpoint
+    in this domain."""
+    id = serializers.CharField()
+    ig = serializers.SerializerMethodField()
+    type = serializers.SerializerMethodField()
+    company_name = serializers.SerializerMethodField()
+    requested_by = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TaskList
+        fields = [
+            "id", "title", "hashtag", "description", "karma", "approval_status",
+            "ig", "type", "company_name", "requested_by", "requested_at", "created_at",
+        ]
+
+    def get_ig(self, obj):
+        return {"id": str(obj.ig.id), "name": obj.ig.name} if obj.ig else None
+
+    def get_type(self, obj):
+        return {"id": str(obj.type.id), "title": obj.type.title} if obj.type else None
+
+    def get_company_name(self, obj):
+        company_profile = getattr(obj.requested_by, "company_profile", None) if obj.requested_by else None
+        return company_profile.name if company_profile else None
+
+    def get_requested_by(self, obj):
+        if not obj.requested_by:
+            return None
+        return {"id": str(obj.requested_by.id), "full_name": obj.requested_by.full_name}
