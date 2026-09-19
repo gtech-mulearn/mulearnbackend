@@ -13,6 +13,9 @@ urlpatterns = [
     path('<str:notification_id>/',         notification_view.DeleteOneView.as_view(),  name='notification-delete-one'),
     path('delete/all/',    notification_view.DeleteAllView.as_view(),          name='notification-delete-all'),
 
+    # ── Admin notification dispatch (new dispatch()-backed pipeline) ──────────
+    path('admin/broadcast/', notification_view.AdminBroadcastDispatchAPI.as_view(), name='admin-broadcast-dispatch'),
+
     # ── Legacy broadcast endpoints (admin) ────────────────────────────────────
     path('broadcast/delete/id/<str:broadcast_id>/',  notification_view.BroadcastNotificationDeleteAPI.as_view(),    name='delete-broadcast-notification'),
     path('broadcast/delete/all/',                    notification_view.BroadcastNotificationDeleteAllAPI.as_view(), name='delete-all-broadcast-notification'),
