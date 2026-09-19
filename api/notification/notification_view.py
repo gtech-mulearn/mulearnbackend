@@ -204,6 +204,7 @@ class MarkReadView(APIView):
             ).get_success_response()
 
         broadcast = BroadcastNotification.objects.filter(
+            _broadcast_audience_q(user_id),
             id=notification_id, expires_at__gt=timezone.now(),
         ).first()
 
@@ -358,6 +359,7 @@ class DeleteOneView(APIView):
             ).get_success_response()
 
         broadcast = BroadcastNotification.objects.filter(
+            _broadcast_audience_q(user_id),
             id=notification_id, expires_at__gt=timezone.now(),
         ).first()
 
