@@ -77,11 +77,11 @@ TEMPLATES: dict[tuple, dict] = {
     },
 
     # ── EVENT_PUBLISHED ───────────────────────────────────────────────────────
-    # Who gets it: the event creator
+    # Who gets it: everyone in the event's scope (campus/IG/company/global) — not just the creator
     # Context keys: event_title
     ("EVENT_PUBLISHED", "IN_APP"): {
         "title": "Event Published!",
-        "body":  "Your event \"{event_title}\" is now live.",
+        "body":  "\"{event_title}\" is now live.",
     },
 
     # ── EVENT_APPROVAL_STAGE ──────────────────────────────────────────────────
