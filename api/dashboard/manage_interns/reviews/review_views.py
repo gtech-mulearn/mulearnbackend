@@ -13,6 +13,8 @@ from db.intern import InternDailyTimesheet, UserInternGuildLink, InternWeeklyRev
 from db.task import KarmaActivityLog, TaskList, Wallet
 from db.achievement import UserStreak
 from utils.utils import CommonUtils
+from utils.karma import notify_karma_change
+from api.notification.types import NotificationType
 from .serializers import ManageInternWeeklyReviewSerializer, ManageInternTimesheetSerializer
 
 
@@ -191,7 +193,7 @@ def _award_missing_milestone_karma(user_id: str, admin_id: str, milestone_hits: 
         )
 
         for _ in range(missing):
-            KarmaActivityLog.objects.create(
+            kal = KarmaActivityLog.objects.create(
                 id=str(uuid.uuid4()),
                 user_id=user_id,
                 task=task_list,
@@ -201,6 +203,9 @@ def _award_missing_milestone_karma(user_id: str, admin_id: str, milestone_hits: 
                 updated_at=now(),
                 created_by_id=admin_id,
                 created_at=now(),
+            )
+            notify_karma_change(
+                NotificationType.KARMA_AWARDED, user_id, admin_id, task_list.title, bonus_karma, kal.id
             )
         Wallet.objects.filter(id=wallet.id).update(karma=F('karma') + (bonus_karma * missing))
 
@@ -272,7 +277,7 @@ class InternTimesheetReviewAPI(APIView):
 
                 task_list = TaskList.objects.filter(hashtag=InternHashtag.DAILY_LOG_HASHTAG.value).first()
                 if task_list:
-                    KarmaActivityLog.objects.create(
+                    kal = KarmaActivityLog.objects.create(
                         id=str(uuid.uuid4()),
                         user_id=user_id,
                         task=task_list,
@@ -286,6 +291,9 @@ class InternTimesheetReviewAPI(APIView):
                     from django.db.models import F
                     wallet, _ = Wallet.objects.get_or_create(user_id=user_id, defaults={'created_by_id': admin_id, 'updated_by_id': admin_id})
                     Wallet.objects.filter(id=wallet.id).update(karma=F('karma') + karma_to_award)
+                    notify_karma_change(
+                        NotificationType.KARMA_AWARDED, user_id, admin_id, task_list.title, karma_to_award, kal.id
+                    )
 
                 # --- Milestone karma (Expected vs Actual — idempotent) ---
                 milestone_map = {
@@ -372,7 +380,7 @@ class InternWeeklyReviewReviewAPI(APIView):
 
                 task_list = TaskList.objects.filter(hashtag=InternHashtag.WEEKLY_REVIEW_HASHTAG.value).first()
                 if task_list:
-                    KarmaActivityLog.objects.create(
+                    kal = KarmaActivityLog.objects.create(
                         id=str(uuid.uuid4()),
                         user_id=user_id,
                         task=task_list,
@@ -386,6 +394,9 @@ class InternWeeklyReviewReviewAPI(APIView):
                     from django.db.models import F
                     wallet, _ = Wallet.objects.get_or_create(user_id=user_id, defaults={'created_by_id': admin_id, 'updated_by_id': admin_id})
                     Wallet.objects.filter(id=wallet.id).update(karma=F('karma') + karma_to_award)
+                    notify_karma_change(
+                        NotificationType.KARMA_AWARDED, user_id, admin_id, task_list.title, karma_to_award, kal.id
+                    )
 
                 # weekly reviews currently have no milestone map, but the
                 # pattern is here if needed in the future.
