@@ -41,6 +41,9 @@ from api.dashboard.media_content.image_utils import (
     delete_stale_media,
 )
 from mu_celery.media_content_tasks import fetch_and_attach_poster
+from api.notification.service import NotificationService
+from api.notification.types import NotificationType
+from api.notification.audience import Audience
 
 from drf_spectacular.utils import extend_schema
 
@@ -138,6 +141,59 @@ def _sync_ig_links(record, ig_ids, *, is_new=False):
     return [link.id for link in links]
 
 
+def _notify_new_media_content(record, actor_id, link_ids=None):
+    """
+    Announce a newly created MediaContent record. Shared by all 4 single-
+    create views and the bulk CSV importer, so every producer of a new
+    session/episode notifies the same way. Office Hours resolves to its
+    tagged IG's learners; the other 3 shows go global (campus/zone kept as
+    descriptive text only — see notification_docs/MediaContent_Notification_Table.md
+    for why: campus is free text, not a real FK, so there's no audience to
+    resolve without a schema change).
+    """
+    content_type = record.content_type
+    if content_type == MediaContent.ContentType.OFFICE_HOURS:
+        NotificationService.dispatch(
+            notif_type = NotificationType.OFFICE_HOURS_ANNOUNCED,
+            audience   = Audience.ig_via_media_content_links(link_ids or []),
+            context    = {"title": record.title, "performer": record.performer or "TBA"},
+            entity_id  = str(record.id),
+            occurrence = "1",
+            actor_id   = actor_id,
+        )
+    elif content_type == MediaContent.ContentType.SALT_MANGO_TREE:
+        NotificationService.dispatch(
+            notif_type = NotificationType.SALT_MANGO_TREE_ANNOUNCED,
+            audience   = Audience.all(),
+            context    = {"title": record.title, "campus": record.campus or "your campus"},
+            entity_id  = str(record.id),
+            occurrence = "1",
+            actor_id   = actor_id,
+        )
+    elif content_type == MediaContent.ContentType.INSPIRATION_STATION:
+        NotificationService.dispatch(
+            notif_type = NotificationType.INSPIRATION_STATION_ANNOUNCED,
+            audience   = Audience.all(),
+            context    = {"title": record.title, "campus": record.campus or "your campus"},
+            entity_id  = str(record.id),
+            occurrence = "1",
+            actor_id   = actor_id,
+        )
+    elif content_type == MediaContent.ContentType.GRAB_YOUR_SUPERPOWERS:
+        NotificationService.dispatch(
+            notif_type = NotificationType.GRAB_YOUR_SUPERPOWERS_ANNOUNCED,
+            audience   = Audience.all(),
+            context    = {
+                "title": record.title,
+                "campus": record.campus or "your campus",
+                "performer": record.performer or "TBA",
+            },
+            entity_id  = str(record.id),
+            occurrence = "1",
+            actor_id   = actor_id,
+        )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Office Hours
 # ─────────────────────────────────────────────────────────────────────────────
@@ -219,6 +275,8 @@ class OfficeHoursListCreateAPI(PublicGetMixin, APIView):
 
         for field, (raw_url, subdir) in pending_urls.items():
             fetch_and_attach_poster.delay(record.id, raw_url, subdir, field)
+
+        _notify_new_media_content(record, user_id, link_ids)
 
         return CustomResponse(
             general_message='Office Hours session created successfully.',
@@ -402,6 +460,8 @@ class SaltMangoTreeListCreateAPI(PublicGetMixin, APIView):
             **data,
         )
 
+        _notify_new_media_content(record, user_id)
+
         return CustomResponse(
             general_message='Salt Mango Tree episode created successfully.',
             response=SaltMangoTreeReadSerializer(record).data,
@@ -553,6 +613,8 @@ class InspirationStationListCreateAPI(PublicGetMixin, APIView):
             **data,
         )
 
+        _notify_new_media_content(record, user_id)
+
         return CustomResponse(
             general_message='Inspiration Station episode created successfully.',
             response=InspirationStationReadSerializer(record).data,
@@ -703,6 +765,8 @@ class GrabYourSuperpowersListCreateAPI(PublicGetMixin, APIView):
             updated_by_id=user_id,
             **data,
         )
+
+        _notify_new_media_content(record, user_id)
 
         return CustomResponse(
             general_message='Grab Your Superpowers session created successfully.',
@@ -972,6 +1036,11 @@ class MediaContentBulkImportAPI(APIView):
             MediaContent.objects.bulk_update(
                 [record for record, _ in office_hours_pending], ['interest_groups']
             )
+
+        # One announcement per successfully imported row — individual, not a
+        # single digest, same as every other producer in this module.
+        for record in pending_records:
+            _notify_new_media_content(record, user_id, record.interest_groups)
 
         return CustomResponse(
             general_message='Bulk import completed.',

@@ -120,3 +120,14 @@ class BroadcastNotificationWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model  = BroadcastNotification
         fields = ['title', 'description', 'url', 'expires_at']
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Admin broadcast dispatch — new pipeline (NotificationService.dispatch()-backed)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class AdminBroadcastDispatchSerializer(serializers.Serializer):
+    title           = serializers.CharField(max_length=100)
+    description     = serializers.CharField(max_length=300)
+    redirect_url    = serializers.CharField(max_length=255, required=False, allow_null=True)
+    expires_in_days = serializers.IntegerField(required=False, min_value=1, max_value=90)

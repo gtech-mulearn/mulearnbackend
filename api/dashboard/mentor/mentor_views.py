@@ -656,6 +656,38 @@ class MentorVerifyAPI(APIView):
             updated_status = serializer.validated_data.get('status')
             serializer.save()
 
+        # Company-mentor self-apply outcome — tell the applicant. Nomination
+        # (the other path onto this tier) already notifies via
+        # MENTOR_NOMINATED in api/dashboard/company/company_views.py; this is
+        # the missing mirror for the self-apply-and-wait path specifically.
+        if application.mentor_tier == MentorApplication.MentorTier.COMPANY_MENTOR:
+            from api.notification.service import NotificationService
+            from api.notification.types import NotificationType
+            from api.notification.audience import Audience
+            from db.company import Company
+
+            company = Company.objects.filter(org_id=application.org_id).first()
+            company_name = company.name if company else (application.org.title if application.org else "the company")
+
+            if updated_status == MentorApplication.Status.APPROVED:
+                NotificationService.dispatch(
+                    notif_type = NotificationType.COMPANY_MENTOR_APPLICATION_APPROVED,
+                    audience   = Audience.user(str(application.user_id)),
+                    context    = {"company_name": company_name},
+                    entity_id  = str(application.id),
+                    occurrence = "1",
+                    actor_id   = user_id,
+                )
+            elif updated_status == MentorApplication.Status.REJECTED:
+                NotificationService.dispatch(
+                    notif_type = NotificationType.COMPANY_MENTOR_APPLICATION_REJECTED,
+                    audience   = Audience.user(str(application.user_id)),
+                    context    = {"company_name": company_name},
+                    entity_id  = str(application.id),
+                    occurrence = "1",
+                    actor_id   = user_id,
+                )
+
         return CustomResponse(
             general_message=f"Mentor status updated to {updated_status} successfully."
         ).get_success_response()
