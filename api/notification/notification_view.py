@@ -1,5 +1,6 @@
 from datetime import datetime, time, timedelta
 
+from django.db import transaction
 from django.db.models import CharField, Exists, F, OuterRef, Q, Subquery, Value
 from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
@@ -228,13 +229,16 @@ class MarkReadBulkView(APIView):
     """
     PATCH /api/v1/notification/read/
 
-    Marks a specific list of the caller's own notifications as read.
+    Marks a specific list of ids as read — personal `notification` rows owned
+    by the caller, and/or `broadcast_notification` rows the caller's audience
+    matches (writes a read receipt, same as the single-item endpoint).
     Body: {"ids": ["<uuid>", ...]}
 
-    IDs that don't exist or aren't owned by the caller are just not counted
-    in the update — there's no single id here to 404 on the way the
-    single-notification endpoints do, so the response reports how many of
-    the submitted ids were actually matched and updated.
+    IDs that don't exist, aren't owned by the caller, or aren't in the
+    caller's broadcast audience are just not counted in the update — there's
+    no single id here to 404 on the way the single-notification endpoints do,
+    so the response reports how many of the submitted ids were actually
+    matched and updated.
     """
     authentication_classes = [CustomizePermission]
 
@@ -246,9 +250,11 @@ class MarkReadBulkView(APIView):
         if not isinstance(ids, list) or not ids:
             return CustomResponse(general_message="'ids' must be a non-empty list").get_failure_response()
 
-        updated = Notification.objects.filter(
-            id__in=ids, user_id=user_id, is_read=False
-        ).update(is_read=True, read_at=timezone.now())
+        with transaction.atomic():
+            updated = Notification.objects.filter(
+                id__in=ids, user_id=user_id, is_read=False
+            ).update(is_read=True, read_at=timezone.now())
+            updated += _sync_broadcast_receipts(user_id, 'read_at', ids=ids)
 
         if updated:
             invalidate_unread_count(user_id)
@@ -262,7 +268,9 @@ class MarkAllReadView(APIView):
     """
     PATCH /api/v1/notification/read-all/
 
-    Marks all unread notifications as read for the authenticated user.
+    Marks all unread notifications as read for the authenticated user —
+    personal `notification` rows and every audience-visible, unexpired
+    broadcast (writes/updates read receipts for the latter).
     """
     authentication_classes = [CustomizePermission]
 
@@ -271,9 +279,11 @@ class MarkAllReadView(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         now     = timezone.now()
 
-        updated = Notification.objects.filter(
-            user_id=user_id, is_read=False
-        ).update(is_read=True, read_at=now)
+        with transaction.atomic():
+            updated = Notification.objects.filter(
+                user_id=user_id, is_read=False
+            ).update(is_read=True, read_at=now)
+            updated += _sync_broadcast_receipts(user_id, 'read_at')
 
         if updated:
             invalidate_unread_count(user_id)
@@ -385,18 +395,22 @@ class DeleteAllView(APIView):
     DELETE /api/v1/notification/
 
     Soft-deletes ALL notifications for the authenticated user — sets
-    is_archived=True on every currently non-archived row, same rationale as
-    DeleteOneView. Idempotent: re-running only affects rows that are still
-    is_archived=False, so it never double-counts or errors on a repeat call.
+    is_archived=True on every currently non-archived personal row, and sets
+    archived_at on a receipt for every audience-visible, unexpired broadcast,
+    same rationale as DeleteOneView. Idempotent: re-running only affects rows
+    that aren't already archived, so it never double-counts or errors on a
+    repeat call.
     """
     authentication_classes = [CustomizePermission]
 
     @extend_schema(tags=['Notification'], description="Delete (soft) all notifications for the current user.")
     def delete(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        deleted_count = Notification.objects.filter(
-            user_id=user_id, is_archived=False
-        ).update(is_archived=True)
+        with transaction.atomic():
+            deleted_count = Notification.objects.filter(
+                user_id=user_id, is_archived=False
+            ).update(is_archived=True)
+            deleted_count += _sync_broadcast_receipts(user_id, 'archived_at')
         if deleted_count:
             invalidate_unread_count(user_id)
 
@@ -458,6 +472,51 @@ def _broadcast_audience_q(user_id: str) -> Q:
         | Q(target_type='event_coowners', target_id__in=coowned_event_ids)
         | Q(target_type='event_coowners', target_id__in=created_event_ids)
     )
+
+
+def _sync_broadcast_receipts(user_id: str, field: str, ids=None) -> int:
+    """
+    Bulk-sets `field` ('read_at' or 'archived_at') to now() on every
+    audience-visible, unexpired broadcast for `user_id` — the broadcast-side
+    counterpart to a bulk Notification.update() (mark-all-read / delete-all).
+
+    Bounded by the number of active broadcasts (one row per broadcast EVENT,
+    not per recipient), never by audience size, so this stays cheap even for
+    a global broadcast.
+
+    Two passes instead of one bulk_create(ignore_conflicts=True), because a
+    receipt may already exist for the OTHER field (e.g. archived but never
+    read) — ignore_conflicts would silently skip updating it:
+      1. existing receipts missing `field` -> UPDATE
+      2. broadcasts with no receipt row at all -> INSERT
+    """
+    now = timezone.now()
+    audience_qs = BroadcastNotification.objects.filter(
+        _broadcast_audience_q(user_id), expires_at__gt=now,
+    )
+    if ids is not None:
+        audience_qs = audience_qs.filter(id__in=ids)
+    audience_ids = list(audience_qs.values_list('id', flat=True))
+
+    if not audience_ids:
+        return 0
+
+    existing = BroadcastNotificationRead.objects.filter(
+        broadcast_id__in=audience_ids, user_id=user_id,
+    )
+    updated = existing.filter(**{f'{field}__isnull': True}).update(**{field: now})
+
+    existing_ids = set(existing.values_list('broadcast_id', flat=True))
+    missing_ids = [bid for bid in audience_ids if bid not in existing_ids]
+    if missing_ids:
+        BroadcastNotificationRead.objects.bulk_create(
+            [BroadcastNotificationRead(broadcast_id=bid, user_id=user_id, **{field: now})
+             for bid in missing_ids],
+            ignore_conflicts=True,
+        )
+        updated += len(missing_ids)
+
+    return updated
 
 
 # Aliased ('f_' prefix) rather than the bare column names: Django's ORM puts
