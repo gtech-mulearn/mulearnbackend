@@ -1,3 +1,4 @@
+from django.db.models import Min
 from rest_framework.views import APIView
 
 from db.user import DynamicRole, Role, DynamicUser
@@ -24,13 +25,13 @@ class DynamicRoleAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request):  # list
-        dynamic_roles = DynamicRole.objects.values('type').distinct()
+        dynamic_roles = DynamicRole.objects.values('type').annotate(role_title=Min('role__title')).order_by('type')
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             dynamic_roles, request,
-            search_fields=["type", "role__title", ],
+            search_fields=["type", "role__title"],
             sort_fields={'type': 'type',
-                         'role': 'role__title'}
+                         'role': 'role_title'}
         )
         dynamic_role_serializer = DynamicRoleListSerializer(paginated_queryset.get('queryset'), many=True).data
         return CustomResponse().paginated_response(data=dynamic_role_serializer,
@@ -73,13 +74,13 @@ class DynamicUserAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
-        dynamic_users = DynamicUser.objects.values('type').distinct()
+        dynamic_users = DynamicUser.objects.values('type').annotate(user_name=Min('user__full_name')).order_by('type')
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             dynamic_users, request,
             search_fields=["type", "user__full_name"],
             sort_fields={'type': 'type',
-                         'user': 'user__full_name'}
+                         'user': 'user_name'}
         )
         dynamic_user_serializer = DynamicUserListSerializer(paginated_queryset.get('queryset'), many=True).data
         return CustomResponse().paginated_response(data=dynamic_user_serializer,
