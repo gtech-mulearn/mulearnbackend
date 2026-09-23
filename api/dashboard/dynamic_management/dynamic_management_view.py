@@ -25,10 +25,9 @@ class DynamicRoleAPI(APIView):
     @role_required([RoleType.ADMIN.value])
     def get(self, request):  # list
         dynamic_roles = DynamicRole.objects.values('type').distinct()
-        data = [{'type': role['type']} for role in dynamic_roles]
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            data, request,
+            dynamic_roles, request,
             search_fields=["type", "role__title", ],
             sort_fields={'type': 'type',
                          'role': 'role__title'}
@@ -75,10 +74,9 @@ class DynamicUserAPI(APIView):
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
         dynamic_users = DynamicUser.objects.values('type').distinct()
-        data = [{'type': user['type']} for user in dynamic_users]
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            data, request,
+            dynamic_users, request,
             search_fields=["type", "user__full_name"],
             sort_fields={'type': 'type',
                          'user': 'user__full_name'}
