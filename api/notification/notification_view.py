@@ -489,6 +489,15 @@ def _sync_broadcast_receipts(user_id: str, field: str, ids=None) -> int:
     read) — ignore_conflicts would silently skip updating it:
       1. existing receipts missing `field` -> UPDATE
       2. broadcasts with no receipt row at all -> INSERT
+
+    A third, reconciling UPDATE follows the INSERT: two concurrent calls for
+    the same missing broadcast but different fields (e.g. a racing read-all
+    and delete-all) can both see "no receipt" and both attempt an INSERT —
+    the unique constraint on (broadcast_id, user_id) lets only one through,
+    and ignore_conflicts silently drops the other with its field never
+    applied. Re-checking after the INSERT for rows still missing `field`
+    catches exactly that loser and updates it in place, so neither request's
+    write is ever lost regardless of which one won the race.
     """
     now = timezone.now()
     audience_qs = BroadcastNotification.objects.filter(
@@ -514,6 +523,12 @@ def _sync_broadcast_receipts(user_id: str, field: str, ids=None) -> int:
              for bid in missing_ids],
             ignore_conflicts=True,
         )
+        # Reconcile: catches a row whose INSERT lost the unique-constraint
+        # race to a concurrent call syncing a different field — it now
+        # exists (created by the other request) but is still missing ours.
+        BroadcastNotificationRead.objects.filter(
+            broadcast_id__in=missing_ids, user_id=user_id, **{f'{field}__isnull': True}
+        ).update(**{field: now})
         updated += len(missing_ids)
 
     return updated
