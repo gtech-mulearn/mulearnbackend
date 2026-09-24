@@ -4,3 +4,9 @@
 # Every test under utils/ exercises a Django-free module (no Django, no
 # database, no settings), so this file is deliberately tiny.
 pytest==8.3.4
+
+# utils/token_verification.py and its tests. requirements.txt only gets these
+# transitively (PyJWT via djangorestframework-simplejwt, cryptography via
+# pyOpenSSL/autobahn), so they are pinned here to the same versions.
+PyJWT==2.13.0
+cryptography==41.0.7

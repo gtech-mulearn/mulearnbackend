@@ -281,3 +281,101 @@ def test_writes_need_write_scope(method):
 def test_no_scopes_allows_nothing():
     assert not scope_allows([], "GET")
     assert not scope_allows(None, "POST")
+
+
+# --- _JWKSCache: an authserver outage must not reject tokens we can verify ---
+
+from utils.token_verification import _JWKSCache  # noqa: E402
+
+
+class _Key:
+    def __init__(self, kid, key):
+        self.key_id = kid
+        self.key = key
+
+
+class FakeJWKSClient:
+    """Stands in for PyJWKClient. `down` makes every fetch fail."""
+
+    def __init__(self, keys):
+        self.keys = keys
+        self.down = False
+        self.fetches = 0
+
+    def get_signing_keys(self):
+        self.fetches += 1
+        if self.down:
+            raise ConnectionError("authserver unreachable")
+        return [_Key(kid, key) for kid, key in self.keys.items()]
+
+
+def _cache(client, ttl=3600):
+    return _JWKSCache("https://auth.example/jwks.json", ttl=ttl,
+                      client_factory=lambda url: client, min_refetch=60)
+
+
+def _token(kid):
+    return jwt.encode({"sub": "x"}, PRIVATE_PEM, algorithm="RS256", headers={"kid": kid})
+
+
+class TestJWKSCache:
+    def test_keys_are_fetched_once_within_the_ttl(self):
+        client = FakeJWKSClient({"k1": PUBLIC_KEY})
+        cache = _cache(client)
+        assert cache.signing_key(_token("k1"), now=0) is PUBLIC_KEY
+        assert cache.signing_key(_token("k1"), now=100) is PUBLIC_KEY
+        assert client.fetches == 1
+
+    def test_known_key_still_verifies_when_refresh_fails_after_ttl(self):
+        client = FakeJWKSClient({"k1": PUBLIC_KEY})
+        cache = _cache(client)
+        cache.signing_key(_token("k1"), now=0)
+        client.down = True
+        assert cache.signing_key(_token("k1"), now=4000) is PUBLIC_KEY
+
+    def test_outage_does_not_refetch_on_every_request(self):
+        client = FakeJWKSClient({"k1": PUBLIC_KEY})
+        cache = _cache(client)
+        cache.signing_key(_token("k1"), now=0)
+        client.down = True
+        for t in (4000, 4001, 4030):
+            cache.signing_key(_token("k1"), now=t)
+        assert client.fetches == 2  # the first fetch, then one failed retry
+
+    def test_unknown_key_during_outage_fails_closed(self):
+        client = FakeJWKSClient({"k1": PUBLIC_KEY})
+        cache = _cache(client)
+        cache.signing_key(_token("k1"), now=0)
+        client.down = True
+        with pytest.raises(Exception):
+            cache.signing_key(_token("k2"), now=4000)
+
+    def test_key_removed_by_authserver_stops_working(self):
+        client = FakeJWKSClient({"k1": PUBLIC_KEY})
+        cache = _cache(client)
+        cache.signing_key(_token("k1"), now=0)
+        client.keys = {"k2": PUBLIC_KEY}
+        with pytest.raises(LookupError):
+            cache.signing_key(_token("k1"), now=4000)
+
+    def test_rotated_key_is_picked_up_before_the_ttl(self):
+        client = FakeJWKSClient({"k1": PUBLIC_KEY})
+        cache = _cache(client)
+        cache.signing_key(_token("k1"), now=0)
+        client.keys = {"k1": PUBLIC_KEY, "k2": PUBLIC_KEY}
+        assert cache.signing_key(_token("k2"), now=61) is PUBLIC_KEY
+
+    def test_unknown_kids_cannot_force_a_fetch_per_request(self):
+        client = FakeJWKSClient({"k1": PUBLIC_KEY})
+        cache = _cache(client)
+        cache.signing_key(_token("k1"), now=0)
+        for i in range(5):
+            with pytest.raises(LookupError):
+                cache.signing_key(_token(f"random-{i}"), now=10 + i)
+        assert client.fetches == 1
+
+    def test_nothing_verifies_if_the_first_fetch_fails(self):
+        client = FakeJWKSClient({"k1": PUBLIC_KEY})
+        client.down = True
+        with pytest.raises(ConnectionError):
+            _cache(client).signing_key(_token("k1"), now=0)

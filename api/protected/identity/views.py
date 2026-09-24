@@ -22,6 +22,7 @@ import hmac
 import logging
 
 from decouple import config
+from django.db import IntegrityError, transaction
 from drf_spectacular.utils import extend_schema
 from rest_framework.views import APIView
 
@@ -82,7 +83,9 @@ class ProvisionMemberAPI(APIView):
         # Report an existing account as a distinct, non-fatal outcome. The
         # caller needs to tell the person "you already have an account, sign in"
         # rather than showing them a validation error on a signup form.
-        if User.objects.filter(email=email).exists():
+        # User.every, not User.objects: suspended members are hidden from
+        # User.objects but still hold their email under the unique constraint.
+        if User.every.filter(email=email).exists():
             return CustomResponse(
                 general_message="An account already exists for this email",
                 response={"already_exists": True},
@@ -98,7 +101,23 @@ class ProvisionMemberAPI(APIView):
                 response={"errors": serializer.errors},
             ).get_failure_response()
 
-        user = serializer.save()
+        # The serializer writes the user and then its wallet, socials, settings,
+        # level and role link. Legacy registration runs that inside
+        # RegisterSerializer's transaction; this call must too, or a failure
+        # midway leaves a half-provisioned member whose email blocks a retry.
+        try:
+            with transaction.atomic():
+                user = serializer.save()
+        except IntegrityError:
+            # A concurrent signup for the same email won the race past the
+            # exists() check above. Our writes are rolled back; report it the
+            # same way.
+            if User.every.filter(email=email).exists():
+                return CustomResponse(
+                    general_message="An account already exists for this email",
+                    response={"already_exists": True},
+                ).get_failure_response()
+            raise
 
         # Same welcome email as the legacy dashboard signup, so members joining
         # through "Sign in with muLearn" are not treated differently. A mail or

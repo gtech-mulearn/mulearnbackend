@@ -50,32 +50,83 @@ FORMAT_OIDC = "oidc_rs256"
 # safe and a short one is a self-inflicted denial of service.
 JWKS_CACHE_SECONDS = 3600
 
+# Minimum gap between fetch attempts. Bounds how often an unknown `kid` (which
+# anyone can put in a token header) or an authserver outage can make this
+# service call out, and how many requests pay the fetch timeout.
+JWKS_MIN_REFETCH_SECONDS = 60
+JWKS_FETCH_TIMEOUT = 5
+
 
 class TokenError(Exception):
     """The token cannot be trusted. The message is safe to log, not to echo."""
 
 
+def _default_jwks_client(url):
+    # The client's own JWK Set cache is off: it expires after 5 minutes and
+    # then has no fallback, which is the exact failure this class prevents.
+    return PyJWKClient(url, cache_jwk_set=False, timeout=JWKS_FETCH_TIMEOUT)
+
+
 class _JWKSCache:
     """
-    Caches authserver's public keys.
+    Caches authserver's public keys, by `kid`.
+
+    The last successfully fetched key set is kept until a later fetch
+    succeeds. So if authserver is down when the TTL runs out, tokens signed by
+    a key we already hold keep verifying - an authserver outage must not sign
+    everyone out here. A key authserver has REMOVED stops working at the next
+    successful fetch, so rotation and revocation are still honoured.
 
     Deliberately a small object rather than a module global so tests can hold
     their own instance and not leak state between cases.
     """
 
-    def __init__(self, jwks_url, ttl=JWKS_CACHE_SECONDS, client_factory=None):
+    def __init__(self, jwks_url, ttl=JWKS_CACHE_SECONDS, client_factory=None,
+                 min_refetch=JWKS_MIN_REFETCH_SECONDS):
         self.jwks_url = jwks_url
         self.ttl = ttl
-        self._client_factory = client_factory or PyJWKClient
+        self.min_refetch = min_refetch
+        self._client_factory = client_factory or _default_jwks_client
         self._client = None
-        self._fetched_at = 0.0
+        self._keys = {}
+        self._fetched_at = None
+        self._attempted_at = None
+
+    def _refresh(self, now):
+        self._attempted_at = now
+        if self._client is None:
+            self._client = self._client_factory(self.jwks_url)
+        keys = {k.key_id: k.key for k in self._client.get_signing_keys()}
+        # Replaced only after a successful fetch, never cleared on failure.
+        self._keys = keys
+        self._fetched_at = now
 
     def signing_key(self, token, *, now=None):
         now = time.time() if now is None else now
-        if self._client is None or (now - self._fetched_at) > self.ttl:
-            self._client = self._client_factory(self.jwks_url)
-            self._fetched_at = now
-        return self._client.get_signing_key_from_jwt(token).key
+        kid = jwt.get_unverified_header(token).get("kid")
+
+        stale = self._fetched_at is None or (now - self._fetched_at) > self.ttl
+        # An unknown kid may be a freshly rotated key, so it triggers a fetch.
+        unknown = kid not in self._keys
+        may_fetch = (
+            self._attempted_at is None
+            or (now - self._attempted_at) >= self.min_refetch
+        )
+
+        if (stale or unknown) and may_fetch:
+            try:
+                self._refresh(now)
+            except Exception:
+                if unknown:
+                    raise
+                logger.warning(
+                    "JWKS refresh failed; using keys fetched at %s", self._fetched_at,
+                    exc_info=True,
+                )
+
+        if kid not in self._keys:
+            raise LookupError(f"No signing key for kid {kid!r}")
+        return self._keys[kid]
 
 
 def token_format(token):

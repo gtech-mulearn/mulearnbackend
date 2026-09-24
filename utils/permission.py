@@ -267,6 +267,19 @@ class JWTUtils:
         validated = JWTUtils._validated(request)
         return None, validated["raw"]
 
+    @staticmethod
+    def is_logged_in(request):
+        """
+        True when the request carries a valid token (either format), else False.
+        For views that serve both anonymous and signed-in callers.
+        """
+        try:
+            JWTUtils._validated(request)
+            return True
+        except UnauthorizedAccessException:
+            return False
+
+
 def role_required(roles):
     def decorator(view_func):
         def wrapped_view_func(obj, request, *args, **kwargs):

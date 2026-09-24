@@ -30,7 +30,7 @@ def call(method, path, *, json=None, params=None):
     4xx responses are returned, not raised: they carry an error code and a
     message meant for the person (wrong current password, invalid policy).
 
-    :raises AuthServerUnavailable: network failure, 5xx, or a non-JSON body.
+    :raises AuthServerUnavailable: network failure, 5xx, or a body that is not a JSON object.
     """
     url = f"{decouple.config('AUTH_DOMAIN').rstrip('/')}/api/v1/internal/{path.lstrip('/')}"
     try:
@@ -51,6 +51,13 @@ def call(method, path, *, json=None, params=None):
     except ValueError as exc:
         logger.error("authserver returned non-JSON for %s %s: HTTP %s", method, path, response.status_code)
         raise AuthServerUnavailable("The sign-in service returned an unexpected response.") from exc
+
+    # Every internal endpoint answers with a JSON object; callers rely on that
+    # for body.get(). A list, string or null means something in between (a
+    # proxy, a misroute) answered instead.
+    if not isinstance(body, dict):
+        logger.error("authserver returned a non-object body for %s %s: HTTP %s", method, path, response.status_code)
+        raise AuthServerUnavailable("The sign-in service returned an unexpected response.")
 
     if response.status_code >= 500 and response.status_code != 503:
         logger.error("authserver error for %s %s: HTTP %s %s", method, path, response.status_code, body)

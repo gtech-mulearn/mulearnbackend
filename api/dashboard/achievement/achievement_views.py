@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import uuid
 from io import BytesIO
@@ -25,6 +26,10 @@ from utils.types import RoleType
 from utils.utils import DateTimeUtils, CommonUtils
 from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
 from rest_framework import serializers as s
+
+# Unexpected failures are logged here with their traceback; the caller only
+# gets a fixed message, never the exception text (SQL, file paths).
+logger = logging.getLogger(__name__)
 
 
 class AchievementListAPIView(APIView):
@@ -180,9 +185,10 @@ class AchievementCreateAPIView(APIView):
                 created_at=now(),
                 updated_at=now(),
             )
-        except Exception as e:
+        except Exception:
+            logger.exception("Failed to create achievement")
             return CustomResponse(
-                general_message=f"Failed to create achievement: {str(e)}"
+                general_message="Failed to create achievement. Please try again."
             ).get_failure_response()
 
         return CustomResponse(
@@ -381,9 +387,10 @@ class UserAchievementsListAPIView(APIView):
                 general_message="Invalid format for muid"
             ).get_failure_response()
 
-        except Exception as e:
+        except Exception:
+            logger.exception("Failed to list user achievements")
             return CustomResponse(
-                general_message=f"An unexpected error occurred: {str(e)}"
+                general_message="An unexpected error occurred."
             ).get_failure_response()
 
 
@@ -1164,8 +1171,9 @@ class AchievementIssueBulkAPIView(APIView):
                         else:
                             failed_rows.append({"row": i, "muid": muid, "reason": result['message']})
 
-                except Exception as e:
-                    failed_rows.append({"row": i, "muid": muid, "reason": str(e)})
+                except Exception:
+                    logger.exception("Bulk achievement issue failed at row %s", i)
+                    failed_rows.append({"row": i, "muid": muid, "reason": "Unexpected error"})
 
             return CustomResponse(
                 response={
@@ -1177,9 +1185,10 @@ class AchievementIssueBulkAPIView(APIView):
                 general_message="Bulk issue processing completed"
             ).get_success_response()
 
-        except Exception as e:
+        except Exception:
+            logger.exception("Failed to process bulk achievement file")
             return CustomResponse(
-                general_message=f"Error processing file: {str(e)}"
+                general_message="Could not process the file. Check it is a valid .xlsx made from the template."
             ).get_failure_response()
 
 
@@ -1200,9 +1209,10 @@ class AchievementBulkImportTemplateAPIView(APIView):
             response = FileResponse(output, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
             response['Content-Disposition'] = 'attachment; filename=achievement_bulk_import_template.xlsx'
             return response
-        except Exception as e:
+        except Exception:
+            logger.exception("Failed to generate achievement bulk import template")
             return CustomResponse(
-                general_message=f"Failed to generate template: {str(e)}"
+                general_message="Failed to generate template."
             ).get_failure_response()
 
 
@@ -1281,7 +1291,8 @@ class BulkClaimTaskAchievementAPIView(APIView):
                 general_message="Invalid date format. Use ISO format (YYYY-MM-DD)."
             ).get_failure_response()
 
-        except Exception as e:
+        except Exception:
+            logger.exception("Failed to schedule achievement bulk sync")
             return CustomResponse(
-                general_message=f"An unexpected error occurred: {str(e)}"
+                general_message="An unexpected error occurred."
             ).get_failure_response()

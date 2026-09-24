@@ -518,16 +518,21 @@ class ResetPasswordConfirmAPI(APIView):
                 general_message=authserver_client.error_message(body)
             ).get_failure_response()
 
-        forget_user.delete()
-
         if not body.get("sessions_revoked"):
+            # Password is set but some sessions survived. Keep the link (it
+            # still expires on its own) so the person can submit again: each
+            # password/set call signs them out everywhere afresh. Consuming it
+            # here would leave a possibly compromised account with live
+            # sessions and no way to retry.
             return CustomResponse(
                 general_message=(
-                    "Password reset, but existing sessions could not be signed "
-                    "out. Please contact support if you suspect your account "
-                    "was accessed."
+                    "Your password was changed, but we could not sign you out "
+                    "of every device. Please submit this form again with the "
+                    "same link to finish."
                 )
-            ).get_failure_response()
+            ).get_failure_response(status_code=503, http_status_code=503)
+
+        forget_user.delete()
 
         return CustomResponse(
             general_message="New Password Saved Successfully"

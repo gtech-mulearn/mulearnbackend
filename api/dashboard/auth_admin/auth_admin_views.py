@@ -58,6 +58,22 @@ def _proxy(method, path, *, json=None, params=None):
     return body, None
 
 
+def _incomplete(body, *keys):
+    """
+    Failure response if a successful change reply lacks the snapshots we need.
+
+    The change has already happened in authserver by this point, so callers
+    audit first (with whatever came back) and then return this.
+    """
+    missing = [k for k in keys if not isinstance(body.get(k), dict)]
+    if not missing:
+        return None
+    logger.error("authserver change reply is missing %s", ", ".join(missing))
+    return CustomResponse(
+        general_message="The change was sent, but the sign-in service's reply was incomplete. Refresh to check it."
+    ).get_failure_response(status_code=502, http_status_code=502)
+
+
 def _audit(request, action, *, entity_name, entity_id, before=None, after=None, subject_user_id=None, remarks=None):
     """
     Record an admin change. The change has already happened in authserver, so
@@ -116,7 +132,9 @@ class SigninPolicyAPI(APIView):
         if failure:
             return failure
         _audit(request, Action.AUTH_POLICY_UPDATE, entity_name="system_setting",
-               entity_id="auth.lockout", before=body["before"], after=body["after"])
+               entity_id="auth.lockout", before=body.get("before"), after=body.get("after"))
+        if bad := _incomplete(body, "before", "after"):
+            return bad
         return CustomResponse(general_message="Sign-in policy updated", response=body["after"]).get_success_response()
 
 
@@ -139,9 +157,12 @@ class ClientListAPI(APIView):
         body, failure = _proxy("POST", "admin/clients/", json=request.data)
         if failure:
             return failure
-        after = body["after"]
+        after = body.get("after")
+        client_id = after.get("client_id") if isinstance(after, dict) else None
         _audit(request, Action.AUTH_CLIENT_CREATE, entity_name="oauth2_provider_application",
-               entity_id=after["client_id"], after=after)
+               entity_id=client_id or request.data.get("client_id"), after=after)
+        if bad := _incomplete(body, "after"):
+            return bad
         return CustomResponse(
             general_message="Client registered",
             response={"client": after, "client_secret": body.get("client_secret")},
@@ -164,7 +185,9 @@ class ClientDetailAPI(APIView):
         if failure:
             return failure
         _audit(request, Action.AUTH_CLIENT_UPDATE, entity_name="oauth2_provider_application",
-               entity_id=client_id, before=body["before"], after=body["after"])
+               entity_id=client_id, before=body.get("before"), after=body.get("after"))
+        if bad := _incomplete(body, "before", "after"):
+            return bad
         return CustomResponse(general_message="Client updated", response=body["after"]).get_success_response()
 
 
@@ -178,8 +201,10 @@ class ClientDisableAPI(APIView):
         if failure:
             return failure
         _audit(request, Action.AUTH_CLIENT_DISABLE, entity_name="oauth2_provider_application",
-               entity_id=client_id, before=body["before"], after=body["after"],
+               entity_id=client_id, before=body.get("before"), after=body.get("after"),
                remarks=request.data.get("reason"))
+        if bad := _incomplete(body, "before", "after"):
+            return bad
         return CustomResponse(general_message="Client disabled", response=body["after"]).get_success_response()
 
 
@@ -193,8 +218,10 @@ class ClientEnableAPI(APIView):
         if failure:
             return failure
         _audit(request, Action.AUTH_CLIENT_ENABLE, entity_name="oauth2_provider_application",
-               entity_id=client_id, before=body["before"], after=body["after"],
+               entity_id=client_id, before=body.get("before"), after=body.get("after"),
                remarks=request.data.get("reason"))
+        if bad := _incomplete(body, "before", "after"):
+            return bad
         return CustomResponse(general_message="Client enabled", response=body["after"]).get_success_response()
 
 
