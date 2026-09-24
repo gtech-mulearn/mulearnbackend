@@ -19,6 +19,7 @@ from utils.token_verification import (
     TokenError,
     _JWKSCache,
     normalise,
+    scope_allows,
     token_format,
     verify_legacy_token,
     verify_oidc_token,
@@ -204,6 +205,9 @@ class JWTUtils:
             raise UnauthorizedAccessException(str(exc)) from exc
 
         validated = normalise(payload, fmt)
+
+        if fmt == FORMAT_OIDC and not scope_allows(validated["scope"], request.method):
+            raise UnauthorizedAccessException("Token does not have the scope for this request")
 
         # Per-format counter. Legacy support is removed only when this shows
         # zero legacy validations for seven consecutive days - observed, not

@@ -19,6 +19,20 @@ from mu_celery.task import onboard_user
 from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
 from rest_framework import serializers as s
 
+import logging
+
+# Counts every account created through the legacy signup (RegisterDataAPI).
+# It is deleted once this shows no use for a week after the dashboard moves to
+# "Sign in with muLearn". User-Agent is logged to tell dashboard traffic from
+# the mobile apps; never log the email or anything else personal here.
+legacy_signup_logger = logging.getLogger("mulearn.legacy_signup")
+
+
+def _log_legacy_signup(request, method):
+    agent = (request.META.get("HTTP_USER_AGENT") or "-")[:150]
+    legacy_signup_logger.info("legacy_signup method=%s user_agent=%r", method, agent)
+
+
 DISCORD_CLIENT_ID = config("DISCORD_CLIENT_ID")
 DISCORD_CLIENT_SECRET = config("DISCORD_CLIENT_SECRET")
 FR_DOMAIN_NAME = config("FR_DOMAIN_NAME")
@@ -390,6 +404,7 @@ class RegisterDataAPI(APIView):
                 except CustomException as e:
                     return CustomResponse(general_message=str(e)).get_failure_response()
                 res_data["data"] = serializers.UserDetailSerializer(existing).data
+                _log_legacy_signup(request, "google_retry")
                 return CustomResponse(response=res_data).get_success_response()
             # ── End Google sign-up path ──────────────────────────────────────
 
@@ -434,6 +449,7 @@ class RegisterDataAPI(APIView):
         )
 
         res_data["data"] = response_data
+        _log_legacy_signup(request, "google" if is_google_signup else "password")
         return CustomResponse(response=res_data).get_success_response()
 
 

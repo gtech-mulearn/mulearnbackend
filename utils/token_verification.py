@@ -163,6 +163,29 @@ def verify_legacy_token(token, *, secret, now):
     return payload
 
 
+READ_SCOPE = "mulearn.read"
+WRITE_SCOPE = "mulearn.write"
+SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+
+def scope_allows(scopes, method):
+    """
+    Whether a new-format token's scopes cover this request.
+
+    The access token's audience is this API, but not every holder should get
+    the whole API: a partner app's token (openid/profile/email only) must not
+    be able to act as the person here. authserver only grants mulearn.* to
+    first-party clients; this is the check that makes that grant matter.
+
+    Reads need mulearn.read (or write, which implies it); anything else needs
+    mulearn.write. Legacy tokens have no scopes and are not checked.
+    """
+    granted = set(scopes or [])
+    if (method or "").upper() in SAFE_METHODS:
+        return bool(granted & {READ_SCOPE, WRITE_SCOPE})
+    return WRITE_SCOPE in granted
+
+
 def normalise(payload, fmt):
     """
     One shape for both formats, so callers never branch on which they got.

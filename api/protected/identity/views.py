@@ -19,14 +19,18 @@ should ever reach it.
 """
 
 import hmac
+import logging
 
 from decouple import config
 from drf_spectacular.utils import extend_schema
 from rest_framework.views import APIView
 
-from api.register.serializers import UserSerializer
+from api.register.serializers import UserDetailSerializer, UserSerializer
 from db.user import User
+from mu_celery.task import send_email
 from utils.response import CustomResponse
+
+logger = logging.getLogger(__name__)
 
 
 def _key_is_valid(provided):
@@ -56,7 +60,7 @@ class ProvisionMemberAPI(APIView):
 
     @extend_schema(
         tags=["Protected - Identity"],
-        description="Create a member from name, email and password. Internal use only.",
+        description="Create a member from name and email, without a password. Internal use only.",
     )
     def post(self, request):
         if not _key_is_valid(request.headers.get("protectionKey")):
@@ -66,7 +70,9 @@ class ProvisionMemberAPI(APIView):
 
         email = (request.data.get("email") or "").strip().lower()
         full_name = (request.data.get("full_name") or "").strip()
-        password = request.data.get("password")
+        # Any `password` in the body is deliberately ignored (Q22): the member
+        # is created without one and authserver, the only writer of
+        # user.password, sets it straight afterwards.
 
         if not email or not full_name:
             return CustomResponse(
@@ -85,9 +91,7 @@ class ProvisionMemberAPI(APIView):
         # The existing registration serializer, unchanged. It issues the muid
         # and creates the wallet, level, socials, settings and role link. Using
         # it directly is the point of this endpoint.
-        serializer = UserSerializer(
-            data={"full_name": full_name, "email": email, "password": password}
-        )
+        serializer = UserSerializer(data={"full_name": full_name, "email": email})
         if not serializer.is_valid():
             return CustomResponse(
                 general_message="Could not create the account",
@@ -95,6 +99,18 @@ class ProvisionMemberAPI(APIView):
             ).get_failure_response()
 
         user = serializer.save()
+
+        # Same welcome email as the legacy dashboard signup, so members joining
+        # through "Sign in with muLearn" are not treated differently. A mail or
+        # queue failure must not undo a created account, so it is only logged.
+        try:
+            send_email.delay(
+                UserDetailSerializer(user, many=False).data,
+                "YOUR TICKET TO µFAM IS HERE!",
+                ["user_registration.html"],
+            )
+        except Exception:
+            logger.exception("Could not queue the welcome email for %s", user.id)
 
         return CustomResponse(
             response={"user_id": user.id, "muid": user.muid, "email": user.email}

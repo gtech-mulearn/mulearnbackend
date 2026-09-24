@@ -259,6 +259,16 @@ LOGGING = {
             "filename": f"{LOG_PATH}/sql.log",
             "formatter": "verbose",
         },
+        # Migration counters for "Sign in with muLearn": which token format each
+        # request used, and every use of the legacy signup. The legacy paths
+        # are removed only after these show zero use for a week, so they get a
+        # file of their own rather than being buried in root.log.
+        "auth_migration_log": {
+            "level": "INFO",
+            "class": "logging.FileHandler",
+            "filename": f"{LOG_PATH}/auth_migration.log",
+            "formatter": "verbose",
+        },
         "root_log": {
             "level": "DEBUG",
             "class": "logging.FileHandler",
@@ -267,6 +277,16 @@ LOGGING = {
         },
     },
     "loggers": {
+        "mulearn.token_format": {
+            "handlers": ["auth_migration_log"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "mulearn.legacy_signup": {
+            "handlers": ["auth_migration_log"],
+            "level": "INFO",
+            "propagate": False,
+        },
         "django.request": {
             "handlers": ["request_log"],
             "level": "INFO",
@@ -399,6 +419,13 @@ CELERY_BEAT_SCHEDULE = {
     'refresh-learning-circle-aggregates-cron': {
         'task': 'mu_celery.learning_circle_aggregates_cron.refresh_learning_circle_aggregates',
         'schedule': crontab(minute='*/15'),
+    },
+    # Deletes expired OAuth tokens/codes in authserver via its internal API, so
+    # the oauth2_provider_* tables stay bounded. Minute 50 keeps it clear of
+    # the */15 aggregate jobs.
+    'clear-expired-auth-tokens-cron': {
+        'task': 'mu_celery.auth_token_cleanup_cron.clear_expired_auth_tokens',
+        'schedule': crontab(minute=50),
     },
 }
 

@@ -3,7 +3,6 @@ import uuid
 from datetime import timedelta
 
 from decouple import config as decouple_config
-from django.contrib.auth.hashers import make_password
 from django.core.files.storage import FileSystemStorage
 from django.db.models import Prefetch, Q
 from rest_framework.views import APIView
@@ -12,7 +11,7 @@ from db.organization import UserOrganizationLink
 from db.task import UserIgLink
 from db.user import ForgotPassword, User, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
-from utils.session_revocation import revoke_all_sessions
+from utils import authserver_client
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType, WebHookActions, WebHookCategory
 from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks, send_template_mail
@@ -499,19 +498,29 @@ class ResetPasswordConfirmAPI(APIView):
         return CustomResponse(general_message="Link is expired").get_failure_response()
 
     def save_password(self, request, forget_user):
-        new_password = request.data.get("password")
-        hashed_pwd = make_password(new_password)
+        # Q22: authserver owns user.password. The reset link was verified
+        # above; authserver validates the password, stores the hash and - F3 -
+        # signs the person out everywhere, which is the point of a reset when
+        # an account may be compromised.
+        try:
+            status, body = authserver_client.call("POST", "password/set/", json={
+                "user_id": forget_user.user_id,
+                "new_password": request.data.get("password"),
+            })
+        except authserver_client.AuthServerUnavailable as exc:
+            return CustomResponse(general_message=str(exc)).get_failure_response(
+                status_code=503, http_status_code=503
+            )
 
-        user = forget_user.user
-        user.password = hashed_pwd
-        user.save()
+        if status >= 400:
+            # Link kept, so the person can retry with an acceptable password.
+            return CustomResponse(
+                general_message=authserver_client.error_message(body)
+            ).get_failure_response()
+
         forget_user.delete()
 
-        # F3: password reset is the control a user reaches for when they think
-        # their account is compromised. Without this, the attacker's refresh
-        # token survives the reset for up to 7 days and the reset achieves
-        # nothing against the threat it exists to address.
-        if not revoke_all_sessions(user.id, DateTimeUtils.get_current_utc_time().timestamp()):
+        if not body.get("sessions_revoked"):
             return CustomResponse(
                 general_message=(
                     "Password reset, but existing sessions could not be signed "
