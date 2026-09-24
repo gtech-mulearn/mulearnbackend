@@ -364,6 +364,21 @@ QSEVERSE_API_KEY = decouple_config("QSEVERSE_API_KEY")
 
 BACKEND_API_KEY = decouple_config("BACKEND_API_KEY")
 
+# ── Notification dispatch ──────────────────────────────────────────────────
+# 'inline' (default): NotificationService writes synchronously, same as
+# every other write path today. 'celery' is a reserved value for a future
+# async dispatch task — not implemented yet, since Celery isn't reliably
+# running in this deployment; dispatch() falls back to inline if it's set.
+NOTIFICATION_DISPATCH_MODE = decouple_config("NOTIFICATION_DISPATCH_MODE", default="inline")
+
+# Audience size at/above which dispatch() writes a single broadcast_notification
+# row instead of one notification row per recipient (the hybrid fan-out branch —
+# see notification_docs/notification-system-status.md).
+NOTIFICATION_BROADCAST_THRESHOLD = decouple_config("NOTIFICATION_BROADCAST_THRESHOLD", default=500, cast=int)
+
+# TTL for the cached unread notification count (seconds).
+NOTIFICATION_UNREAD_COUNT_CACHE_TTL = decouple_config("NOTIFICATION_UNREAD_COUNT_CACHE_TTL", default=60, cast=int)
+
 DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
 
 import socket

@@ -2,6 +2,7 @@
 Admin Events API views.
 All endpoints require the 'Admins' role.
 """
+from django.db.models import Case, When, Value, CharField
 from rest_framework.views import APIView
 
 from db.events import Event, EventLog
@@ -10,11 +11,13 @@ from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.utils import CommonUtils
 from utils.types import RoleType
-from api.notification.notifications_utils import NotificationUtils
-from api.notification.broadcast_utils import BroadcastUtils
+from api.notification.service import NotificationService
+from api.notification.types import NotificationType
+from api.notification.audience import Audience
 
 from .serializers import EventListItemSerializer, EventDetailSerializer, get_live_events
 from .event_logger import log_event_action
+from .publish_policy import resolve_terminal_status, should_announce
 from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
 from rest_framework import serializers as s
 
@@ -31,6 +34,121 @@ APPROVAL_TRANSITIONS = {
     Event.Status.PENDING_APPROVAL: Event.Status.PUBLISHED,
     Event.Status.PENDING_MENTOR_APPROVAL: Event.Status.PUBLISHED,
 }
+
+
+def _notify_next_approver(event, actor_id):
+    """
+    Notify whoever needs to act next, based on event.status right after a
+    transition landed it in one of the three "awaiting review" states.
+    Shared by every call site that can produce one of those transitions
+    (admin/campus/mentor/company approve, and the skip-review publish path).
+
+    The audience for each branch mirrors the authorization check the
+    matching approve endpoint already uses for that exact status/organiser
+    combination — this only resolves who to *notify*, it doesn't change who
+    is *authorized* to approve.
+
+    occurrence is timestamp-based (not a static "1") because an event can
+    re-enter the same pending status more than once in its lifetime (e.g.
+    rejected → resubmitted → pending again).
+
+    No-op for any other status (published/rejected/completed/ongoing).
+    """
+    status = event.status
+    if status not in (
+        Event.Status.PENDING_APPROVAL,
+        Event.Status.PENDING_CAMPUS_APPROVAL,
+        Event.Status.PENDING_MENTOR_APPROVAL,
+    ):
+        return
+
+    organiser = User.objects.filter(id=event.created_by_id).first()
+    context = {
+        "event_title": event.title,
+        "organiser_name": organiser.full_name if organiser else "Someone",
+    }
+    occurrence = f"{event.id}:{event.updated_at.isoformat()}"
+    kwargs = dict(
+        context    = context,
+        entity_id  = str(event.id),
+        occurrence = occurrence,
+        actor_id   = actor_id,
+    )
+
+    if status == Event.Status.PENDING_APPROVAL:
+        NotificationService.dispatch(
+            notif_type = NotificationType.ADMIN_EVENT_PENDING,
+            audience   = Audience.admins(),
+            **kwargs,
+        )
+        return
+
+    if status == Event.Status.PENDING_CAMPUS_APPROVAL:
+        # Same role set CampusEventApproveAPI itself gates on, scoped to
+        # this event's own campus.
+        from db.organization import UserOrganizationLink
+        lead_ids = set(
+            str(uid) for uid in
+            UserOrganizationLink.objects.filter(
+                org_id=event.scope_org_id, verified=True,
+                user__user_role_link_user__role__title__in=[
+                    RoleType.CAMPUS_LEAD.value,
+                    RoleType.ZONAL_CAMPUS_LEAD.value,
+                    RoleType.DISTRICT_CAMPUS_LEAD.value,
+                    RoleType.ENABLER.value,
+                    RoleType.LEAD_ENABLER.value,
+                ],
+            ).values_list('user_id', flat=True)
+        )
+        NotificationService.dispatch(
+            notif_type = NotificationType.CAMPUS_EVENT_PENDING,
+            audience   = Audience.users(list(lead_ids)),
+            **kwargs,
+        )
+        return
+
+    # PENDING_MENTOR_APPROVAL — the approver differs by organiser_type,
+    # same as MentorEventApproveAPI/CompanyEventApproveAPI's own checks.
+    if event.organiser_type == Event.OrganiserType.COMPANY:
+        from db.company import Company, CompanyAdminLink
+        company = Company.objects.filter(org_id=event.organiser_org_id, status='verified').first()
+        if not company:
+            return
+        recipient_ids = {str(company.company_user_id)} | set(
+            str(uid) for uid in
+            CompanyAdminLink.objects.filter(
+                company=company, status=CompanyAdminLink.Status.ACCEPTED,
+            ).values_list('user_id', flat=True)
+        )
+    elif event.organiser_type == Event.OrganiserType.CAMPUS_IG:
+        from db.user import MentorScopeGrant, MentorApplication
+        recipient_ids = set(
+            str(uid) for uid in
+            MentorScopeGrant.objects.filter(
+                scope_type=MentorScopeGrant.ScopeType.CAMPUS_MENTOR,
+                scope_id=str(event.scope_org_id),
+                is_active=True,
+                application__status=MentorApplication.Status.APPROVED,
+            ).values_list('application__user_id', flat=True)
+        )
+    elif event.organiser_type == Event.OrganiserType.GLOBAL_IG:
+        from db.task import UserIgLink
+        recipient_ids = set(
+            str(uid) for uid in
+            UserIgLink.objects.filter(
+                ig_id=event.organiser_ig_id,
+                assignment_type=UserIgLink.AssignmentType.MENTOR,
+                is_active=True,
+            ).values_list('user_id', flat=True)
+        )
+    else:
+        recipient_ids = set()
+
+    NotificationService.dispatch(
+        notif_type = NotificationType.MENTOR_EVENT_PENDING,
+        audience   = Audience.users(list(recipient_ids)),
+        **kwargs,
+    )
 
 
 class AdminEventListAPI(APIView):
@@ -50,6 +168,11 @@ class AdminEventListAPI(APIView):
     def get(self, request):
         events = Event.objects.all().select_related('category', 'organiser_ig', 'organiser_org')
 
+        # Past-dated pending events are deliberately NOT hidden: approving one
+        # now resolves it to completed/ongoing rather than publishing something
+        # that already happened, so an approver has to be able to see it. The
+        # old exclusion left those events permanently unreachable.
+
         params = request.query_params
         if status := params.get('status'):
             events = events.filter(status=status)
@@ -62,9 +185,25 @@ class AdminEventListAPI(APIView):
         if is_featured := params.get('is_featured'):
             events = events.filter(is_featured=is_featured.lower() == 'true')
 
+        # Map admin events to 'mulearn' so ?search=mulearn finds them.
+        events = events.annotate(
+            organiser_display_name=Case(
+                When(organiser_type=Event.OrganiserType.ADMIN, then=Value('mulearn')),
+                default=Value(''),
+                output_field=CharField(),
+            )
+        )
+
         paginated = CommonUtils.get_paginated_queryset(
             events, request,
-            search_fields=['title', 'description', 'venue_city'],
+            search_fields=[
+                'title',
+                'description',
+                'venue_city',
+                'organiser_org__title',
+                'organiser_ig__name',
+                'organiser_display_name',
+            ],
             sort_fields={
                 'created_at': 'created_at',
                 'start_datetime': 'start_datetime',
@@ -120,14 +259,16 @@ class AdminEventApproveAPI(APIView):
 
         old_status = event.status
         new_status = APPROVAL_TRANSITIONS[event.status]
-        # Campus events scoped to their own campus have no admin stage —
-        # campus-level approval publishes them directly.
+        # Campus events have no admin stage at any scope — campus-level
+        # approval publishes them directly.
         if (
             old_status == Event.Status.PENDING_CAMPUS_APPROVAL
             and event.organiser_type == Event.OrganiserType.CAMPUS
-            and event.scope == Event.Scope.CAMPUS
         ):
             new_status = Event.Status.PUBLISHED
+        # Settle against the clock so an event whose date passed during review
+        # is recorded as completed rather than published into the past.
+        new_status = resolve_terminal_status(event, new_status)
         event.status = new_status
         event.updated_by_id = user_id
         event.save()
@@ -139,72 +280,38 @@ class AdminEventApproveAPI(APIView):
             changes={'Status': {'from': old_status, 'to': new_status}},
         )
 
-        # Notify the event creator
-        actor = User.objects.filter(id=user_id).first()
-        creator = event.created_by
-        if creator and actor:
+        # Notify the event creator + fan out to scope audience
+        if event.created_by_id:
             if new_status == Event.Status.PUBLISHED:
-                NotificationUtils.insert_notification(
-                    user=creator,
-                    title='Event Published',
-                    description=f'Your event "{event.title}" is now live!',
-                    button='View',
-                    url=f'/events/{event.id}/',
-                    created_by=actor,
+                # Fan out EVENT_PUBLISHED to all users in the event's scope
+                # (campus members, IG members, company members, or all users).
+                # The actor (admin approver) is auto-excluded by dispatch().
+                # occurrence is timestamp-based, not just event.id: a rejected
+                # event can be resubmitted and published again, and a static
+                # occurrence would make the second publish notification
+                # silently collide with the first under the dedupe key.
+                NotificationService.dispatch(
+                    notif_type = NotificationType.EVENT_PUBLISHED,
+                    audience   = Audience.event_scope(str(event.id)),
+                    context    = {"event_title": event.title},
+                    entity_id  = str(event.id),
+                    occurrence = f"{event.id}:{event.updated_at.isoformat()}",
+                    actor_id   = user_id,
                 )
             else:
-                NotificationUtils.insert_notification(
-                    user=creator,
-                    title='Event Approved',
-                    description=f'Your event "{event.title}" has been approved and is progressing through review.',
-                    button=None,
-                    url=None,
-                    created_by=actor,
+                NotificationService.dispatch(
+                    notif_type = NotificationType.EVENT_APPROVAL_STAGE,
+                    audience   = Audience.user(str(event.created_by_id)),
+                    context    = {"event_title": event.title, "approver_role": "admin"},
+                    entity_id  = str(event.id),
+                    occurrence = f"{event.id}:{event.updated_at.isoformat()}",
+                    actor_id   = user_id,
                 )
 
-        # Fire audience broadcast when the event reaches PUBLISHED
-        if new_status == Event.Status.PUBLISHED and actor:
-            if event.organiser_type == Event.OrganiserType.CAMPUS_IG:
-                BroadcastUtils.create_broadcast(
-                    title='New Event Published',
-                    description=f'A new Campus IG event "{event.title}" is now live!',
-                    target_type='campus_ig',
-                    target_id=event.organiser_ci_id or event.scope_ci_id,
-                    created_by=actor,
-                    expiry_key='event_published',
-                    url=f'/events/{event.id}/',
-                )
-            elif event.organiser_type == Event.OrganiserType.GLOBAL_IG:
-                BroadcastUtils.create_broadcast(
-                    title='New Event Published',
-                    description=f'A new Interest Group event "{event.title}" is now live!',
-                    target_type='interest_group',
-                    target_id=event.organiser_ig_id,
-                    created_by=actor,
-                    expiry_key='event_published',
-                    url=f'/events/{event.id}/',
-                )
-            elif event.organiser_type == Event.OrganiserType.CAMPUS:
-                BroadcastUtils.create_broadcast(
-                    title='New Event Published',
-                    description=f'A new Campus event "{event.title}" is now live!',
-                    target_type='campus',
-                    target_id=event.scope_org_id,
-                    created_by=actor,
-                    expiry_key='event_published',
-                    url=f'/events/{event.id}/',
-                )
-            else:
-                # ADMIN / COMPANY → global broadcast
-                BroadcastUtils.create_broadcast(
-                    title='New Event Published',
-                    description=f'A new event "{event.title}" is now available!',
-                    target_type='global',
-                    target_id=None,
-                    created_by=actor,
-                    expiry_key='event_published',
-                    url=f'/events/{event.id}/',
-                )
+        # Outside the created_by_id gate above (unlike the creator notify):
+        # the next approver needs to know an event is in their queue
+        # regardless of whether the creator is resolvable.
+        _notify_next_approver(event, user_id)
 
         return CustomResponse(
             general_message=f'Event approved: {old_status} → {new_status}.',
@@ -263,16 +370,14 @@ class AdminEventRejectAPI(APIView):
         )
 
         # Notify the event creator
-        actor = User.objects.filter(id=user_id).first()
-        creator = event.created_by
-        if creator and actor:
-            NotificationUtils.insert_notification(
-                user=creator,
-                title='Event Rejected',
-                description=f'Your event "{event.title}" was rejected. Reason: {reason}',
-                button=None,
-                url=None,
-                created_by=actor,
+        if event.created_by_id:
+            NotificationService.dispatch(
+                notif_type = NotificationType.EVENT_REJECTED,
+                audience   = Audience.user(str(event.created_by_id)),
+                context    = {"event_title": event.title, "approver_role": "admin", "reason": reason},
+                entity_id  = str(event.id),
+                occurrence = f"{event.id}:{event.updated_at.isoformat()}",
+                actor_id   = user_id,
             )
 
         return CustomResponse(

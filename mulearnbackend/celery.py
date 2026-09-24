@@ -10,6 +10,7 @@ app = Celery(
     include=[
         "mu_celery.alumni_cron",
         "mu_celery.org_aggregates_cron",
+        "mu_celery.learning_circle_aggregates_cron",
         "mu_celery.auth_token_cleanup_cron",
     ],
 )

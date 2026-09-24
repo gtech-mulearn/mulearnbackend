@@ -11,7 +11,7 @@ from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.utils import CommonUtils
 
-from .serializers import EventListItemSerializer, get_live_events
+from .serializers import EventListItemSerializer, get_active_events
 from drf_spectacular.utils import extend_schema
 
 
@@ -20,9 +20,6 @@ def _viewer_id(request):
         return JWTUtils.fetch_user_id(request)
     except Exception:
         return None
-
-
-PUBLISHED_STATUSES = [Event.Status.PUBLISHED, Event.Status.ONGOING]
 
 
 class IGEventListAPI(APIView):
@@ -44,9 +41,8 @@ class IGEventListAPI(APIView):
             return CustomResponse(general_message='Interest Group not found.').get_failure_response()
 
         from django.db.models import Q
-        events = get_live_events().select_related('category', 'organiser_ig', 'organiser_org').filter(
+        events = get_active_events().select_related('category', 'organiser_ig', 'organiser_org').filter(
             Q(organiser_ig_id=ig_id) | Q(scope_ig_id=ig_id),
-            status__in=PUBLISHED_STATUSES,
         )
 
         paginated = CommonUtils.get_paginated_queryset(
@@ -90,9 +86,8 @@ class ClusterEventListAPI(APIView):
                 pagination={'count': 0, 'totalPages': 0, 'isNext': False, 'isPrev': False, 'nextPage': None},
             )
 
-        events = get_live_events().select_related('category', 'organiser_ig', 'organiser_org').filter(
+        events = get_active_events().select_related('category', 'organiser_ig', 'organiser_org').filter(
             organiser_ig_id__in=ig_ids,
-            status__in=PUBLISHED_STATUSES,
         )
 
         paginated = CommonUtils.get_paginated_queryset(
@@ -129,9 +124,8 @@ class CampusEventListAPI(APIView):
             return CustomResponse(general_message='Campus not found.').get_failure_response()
 
         from django.db.models import Q
-        events = get_live_events().select_related('category', 'organiser_ig', 'organiser_org').filter(
+        events = get_active_events().select_related('category', 'organiser_ig', 'organiser_org').filter(
             Q(scope_org_id=campus_id) | Q(organiser_org_id=campus_id),
-            status__in=PUBLISHED_STATUSES,
         )
 
         # Optional cluster filter
@@ -171,9 +165,8 @@ class CampusIGEventListAPI(APIView):
         responses={200: EventListItemSerializer},
     )
     def get(self, request, campus_ig_id):
-        events = get_live_events().select_related('category', 'organiser_ig', 'organiser_org').filter(
+        events = get_active_events().select_related('category', 'organiser_ig', 'organiser_org').filter(
             organiser_ci_id=campus_ig_id,
-            status__in=PUBLISHED_STATUSES,
         )
 
         paginated = CommonUtils.get_paginated_queryset(
@@ -208,10 +201,9 @@ class CompanyEventListAPI(APIView):
         if not org:
             return CustomResponse(general_message='Company not found.').get_failure_response()
 
-        events = get_live_events().select_related('category', 'organiser_ig', 'organiser_org').filter(
+        events = get_active_events().select_related('category', 'organiser_ig', 'organiser_org').filter(
             organiser_org_id=company_id,
             organiser_type=Event.OrganiserType.COMPANY,
-            status__in=PUBLISHED_STATUSES,
         )
 
         paginated = CommonUtils.get_paginated_queryset(

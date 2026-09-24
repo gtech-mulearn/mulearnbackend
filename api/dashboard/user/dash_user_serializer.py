@@ -755,3 +755,43 @@ class UserBasicDetailsSerializer(serializers.ModelSerializer):
         for ig_link in ig_links:
             data.append({"id": ig_link.ig.id, "name": ig_link.ig.name})
         return data
+
+
+class UnverifiedOrgLinkUsersSerializer(serializers.ModelSerializer):
+    """Serializer for users whose UserOrganizationLink.verified is False.
+
+    The model is UserOrganizationLink so we can surface both the user fields
+    and the specific unverified link details in one flat response.
+    """
+
+    user_id = serializers.ReadOnlyField(source="user.id")
+    full_name = serializers.ReadOnlyField(source="user.full_name")
+    muid = serializers.ReadOnlyField(source="user.muid")
+    email = serializers.ReadOnlyField(source="user.email")
+    mobile = serializers.ReadOnlyField(source="user.mobile")
+    joined = serializers.ReadOnlyField(source="user.created_at")
+
+    org_id = serializers.ReadOnlyField(source="org.id")
+    org_title = serializers.ReadOnlyField(source="org.title")
+    org_type = serializers.ReadOnlyField(source="org.org_type")
+    graduation_year = serializers.ReadOnlyField()
+    is_alumni = serializers.ReadOnlyField()
+    link_created_at = serializers.ReadOnlyField(source="created_at")
+
+    class Meta:
+        model = UserOrganizationLink
+        fields = [
+            "id",
+            "user_id",
+            "full_name",
+            "muid",
+            "email",
+            "mobile",
+            "joined",
+            "org_id",
+            "org_title",
+            "org_type",
+            "graduation_year",
+            "is_alumni",
+            "link_created_at",
+        ]

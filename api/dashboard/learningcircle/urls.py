@@ -1,4 +1,4 @@
-﻿from django.urls import path
+from django.urls import path
 
 from . import learningcircle_views
 
@@ -56,6 +56,8 @@ urlpatterns = [
     path("user-circles/", learningcircle_views.UserCircleListAPI.as_view()),
     path("join/<str:circle_id>/", learningcircle_views.CircleJoinAPI.as_view()),
     path("members/add/<str:circle_id>/", learningcircle_views.CircleMemberAddAPI.as_view()),
+    path("members/remove/<str:circle_id>/", learningcircle_views.CircleMemberRemoveAPI.as_view()),
+    path("leave/<str:circle_id>/", learningcircle_views.CircleLeaveAPI.as_view()),
     # Specific invite routes MUST come before the generic invite/<circle_id>/ to avoid swallowing
     path("invite/status/", learningcircle_views.CircleInviteStatusAPI.as_view()),
     path("invite/status/<str:link_id>/", learningcircle_views.CircleInviteStatusAPI.as_view()),

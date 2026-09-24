@@ -12,7 +12,7 @@ from db.user import User, UserRoleLink
 from utils.types import OrganizationType
 from utils.types import RoleType, SocialPlatformType
 from utils.utils import DateTimeUtils
-from .dash_campus_helper import validate_campus_member, assign_ig_campus_lead
+from .dash_campus_helper import validate_campus_member, assign_ig_campus_lead, ensure_ig_execom_catalog_entries
 from db.events import Event
 from db.learning_circle import LearningCircle, UserCircleLink
 
@@ -500,12 +500,20 @@ class UserRoleLinkSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         user_id = self.context.get("user_id")
-        validated_data["created_by_id"] = user_id
-        validated_data["id"] = uuid.uuid4()
-        validated_data["verified"] = True
 
-        user_role_link = UserRoleLink.objects.create(**validated_data)
-        return user_role_link
+        link, created = UserRoleLink.objects.get_or_create(
+            user=validated_data["user"],
+            role=validated_data["role"],
+            defaults={
+                "id": str(uuid.uuid4()),
+                "created_by_id": user_id,
+                "verified": True,
+            }
+        )
+        if not created:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError("User already has this role.")
+        return link
 
 
 class CampusEventListSerializer(serializers.ModelSerializer):
@@ -554,13 +562,11 @@ class ExecomMemberSerializer(serializers.ModelSerializer):
 
     def get_ig_name(self, obj):
         title = obj.role.title
-        # IG campus lead roles use canonical format: "{ig_code} CampusLead"
-        if title not in (
-            RoleType.CAMPUS_LEAD.value,
-            RoleType.LEAD_ENABLER.value,
-        ) and title.endswith("CampusLead"):
-            ig_name = title.replace("CampusLead", "").strip()
-            return ig_name or None
+        # IG campus lead/co-lead roles use canonical format: "{ig_code} CampusIGLead" / "{ig_code} CampusIGCoLead"
+        for suffix in ("CampusIGLead", "CampusIGCoLead"):
+            if title.endswith(suffix):
+                ig_name = title[: -len(suffix)].strip()
+                return ig_name or None
         return None
 
         
@@ -692,14 +698,18 @@ class CampusIGChapterCreateSerializer(serializers.ModelSerializer):
         with transaction.atomic():
             chapter = CampusIGChapter.objects.create(**validated_data)
 
+            ig_name = chapter.ig.name
+            ig_code = chapter.ig.code
+
+            # Populate the global role directory with this IG's assignable titles
+            # immediately on chapter creation, regardless of whether a lead is set yet.
+            ensure_ig_execom_catalog_entries(ig_code, ig_name, user_id)
+
             if chapter.lead:
                 # assign_ig_campus_lead handles bootstrapping the roles internally
                 assign_ig_campus_lead(chapter, chapter.lead, user_id)
             else:
                 # Ensure IG roles exist in the database
-                ig_name = chapter.ig.name
-                ig_code = chapter.ig.code
-
                 roles_to_ensure = [
                     {
                         "title": ig_name,
@@ -708,6 +718,10 @@ class CampusIGChapterCreateSerializer(serializers.ModelSerializer):
                     {
                         "title": RoleType.IG_CAMPUS_LEAD_ROLE(ig_code),
                         "description": f"{ig_name} Interest Group Campus Lead",
+                    },
+                    {
+                        "title": RoleType.IG_CAMPUS_COLEAD_ROLE(ig_code),
+                        "description": f"{ig_name} Interest Group Campus Co-Lead",
                     },
                     {
                         "title": RoleType.IG_LEAD_ROLE(ig_code),

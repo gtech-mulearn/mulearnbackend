@@ -563,10 +563,13 @@ class TransferLeadRoleAPI(APIView):
             ).get_failure_response()
 
         with transaction.atomic():
-            UserRoleLink.objects.filter(
-                user__id=user_id,
-                role__id=role_id,
-            ).delete()
+            current_lead = UserRoleLink.objects.filter(
+            user__user_organization_link_user__org=user_org_link.org,
+            user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+            role__id=role_id,
+            ).first()
+            if current_lead:
+                current_lead.delete()
 
             serializer = serializers.UserRoleLinkSerializer(
                 data={

@@ -35,7 +35,10 @@ class ImpactProjectSerializer(serializers.ModelSerializer):
         ]
 
     def get_team(self, obj):
-        links = obj.impact_project_user_link_project.select_related("user").all()
+        if hasattr(obj, "_prefetched_objects_cache") and "impact_project_user_link_project" in obj._prefetched_objects_cache:
+            links = obj.impact_project_user_link_project.all()
+        else:
+            links = obj.impact_project_user_link_project.select_related("user").all()
         return ImpactProjectTeamMemberSerializer(links, many=True).data
 
     def get_links(self, obj):
