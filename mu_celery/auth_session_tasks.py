@@ -8,18 +8,23 @@ person resubmitting the link.
 
 Three pieces, so an incomplete revocation is never just dropped:
 
-  1. A Redis hash of pending user ids. Written BEFORE the task is queued and
-     removed only when authserver confirms the revocation. It lives in the
-     same Redis as the Celery queue, so it is exactly as durable as the queued
-     task itself.
+  1. A pending record in Redis. Written BEFORE the task is queued and removed
+     only when authserver confirms the revocation. It lives in the same Redis
+     as the Celery queue, so it is exactly as durable as the queued task.
   2. revoke_all_sessions: the fast path, retried with backoff for about an
-     hour. Giving up there leaves the user in the hash.
-  3. retry_pending_session_revocations (beat, every 15 minutes): retries every
-     pending user and never gives up. Anything pending over an hour is logged
-     as an error on every run until it clears or an admin revokes it by hand
-     (dashboard: Auth Admin -> revoke sessions).
+     hour. Giving up there leaves the record in place.
+  3. retry_pending_session_revocations (beat, every 15 minutes): retries
+     pending members and never gives up. Anything pending over an hour is
+     logged as an error on every attempt until it clears or an admin revokes
+     it by hand (dashboard: Auth Admin -> revoke sessions).
 
-The hash is bounded: one field per member, removed on success.
+The record is two keys:
+  QUEUE_KEY  sorted set, member = user id, score = last attempt time.
+             Each sweep takes the least recently attempted batch and moves
+             failures to the back, so every pending member is reached in turn
+             however many keep failing.
+  SINCE_KEY  hash, user id -> when it first went pending (for the alert).
+Both are bounded: one entry per member, removed on success.
 """
 
 import logging
@@ -33,7 +38,8 @@ from utils.authserver_client import AuthServerUnavailable, call
 
 logger = logging.getLogger(__name__)
 
-PENDING_KEY = "auth:session_revoke_pending"
+QUEUE_KEY = "auth:session_revoke_queue"
+SINCE_KEY = "auth:session_revoke_since"
 
 # 1, 2, 4, 8, 15, 15, 15, 15 minutes: a little over an hour in total.
 MAX_RETRIES = 8
@@ -44,45 +50,51 @@ SWEEP_BATCH = 200
 SWEEP_LOCK_KEY = "auth_session_revoke_sweep_lock"
 SWEEP_LOCK_TIMEOUT = 60 * 10
 
+# _revoke_once outcomes
+DONE, FAILED, UNAVAILABLE = "done", "failed", "unavailable"
 
-def _pending():
+
+def _redis():
     return get_redis_connection("default")
 
 
-def mark_pending(user_id):
+def mark_pending(user_id, *, now=None):
     """Record that this member still has sessions to revoke. Keeps the first time."""
-    _pending().hsetnx(PENDING_KEY, str(user_id), int(time.time()))
+    now = int(time.time() if now is None else now)
+    pipe = _redis().pipeline()
+    pipe.hsetnx(SINCE_KEY, str(user_id), now)
+    pipe.zadd(QUEUE_KEY, {str(user_id): now}, nx=True)
+    pipe.execute()
 
 
 def _clear_pending(user_id):
-    _pending().hdel(PENDING_KEY, str(user_id))
+    pipe = _redis().pipeline()
+    pipe.zrem(QUEUE_KEY, str(user_id))
+    pipe.hdel(SINCE_KEY, str(user_id))
+    pipe.execute()
 
 
 def _revoke_once(user_id):
-    """
-    One attempt. Returns True when done (confirmed, or the user no longer
-    exists), False when it should be tried again.
-    """
     try:
         status, body = call("POST", "sessions/revoke/", json={"user_id": user_id})
     except AuthServerUnavailable:
-        return False
+        return UNAVAILABLE
 
     if status == 200 and body.get("sessions_revoked"):
         _clear_pending(user_id)
         logger.info("Sessions revoked for %s", user_id)
-        return True
+        return DONE
     if status == 404:
         _clear_pending(user_id)
         logger.error("Session revocation: user %s not found in authserver", user_id)
-        return True
-    return False
+        return DONE
+    return FAILED
 
 
 @shared_task(bind=True, max_retries=MAX_RETRIES)
 def revoke_all_sessions(self, user_id):
     """Idempotent: revoking already-revoked sessions is a no-op in authserver."""
-    if _revoke_once(user_id):
+    if _revoke_once(user_id) == DONE:
         return True
     try:
         raise self.retry(countdown=min(60 * 2 ** self.request.retries, MAX_DELAY_SECONDS))
@@ -95,28 +107,36 @@ def revoke_all_sessions(self, user_id):
 
 
 @shared_task
-def retry_pending_session_revocations():
+def retry_pending_session_revocations(now=None):
     """
-    Returns how many were still pending after this run, or -1 if a run was
+    Returns how many are still pending after this run, or -1 if a run was
     already in progress.
     """
     if not cache.add(SWEEP_LOCK_KEY, "1", SWEEP_LOCK_TIMEOUT):
         return -1
     try:
-        pending = _pending().hgetall(PENDING_KEY)
-        now = time.time()
-        still_pending = 0
-        for raw_user_id, raw_since in list(pending.items())[:SWEEP_BATCH]:
-            user_id = raw_user_id.decode()
-            if _revoke_once(user_id):
+        redis = _redis()
+        now = int(time.time() if now is None else now)
+        batch = [raw.decode() for raw in redis.zrange(QUEUE_KEY, 0, SWEEP_BATCH - 1)]
+        for user_id in batch:
+            outcome = _revoke_once(user_id)
+            if outcome == DONE:
                 continue
-            still_pending += 1
-            if now - int(raw_since) > ALERT_AFTER_SECONDS:
+            # Tried: to the back of the line, so the next sweep reaches others.
+            redis.zadd(QUEUE_KEY, {user_id: now}, xx=True)
+            since = redis.hget(SINCE_KEY, user_id)
+            if since and now - int(since) > ALERT_AFTER_SECONDS:
                 logger.error(
                     "Sessions for %s still not revoked %s minutes after a password "
                     "reset; revoke them from the admin console",
-                    user_id, int((now - int(raw_since)) // 60),
+                    user_id, (now - int(since)) // 60,
                 )
-        return still_pending + max(0, len(pending) - SWEEP_BATCH)
+            if outcome == UNAVAILABLE:
+                # authserver is down: every remaining call would just wait out
+                # its timeout. The next sweep resumes from the members not yet
+                # tried, since they are now at the front.
+                logger.warning("Session revocation sweep stopped: authserver unavailable")
+                break
+        return redis.zcard(QUEUE_KEY)
     finally:
         cache.delete(SWEEP_LOCK_KEY)
