@@ -524,13 +524,18 @@ class ResetPasswordConfirmAPI(APIView):
 
         if not body.get("sessions_revoked"):
             # Some sessions survived. Retry the sign-out in the background
-            # rather than through the link.
-            from mu_celery.auth_session_tasks import revoke_all_sessions
+            # rather than through the link. The pending record is written
+            # first: it is what the 15-minute sweep retries from if the task
+            # itself gives up or is lost.
+            from mu_celery.auth_session_tasks import mark_pending, revoke_all_sessions
 
             try:
-                revoke_all_sessions.delay(forget_user.user_id)
+                mark_pending(forget_user.user_id)
             except Exception:
-                logger.exception("Could not queue session revocation for %s", forget_user.user_id)
+                logger.exception(
+                    "Could not record session revocation for %s; sign them out "
+                    "from the admin console", forget_user.user_id,
+                )
                 return CustomResponse(
                     general_message=(
                         "Your password was changed, but we could not sign you "
@@ -538,6 +543,11 @@ class ResetPasswordConfirmAPI(APIView):
                         "manually or contact support."
                     )
                 ).get_failure_response(status_code=503, http_status_code=503)
+            try:
+                revoke_all_sessions.delay(forget_user.user_id)
+            except Exception:
+                # Recorded above, so the sweep still picks it up within 15 min.
+                logger.exception("Could not queue session revocation for %s", forget_user.user_id)
             return CustomResponse(
                 general_message=(
                     "New password saved. Signing you out of your other devices "

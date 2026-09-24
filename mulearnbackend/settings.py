@@ -442,6 +442,13 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'mu_celery.auth_token_cleanup_cron.clear_expired_auth_tokens',
         'schedule': crontab(minute=50),
     },
+    # Retries "sign out everywhere" for members whose password was reset while
+    # authserver could not revoke every session. Never gives up; see
+    # mu_celery/auth_session_tasks.py.
+    'retry-pending-session-revocations-cron': {
+        'task': 'mu_celery.auth_session_tasks.retry_pending_session_revocations',
+        'schedule': crontab(minute='7,22,37,52'),
+    },
 }
 
 # ============================================================================
