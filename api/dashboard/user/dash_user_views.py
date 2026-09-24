@@ -518,21 +518,32 @@ class ResetPasswordConfirmAPI(APIView):
                 general_message=authserver_client.error_message(body)
             ).get_failure_response()
 
+        # The password is set, so the link is spent. Keeping it would let
+        # whoever holds it set yet another password.
+        forget_user.delete()
+
         if not body.get("sessions_revoked"):
-            # Password is set but some sessions survived. Keep the link (it
-            # still expires on its own) so the person can submit again: each
-            # password/set call signs them out everywhere afresh. Consuming it
-            # here would leave a possibly compromised account with live
-            # sessions and no way to retry.
+            # Some sessions survived. Retry the sign-out in the background
+            # rather than through the link.
+            from mu_celery.auth_session_tasks import revoke_all_sessions
+
+            try:
+                revoke_all_sessions.delay(forget_user.user_id)
+            except Exception:
+                logger.exception("Could not queue session revocation for %s", forget_user.user_id)
+                return CustomResponse(
+                    general_message=(
+                        "Your password was changed, but we could not sign you "
+                        "out of your other devices. Please sign out of them "
+                        "manually or contact support."
+                    )
+                ).get_failure_response(status_code=503, http_status_code=503)
             return CustomResponse(
                 general_message=(
-                    "Your password was changed, but we could not sign you out "
-                    "of every device. Please submit this form again with the "
-                    "same link to finish."
+                    "New password saved. Signing you out of your other devices "
+                    "may take a few minutes."
                 )
-            ).get_failure_response(status_code=503, http_status_code=503)
-
-        forget_user.delete()
+            ).get_success_response()
 
         return CustomResponse(
             general_message="New Password Saved Successfully"

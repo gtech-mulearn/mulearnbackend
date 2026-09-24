@@ -53,7 +53,14 @@ JWKS_CACHE_SECONDS = 3600
 # Minimum gap between fetch attempts. Bounds how often an unknown `kid` (which
 # anyone can put in a token header) or an authserver outage can make this
 # service call out, and how many requests pay the fetch timeout.
-JWKS_MIN_REFETCH_SECONDS = 60
+#
+# Kept short on purpose. authserver signs with a new key the moment it
+# publishes it, so a token with a just-rotated kid that lands inside this
+# window is rejected until it ends - and the same for recovery after a failed
+# fetch. Normally the last attempt was long ago and the fetch is immediate;
+# the window only bites while fetches are frequent (someone spraying random
+# kids). 5 seconds caps that at one outbound call per 5s per process.
+JWKS_MIN_REFETCH_SECONDS = 5
 JWKS_FETCH_TIMEOUT = 5
 
 

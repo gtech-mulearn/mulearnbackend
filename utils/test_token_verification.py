@@ -374,6 +374,23 @@ class TestJWKSCache:
                 cache.signing_key(_token(f"random-{i}"), now=10 + i)
         assert client.fetches == 1
 
+    def test_default_refetch_gap_is_short_for_a_rotated_key(self):
+        # Rotation right after a fetch: picked up within seconds, not a minute.
+        client = FakeJWKSClient({"k1": PUBLIC_KEY})
+        cache = _JWKSCache("https://auth.example/jwks.json", client_factory=lambda url: client)
+        cache.signing_key(_token("k1"), now=0)
+        client.keys = {"k1": PUBLIC_KEY, "k2": PUBLIC_KEY}
+        assert cache.signing_key(_token("k2"), now=5) is PUBLIC_KEY
+
+    def test_recovers_within_seconds_after_a_failed_first_fetch(self):
+        client = FakeJWKSClient({"k1": PUBLIC_KEY})
+        cache = _JWKSCache("https://auth.example/jwks.json", client_factory=lambda url: client)
+        client.down = True
+        with pytest.raises(ConnectionError):
+            cache.signing_key(_token("k1"), now=0)
+        client.down = False
+        assert cache.signing_key(_token("k1"), now=5) is PUBLIC_KEY
+
     def test_nothing_verifies_if_the_first_fetch_fails(self):
         client = FakeJWKSClient({"k1": PUBLIC_KEY})
         client.down = True
