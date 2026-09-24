@@ -258,3 +258,26 @@ class TestNormalise:
         assert n["roles"] is None
         assert n["muid"] is None
         assert n["scope"] == ["openid", "mulearn.read"]
+
+
+# --- scope_allows: partner-app tokens must not reach the muLearn API ---------
+
+from utils.token_verification import scope_allows  # noqa: E402
+
+
+@pytest.mark.parametrize("method", ["GET", "HEAD", "OPTIONS", "get"])
+def test_reads_need_read_or_write_scope(method):
+    assert scope_allows(["openid", "mulearn.read"], method)
+    assert scope_allows(["openid", "mulearn.write"], method)
+    assert not scope_allows(["openid", "profile", "email"], method)
+
+
+@pytest.mark.parametrize("method", ["POST", "PUT", "PATCH", "DELETE"])
+def test_writes_need_write_scope(method):
+    assert scope_allows(["mulearn.read", "mulearn.write"], method)
+    assert not scope_allows(["openid", "mulearn.read"], method)
+
+
+def test_no_scopes_allows_nothing():
+    assert not scope_allows([], "GET")
+    assert not scope_allows(None, "POST")
