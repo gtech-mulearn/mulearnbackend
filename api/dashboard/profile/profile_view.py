@@ -7,7 +7,6 @@ from rest_framework import serializers as s
 import qrcode
 import requests
 from django.conf import settings
-from django.contrib.auth.hashers import make_password
 from django.core.files.base import ContentFile
 from django.core.files.storage import FileSystemStorage
 from django.db.models import Prefetch
@@ -31,6 +30,7 @@ from db.user import (
     UserSettings,
 )
 from utils.permission import CustomizePermission, JWTUtils
+from utils import authserver_client
 from utils.response import CustomResponse
 from utils.types import (
     OrganizationType,
@@ -39,7 +39,6 @@ from utils.types import (
     TFPTasksHashtags,
 )
 from utils.utils import DiscordWebhooks
-from django.contrib.auth.hashers import check_password
 
 from . import profile_serializer
 from .profile_serializer import LinkSocials, ResetPasswordSerialzier
@@ -605,18 +604,37 @@ class ResetPasswordAPI(APIView):
         if not serializer.is_valid():
             return CustomResponse(response=serializer.errors).get_failure_response()
 
-        current_password = serializer.validated_data.get("current_password")
-        new_password = serializer.validated_data.get("password")
+        # Q22: authserver owns user.password. It checks the current password,
+        # applies the password validators, stores the hash and signs the
+        # person out everywhere (F3) - this service no longer writes the column.
+        try:
+            status, body = authserver_client.call("POST", "password/change/", json={
+                "user_id": user.id,
+                "current_password": serializer.validated_data.get("current_password"),
+                "new_password": serializer.validated_data.get("password"),
+            })
+        except authserver_client.AuthServerUnavailable as exc:
+            return CustomResponse(general_message=str(exc)).get_failure_response(
+                status_code=503, http_status_code=503
+            )
 
-        if not check_password(current_password, user.password):
+        if status >= 400:
+            if body.get("error") == "invalid_credentials":
+                return CustomResponse(
+                    general_message="Current Password is incorrect"
+                ).get_failure_response()
             return CustomResponse(
-                general_message="Current Password is incorrect"
+                general_message=authserver_client.error_message(body)
             ).get_failure_response()
 
-        hashed_pwd = make_password(new_password)
+        if not body.get("sessions_revoked"):
+            return CustomResponse(
+                general_message=(
+                    "Password changed, but existing sessions could not be signed "
+                    "out. Please log out of all devices manually."
+                )
+            ).get_failure_response()
 
-        user.password = hashed_pwd
-        user.save()
         return CustomResponse(
             general_message="New Password Saved Successfully"
         ).get_success_response()
