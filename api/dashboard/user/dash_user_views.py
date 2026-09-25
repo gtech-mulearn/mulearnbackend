@@ -279,6 +279,16 @@ class UserVerificationAPI(APIView):
             verified=False
         )
 
+        # The unified page lists one role per tab (e.g. ?role=Enabler);
+        # Mentor and Company requests are approved through their own flows.
+        role = request.query_params.get("role")
+        if role:
+            user_queryset = user_queryset.filter(role__title=role)
+
+        # Newest request first unless the client sorts; pk breaks ties so
+        # offset pagination stays stable.
+        user_queryset = user_queryset.order_by("-created_at", "pk")
+
         queryset = CommonUtils.get_paginated_queryset(
             user_queryset,
             request,
@@ -295,6 +305,7 @@ class UserVerificationAPI(APIView):
                 "muid": "user__muid",
                 "email": "user__email",
                 "mobile": "user__mobile",
+                "created_at": "created_at",
             },
         )
         serializer = dash_user_serializer.UserVerificationSerializer(
@@ -382,6 +393,10 @@ class UserVerificationCSV(APIView):
         ).filter(
             verified=False
         )
+
+        role = request.query_params.get("role")
+        if role:
+            user_queryset = user_queryset.filter(role__title=role)
 
         serializer = dash_user_serializer.UserVerificationSerializer(
             user_queryset, many=True

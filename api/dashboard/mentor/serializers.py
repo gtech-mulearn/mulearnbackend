@@ -497,6 +497,8 @@ class MentorApplicationListSerializer(serializers.ModelSerializer):
     user_full_name = serializers.CharField(source='user.full_name', read_only=True)
     user_email = serializers.CharField(source='user.email', read_only=True)
     muid = serializers.CharField(source='user.muid', read_only=True)
+    # Null org → None via default (DRF Field.get_attribute).
+    org_name = serializers.CharField(source="org.title", read_only=True, default=None)
 
     class Meta:
         model = MentorApplication
@@ -512,6 +514,7 @@ class MentorApplicationListSerializer(serializers.ModelSerializer):
             "verified_at",
             "mentor_tier",
             "org",
+            "org_name",
             "status",
             "created_at",
             "updated_at"

@@ -437,10 +437,20 @@ class CompanyListAPI(APIView):
         if country_id:
             companies = companies.filter(district__zone__state__country_id=country_id)
 
+        # Newest verification request first unless the client sorts; pk
+        # breaks ties so offset pagination stays stable.
+        companies = companies.order_by("-verification_requested_at", "pk")
+
         paginated_queryset = CommonUtils.get_paginated_queryset(
             companies, request, 
             search_fields=["name", "slug", "email", "industry_sector"],
-            sort_fields={"name": "name", "status": "status", "created_at": "created_at"}
+            sort_fields={
+                "name": "name",
+                "status": "status",
+                "industry_sector": "industry_sector",
+                "verification_requested_at": "verification_requested_at",
+                "created_at": "created_at",
+            }
         )
         
         serializer = serializers.CompanyListSerializer(paginated_queryset.get("queryset"), many=True)

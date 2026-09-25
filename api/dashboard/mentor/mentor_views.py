@@ -355,7 +355,7 @@ class MentorListAPI(APIView):
             ).values_list('user_id', 'mentor_tier')
         )
 
-        applications = MentorApplication.objects.select_related('user')
+        applications = MentorApplication.objects.select_related('user', 'org')
         if approved_user_tier_pairs:
             change_request_ids = [
                 app.id for app in applications.filter(status=MentorApplication.Status.PENDING)
@@ -371,6 +371,10 @@ class MentorListAPI(APIView):
             applications = applications.filter(status=status)
         if mentor_tier:
             applications = applications.filter(mentor_tier=mentor_tier)
+
+        # Newest first unless the client sorts; pk breaks created_at ties so
+        # offset pagination stays stable.
+        applications = applications.order_by("-created_at", "pk")
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             applications, request,
@@ -489,14 +493,16 @@ class MentorChangeRequestListAPI(APIView):
             ).values_list('user_id', 'mentor_tier')
         )
 
-        pending_applications = MentorApplication.objects.select_related('user').filter(
+        pending_applications = MentorApplication.objects.select_related('user', 'org').filter(
             status=MentorApplication.Status.PENDING
         )
         change_request_ids = [
             app.id for app in pending_applications
             if (app.user_id, app.mentor_tier) in approved_user_tier_pairs
         ]
-        change_requests = pending_applications.filter(id__in=change_request_ids)
+        change_requests = pending_applications.filter(
+            id__in=change_request_ids
+        ).order_by("-created_at", "pk")
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             change_requests, request, 
