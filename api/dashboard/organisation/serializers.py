@@ -462,33 +462,47 @@ class OrganizationImportSerializer(serializers.ModelSerializer):
 
 class OrganizationVerifySerializer(serializers.ModelSerializer):
     verified = serializers.BooleanField(required=True)
+    # Only an approval maps the request onto a real Organization; a rejection
+    # has nothing to map to.
     org_id = serializers.PrimaryKeyRelatedField(
-        queryset=Organization.objects.all(), required=True
+        queryset=Organization.objects.all(), required=False, allow_null=True
     )
+
+    def validate(self, attrs):
+        if attrs.get("verified") and not attrs.get("org_id"):
+            raise serializers.ValidationError(
+                {"org_id": "Select the organization to map this request to."}
+            )
+        return attrs
 
     def update(self, instance, validated_data):
         if instance.verified:
             raise serializers.ValidationError("Organization already verified")
-        instance.verified = validated_data.get("verified")
-        instance.org = validated_data.get("org_id")
-        instance.verified_by_id = self.context.get("user_id")
-        instance.verified_at = DateTimeUtils.get_current_utc_time()
-        instance.save()
-        if instance.verified:
-            if UserOrganizationLink.objects.filter(
-                user_id=instance.created_by_id, org_id=instance.org_id
-            ).exists():
-                raise serializers.ValidationError(
-                    "Unable to assign organization to user"
-                )
-            UserOrganizationLink.objects.create(
-                user_id=instance.created_by_id,
-                org=validated_data.get("org_id"),
-                department_id=instance.department_id,
-                graduation_year=instance.graduation_year,
-                verified=True,
-                created_by_id=instance.verified_by_id,
+        verified = validated_data.get("verified")
+        org = validated_data.get("org_id")
+        # Checked before anything is saved: raising after save() left the
+        # request marked verified with no user link created.
+        if verified and UserOrganizationLink.objects.filter(
+            user_id=instance.created_by_id, org_id=org.id
+        ).exists():
+            raise serializers.ValidationError(
+                "Unable to assign organization to user"
             )
+        with transaction.atomic():
+            instance.verified = verified
+            instance.org = org
+            instance.verified_by_id = self.context.get("user_id")
+            instance.verified_at = DateTimeUtils.get_current_utc_time()
+            instance.save()
+            if verified:
+                UserOrganizationLink.objects.create(
+                    user_id=instance.created_by_id,
+                    org=org,
+                    department_id=instance.department_id,
+                    graduation_year=instance.graduation_year,
+                    verified=True,
+                    created_by_id=instance.verified_by_id,
+                )
         return instance
 
     class Meta:
@@ -500,6 +514,8 @@ class UnverifiedOrganizationsSerializer(serializers.ModelSerializer):
     id = serializers.CharField(read_only=True)
     created_by = serializers.CharField(source="created_by.full_name", read_only=True)
     department = serializers.CharField(source="department.title", read_only=True)
+    created_by_muid = serializers.CharField(source="created_by.muid", read_only=True)
+    created_by_email = serializers.CharField(source="created_by.email", read_only=True)
 
     class Meta:
         model = UnverifiedOrganization
@@ -510,5 +526,7 @@ class UnverifiedOrganizationsSerializer(serializers.ModelSerializer):
             "graduation_year",
             "department",
             "created_by",
+            "created_by_muid",
+            "created_by_email",
             "created_at",
         ]

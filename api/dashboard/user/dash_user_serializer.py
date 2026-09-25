@@ -291,6 +291,7 @@ class UserVerificationSerializer(serializers.ModelSerializer):
             "gender",
             "dob",
             "joined",
+            "created_at",
             "district",
             "state",
             "country",

@@ -859,17 +859,25 @@ class TransferAPI(APIView):
 class UnverifiedOrganizationsListAPI(APIView):
     permission_classes = [CustomizePermission]
 
+    # extend_schema must be outermost: role_required doesn't functools.wraps,
+    # so the schema drf-spectacular reads would be hidden on the inner fn.
     @extend_schema(
         tags=['Dashboard - Organisation'],
         description="Retrieve Unverified Organizations List.",
         responses={200: UnverifiedOrganizationsSerializer},
     )
+    @role_required([RoleType.ADMIN.value])
     def get(self, request):
         unverified_orgs = (
             UnverifiedOrganization.objects.select_related("created_by", "department")
             .filter(verified__isnull=True)
             .order_by("-created_at")
         )
+        # The College tab filters by type; the frontend only sends
+        # OrganizationType values.
+        org_type = request.query_params.get("org_type")
+        if org_type:
+            unverified_orgs = unverified_orgs.filter(org_type=org_type)
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             unverified_orgs,
@@ -899,6 +907,7 @@ class VerifyOrganizationAPI(APIView):
         request=OrganizationVerifySerializer,
         responses={200: OrganizationVerifySerializer},
     )
+    @role_required([RoleType.ADMIN.value])
     def post(self, request, uorg_id):
         user_id = JWTUtils.fetch_user_id(request)
         unverifed_org = UnverifiedOrganization.objects.filter(id=uorg_id).first()

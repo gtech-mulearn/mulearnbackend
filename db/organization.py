@@ -242,7 +242,7 @@ class UnverifiedOrganization(models.Model):
     verified = models.BooleanField(null=True)
     verified_by = models.ForeignKey(User, models.DO_NOTHING, db_column='verified_by', related_name='unverified_organizations_verified_by', null=True)
     verified_at = models.DateTimeField(null=True)
-    org = models.ForeignKey(Organization, models.DO_NOTHING, related_name='unverified_organizations_org')
+    org = models.ForeignKey(Organization, models.DO_NOTHING, related_name='unverified_organizations_org', null=True)
     created_by = models.ForeignKey(User, models.DO_NOTHING, db_column='created_by', related_name='unverified_organizations_created_by')
     created_at = models.DateTimeField(auto_now=True)
 
