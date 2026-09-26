@@ -1,3 +1,4 @@
+from django.conf import settings
 from rest_framework import serializers
 import json
 from datetime import date
@@ -163,6 +164,7 @@ class InterestGroupSerializer(serializers.ModelSerializer):
     updated_by = serializers.CharField(source="updated_by.full_name")
     created_by = serializers.CharField(source="created_by.full_name")
     members = serializers.SerializerMethodField()
+    banner_image = serializers.SerializerMethodField()
     cover_image = serializers.CharField(read_only=True, allow_null=True)
     icon_image = serializers.CharField(read_only=True, allow_null=True)
     category = serializers.ChoiceField(
@@ -202,6 +204,7 @@ class InterestGroupSerializer(serializers.ModelSerializer):
             "cover_image",
             "code",
             "category",
+            "banner_image",
             "status",
             "members",
             "media_content_links",
@@ -215,6 +218,9 @@ class InterestGroupSerializer(serializers.ModelSerializer):
             "created_at",
             "impact_projects",
         ]
+
+    def get_banner_image(self, obj):
+        return f"{settings.MEDIA_URL}{media}" if (media := obj.banner_image) else None
 
     def get_members(self, obj):
         if hasattr(obj, "members"):
@@ -334,6 +340,7 @@ class InterestGroupSerializer(serializers.ModelSerializer):
 
 
 class InterestGroupCreateUpdateSerializer(serializers.ModelSerializer):
+    banner_image = serializers.ImageField(required=False, allow_null=True)
     # icon is no longer settable here — it's uploaded as a file via the
     # dedicated <pk>/icon-image/ endpoint, same as cover_image.
 
@@ -371,6 +378,19 @@ class InterestGroupRequestSerializer(serializers.ModelSerializer):
             "name",
             "code",
             "category",
+            "icon",
+            "banner_image",
+            "created_by",
+            "updated_by",
+        ]
+
+    def update(self, instance, validated_data):
+        if "banner_image" in validated_data:
+            new_banner = validated_data.get("banner_image")
+            if instance.banner_image and instance.banner_image != new_banner:
+                instance.banner_image.delete(save=False)
+        return super().update(instance, validated_data)
+
             "about",
             "prerequisites",
             "career_opportunities",
