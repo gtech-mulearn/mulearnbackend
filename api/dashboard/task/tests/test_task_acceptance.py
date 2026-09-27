@@ -1,14 +1,15 @@
 import uuid
 from datetime import timedelta
+from unittest.mock import patch
 import jwt
 from django.conf import settings
-from django.db import connection
+from django.db import connection, IntegrityError
 from django.test import TransactionTestCase
 from rest_framework.test import APIClient
 
-from db.organization import Country, State, Zone, District, Organization
-from db.company import Company, CompanyTaskTemplate
-from db.events import Event
+from db.organization import Country, State, Zone, District, Organization, UserOrganizationLink
+from db.company import Company, CompanyTaskTemplate, Collaboration
+from db.events import Event, EventConnection, EventInterest, EventLog, EventTag, EventTagLink
 from db.user import User, Role, UserRoleLink, UserDomains, MentorApplication, UserMentor, UserEndgoals
 from db.task import (
     Channel,
@@ -21,6 +22,7 @@ from db.task import (
     MucoinActivityLog,
     VoucherLog,
     Category,
+    UserIgLink,
 )
 from db.skill import Skill, TaskSkillLink
 from utils.types import RoleType
@@ -36,6 +38,8 @@ class TaskAcceptanceTestCase(TransactionTestCase):
         User,
         Role,
         UserRoleLink,
+        UserOrganizationLink,
+        UserIgLink,
         UserDomains,
         MentorApplication,
         UserMentor,
@@ -47,10 +51,16 @@ class TaskAcceptanceTestCase(TransactionTestCase):
         Organization,
         Company,
         CompanyTaskTemplate,
+        Collaboration,
         Skill,
         TaskSkillLink,
         Category,
         Event,
+        EventConnection,
+        EventInterest,
+        EventLog,
+        EventTag,
+        EventTagLink,
         TaskList,
         KarmaActivityLog,
         MucoinActivityLog,
@@ -174,6 +184,7 @@ class TaskAcceptanceTestCase(TransactionTestCase):
     def tearDown(self):
         TaskAcceptance.objects.all().delete()
         TaskList.objects.all().delete()
+        Event.objects.all().delete()
         TaskType.objects.all().delete()
         super().tearDown()
 
@@ -230,6 +241,42 @@ class TaskAcceptanceTestCase(TransactionTestCase):
         self.assertIn(self.learner_user.id, user_ids)
         self.assertNotIn(self.other_learner_user.id, user_ids)
 
+    # 6b. Accepted task list does not produce N+1 queries for multiple accepted tasks
+    def test_accepted_task_list_query_count_optimisation(self):
+        task2 = TaskList.objects.create(
+            id=str(uuid.uuid4()),
+            title="Task 2",
+            hashtag=f"#task2-{uuid.uuid4().hex[:6]}",
+            type=self.task_type,
+            approval_status="approved",
+            active=True,
+            is_deleted=False,
+            created_by=self.learner_user,
+            updated_by=self.learner_user,
+        )
+        task3 = TaskList.objects.create(
+            id=str(uuid.uuid4()),
+            title="Task 3",
+            hashtag=f"#task3-{uuid.uuid4().hex[:6]}",
+            type=self.task_type,
+            approval_status="approved",
+            active=True,
+            is_deleted=False,
+            created_by=self.learner_user,
+            updated_by=self.learner_user,
+        )
+        TaskAcceptance.objects.create(id=str(uuid.uuid4()), user=self.learner_user, task=self.approved_task)
+        TaskAcceptance.objects.create(id=str(uuid.uuid4()), user=self.learner_user, task=task2)
+        TaskAcceptance.objects.create(id=str(uuid.uuid4()), user=self.learner_user, task=task3)
+
+        client = self.get_client(user=self.learner_user, roles=[RoleType.STUDENT.value])
+        # Execute GET request within assertNumQueries block to prove static query count (3 queries: pagination COUNT query + main annotated query + prefetch skills query)
+        with self.assertNumQueries(3):
+            resp = client.get("/api/v1/dashboard/task/accepted/")
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.json()["response"]["data"]), 3)
+
     # 7. Unauthenticated user cannot accept
     def test_unauthenticated_user_cannot_accept(self):
         client = self.get_client(user=None)
@@ -261,3 +308,112 @@ class TaskAcceptanceTestCase(TransactionTestCase):
         self.assertIn(self.approved_task.id, all_public_ids)
         self.assertNotIn(self.pending_task.id, all_public_ids)
         self.assertNotIn(self.rejected_task.id, all_public_ids)
+
+    # 10. Event task scope enforcement
+    def test_event_task_acceptance_scope_control(self):
+        now = DateTimeUtils.get_current_utc_time()
+        event_accessible = Event.objects.create(
+            id=str(uuid.uuid4()),
+            title="Live Hackathon",
+            slug=f"live-hack-{uuid.uuid4().hex[:6]}",
+            status=Event.Status.PUBLISHED,
+            start_datetime=now,
+            end_datetime=now + timedelta(days=1),
+            venue_type="online",
+            scope="global",
+            organiser_type="admin",
+            event_scope="maker",
+            event_type="hackathon",
+            is_featured=False,
+            is_collaboration=False,
+            interest_count=0,
+            user_limit=100,
+            created_by=self.learner_user,
+            updated_by=self.learner_user,
+            created_at=now,
+            updated_at=now,
+        )
+        accessible_event_task = TaskList.objects.create(
+            id=str(uuid.uuid4()),
+            title="Event Task Accessible",
+            hashtag=f"#event-task-{uuid.uuid4().hex[:6]}",
+            type=self.task_type,
+            event_fk=event_accessible,
+            approval_status="approved",
+            active=True,
+            is_deleted=False,
+            created_by=self.learner_user,
+            updated_by=self.learner_user,
+        )
+
+        event_draft = Event.objects.create(
+            id=str(uuid.uuid4()),
+            title="Draft Event",
+            slug=f"draft-event-{uuid.uuid4().hex[:6]}",
+            status=Event.Status.DRAFT,
+            start_datetime=now,
+            end_datetime=now + timedelta(days=1),
+            venue_type="online",
+            scope="global",
+            organiser_type="admin",
+            event_scope="maker",
+            event_type="workshop",
+            is_featured=False,
+            is_collaboration=False,
+            interest_count=0,
+            user_limit=100,
+            created_by=self.learner_user,
+            updated_by=self.learner_user,
+            created_at=now,
+            updated_at=now,
+        )
+        inaccessible_event_task = TaskList.objects.create(
+            id=str(uuid.uuid4()),
+            title="Event Task Inaccessible",
+            hashtag=f"#event-draft-{uuid.uuid4().hex[:6]}",
+            type=self.task_type,
+            event_fk=event_draft,
+            approval_status="approved",
+            active=True,
+            is_deleted=False,
+            created_by=self.learner_user,
+            updated_by=self.learner_user,
+        )
+
+        client = self.get_client(user=self.learner_user, roles=[RoleType.STUDENT.value])
+        # Accessible event task -> 200 OK
+        resp_acc = client.post(f"/api/v1/dashboard/task/{accessible_event_task.id}/accept/")
+        self.assertEqual(resp_acc.status_code, 200)
+
+        # Inaccessible event task -> 404 Not Found
+        resp_inacc = client.post(f"/api/v1/dashboard/task/{inaccessible_event_task.id}/accept/")
+        self.assertEqual(resp_inacc.status_code, 404)
+
+    # 11. IntegrityError handling: non-duplicate database error returns 500
+    @patch("db.task.TaskAcceptance.objects.create")
+    def test_non_duplicate_integrity_error_returns_database_error(self, mock_create):
+        mock_create.side_effect = IntegrityError("Database FK violation")
+        client = self.get_client(user=self.learner_user, roles=[RoleType.STUDENT.value])
+        resp = client.post(f"/api/v1/dashboard/task/{self.approved_task.id}/accept/")
+        self.assertEqual(resp.status_code, 500)
+        self.assertEqual(resp.json()["message"]["error_code"], "DATABASE_ERROR")
+
+    # 12. IntegrityError handling: concurrent race condition duplicate returns 409
+    @patch("db.task.TaskAcceptance.objects.create")
+    def test_race_condition_duplicate_integrity_error_returns_already_accepted(self, mock_create):
+        def side_effect_race_duplicate(*args, **kwargs):
+            TaskAcceptance.objects.bulk_create([
+                TaskAcceptance(
+                    id=str(uuid.uuid4()),
+                    user=self.learner_user,
+                    task=self.approved_task,
+                    status=TaskAcceptance.Status.ACCEPTED,
+                )
+            ])
+            raise IntegrityError("Duplicate entry")
+
+        mock_create.side_effect = side_effect_race_duplicate
+        client = self.get_client(user=self.learner_user, roles=[RoleType.STUDENT.value])
+        resp = client.post(f"/api/v1/dashboard/task/{self.approved_task.id}/accept/")
+        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(resp.json()["message"]["error_code"], "ALREADY_ACCEPTED")

@@ -1522,6 +1522,11 @@ class TaskAcceptanceAPI(APIView):
                 general_message="Task not found or is not available for acceptance."
             ).get_failure_response(status_code=404, http_status_code=status.HTTP_404_NOT_FOUND)
 
+        if task.event_fk_id is not None and not _is_event_accessible(request, task.event_fk_id):
+            return CustomResponse(
+                general_message="Task not found or is not available for acceptance."
+            ).get_failure_response(status_code=404, http_status_code=status.HTTP_404_NOT_FOUND)
+
         if TaskAcceptance.objects.filter(user_id=user_id, task=task).exists():
             return CustomResponse(
                 general_message="You have already accepted this task.",
@@ -1536,10 +1541,15 @@ class TaskAcceptanceAPI(APIView):
                 status=TaskAcceptance.Status.ACCEPTED,
             )
         except IntegrityError:
+            if TaskAcceptance.objects.filter(user_id=user_id, task=task).exists():
+                return CustomResponse(
+                    general_message="You have already accepted this task.",
+                    message={"error_code": "ALREADY_ACCEPTED"},
+                ).get_failure_response(status_code=409, http_status_code=status.HTTP_409_CONFLICT)
             return CustomResponse(
-                general_message="You have already accepted this task.",
-                message={"error_code": "ALREADY_ACCEPTED"},
-            ).get_failure_response(status_code=409, http_status_code=status.HTTP_409_CONFLICT)
+                general_message="Failed to accept task due to a database integrity error.",
+                message={"error_code": "DATABASE_ERROR"},
+            ).get_failure_response(status_code=500, http_status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         serializer = TaskAcceptanceSerializer(acceptance)
         return CustomResponse(
@@ -1567,8 +1577,22 @@ class TaskAcceptedListAPI(APIView):
             TaskAcceptance.objects
             .filter(user_id=user_id, task__is_deleted=False)
             .select_related(
-                "task", "task__type", "task__level", "task__ig", "task__org",
-                "task__channel", "task__created_by", "task__updated_by",
+                "user",
+                "task",
+                "task__channel",
+                "task__type",
+                "task__level",
+                "task__ig",
+                "task__org",
+                "task__created_by",
+                "task__updated_by",
+            )
+            .prefetch_related("task__skill_links__skill")
+            .annotate(
+                task_total_karma_gainers=Count(
+                    "task__karma_activity_log_task",
+                    filter=Q(task__karma_activity_log_task__appraiser_approved=True),
+                )
             )
             .order_by("-accepted_at")
         )
@@ -1580,7 +1604,11 @@ class TaskAcceptedListAPI(APIView):
             sort_fields={"accepted_at": "accepted_at", "title": "task__title"},
         )
 
-        serializer_data = TaskAcceptanceSerializer(paginated.get("queryset"), many=True).data
+        paginated_queryset = paginated.get("queryset")
+        for acceptance in paginated_queryset:
+            acceptance.task.total_karma_gainers_count = acceptance.task_total_karma_gainers
+
+        serializer_data = TaskAcceptanceSerializer(paginated_queryset, many=True).data
 
         return CustomResponse().paginated_response(
             data=serializer_data,
