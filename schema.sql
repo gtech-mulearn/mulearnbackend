@@ -2595,7 +2595,31 @@ CREATE TABLE `comic_reading_progress` (
   CONSTRAINT `fk_comic_reading_progress_ref_user_id` FOREIGN KEY (`user_id`) REFERENCES `user` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+--
+-- Table structure for table `task_acceptance`
+--
+
+DROP TABLE IF EXISTS `task_acceptance`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `task_acceptance` (
+  `id` varchar(36) NOT NULL,
+  `user_id` varchar(36) NOT NULL,
+  `task_id` varchar(36) NOT NULL,
+  `status` varchar(20) NOT NULL DEFAULT 'ACCEPTED',
+  `accepted_at` datetime NOT NULL,
+  `created_at` datetime NOT NULL,
+  `updated_at` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_task_acceptance_user_task` (`user_id`, `task_id`),
+  KEY `fk_task_acceptance_ref_user_id` (`user_id`),
+  KEY `fk_task_acceptance_ref_task_id` (`task_id`),
+  CONSTRAINT `fk_task_acceptance_ref_user_id` FOREIGN KEY (`user_id`) REFERENCES `user` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_task_acceptance_ref_task_id` FOREIGN KEY (`task_id`) REFERENCES `task_list` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 SET @@SESSION.SQL_LOG_BIN = @MYSQLDUMP_TEMP_LOG_BIN;
+
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;

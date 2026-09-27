@@ -441,5 +441,24 @@ class TaskReport(models.Model):
         db_table = "task_report"
 
 
+class TaskAcceptance(models.Model):
+    class Status(models.TextChoices):
+        ACCEPTED = "ACCEPTED", "Accepted"
+        IN_PROGRESS = "IN_PROGRESS", "In Progress"
+        COMPLETED = "COMPLETED", "Completed"
+        ABANDONED = "ABANDONED", "Abandoned"
 
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="task_acceptances")
+    task = models.ForeignKey(TaskList, on_delete=models.CASCADE, related_name="task_acceptances")
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.ACCEPTED
+    )
+    accepted_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        managed = False
+        db_table = "task_acceptance"
+        unique_together = [("user", "task")]

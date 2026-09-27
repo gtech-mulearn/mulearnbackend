@@ -1,13 +1,13 @@
 import json
 import uuid
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Count, Exists, OuterRef, Q
 
 from rest_framework import status
 from rest_framework.views import APIView
 
 from db.organization import Organization, UserOrganizationLink
-from db.task import Channel, InterestGroup, Level, TaskList, TaskType, UserIgLink
+from db.task import Channel, InterestGroup, Level, TaskAcceptance, TaskList, TaskType, UserIgLink
 from db.user import UserMentor
 from db.skill import Skill, TaskSkillLink
 from utils.permission import CustomizePermission, JWTUtils, OptionalAuthentication, role_required
@@ -15,6 +15,7 @@ from utils.response import CustomResponse
 from utils.types import Events, OrganizationType, RoleType
 from utils.utils import CommonUtils, DateTimeUtils, ImportCSV
 from .dash_task_serializer import (
+    TaskAcceptanceSerializer,
     TaskAdminApprovalSerializer,
     TaskImportSerializer,
     TaskListPublicSerializer,
@@ -258,7 +259,8 @@ class TaskPublicListAPI(APIView):
         base_queryset = TaskList.objects.select_related(
             "channel", "type", "level", "ig", "org", "event_fk",
             "requested_by", "requested_by__company_profile",
-        ).filter(active=True)
+        ).filter(active=True, approval_status="approved", is_deleted=False)
+
 
         # --- Visibility filtering ---
         # Determine which orgs/IGs the current user belongs to (if authenticated).
@@ -1490,3 +1492,97 @@ class AdminTaskApprovalAPI(APIView):
                 "reviewed_at":      task.reviewed_at.isoformat() if task.reviewed_at else None,
             },
         ).get_success_response()
+
+
+# ---------------------------------------------------------------------------
+# Learner: Task Acceptance Workflow
+# ---------------------------------------------------------------------------
+
+class TaskAcceptanceAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.STUDENT.value, RoleType.MULEARNER.value])
+    @extend_schema(
+        tags=['Dashboard - Task'],
+        description="Accept an approved task / problem statement.",
+        responses={200: TaskAcceptanceSerializer},
+    )
+    def post(self, request, task_id):
+        user_id = JWTUtils.fetch_user_id(request)
+
+        try:
+            task = TaskList.objects.get(
+                id=task_id,
+                approval_status="approved",
+                active=True,
+                is_deleted=False,
+            )
+        except TaskList.DoesNotExist:
+            return CustomResponse(
+                general_message="Task not found or is not available for acceptance."
+            ).get_failure_response(status_code=404, http_status_code=status.HTTP_404_NOT_FOUND)
+
+        if TaskAcceptance.objects.filter(user_id=user_id, task=task).exists():
+            return CustomResponse(
+                general_message="You have already accepted this task.",
+                message={"error_code": "ALREADY_ACCEPTED"},
+            ).get_failure_response(status_code=409, http_status_code=status.HTTP_409_CONFLICT)
+
+        try:
+            acceptance = TaskAcceptance.objects.create(
+                id=str(uuid.uuid4()),
+                user_id=user_id,
+                task=task,
+                status=TaskAcceptance.Status.ACCEPTED,
+            )
+        except IntegrityError:
+            return CustomResponse(
+                general_message="You have already accepted this task.",
+                message={"error_code": "ALREADY_ACCEPTED"},
+            ).get_failure_response(status_code=409, http_status_code=status.HTTP_409_CONFLICT)
+
+        serializer = TaskAcceptanceSerializer(acceptance)
+        return CustomResponse(
+            general_message="Task accepted successfully.",
+            response=serializer.data,
+        ).get_success_response()
+
+
+class TaskAcceptedListAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.STUDENT.value, RoleType.MULEARNER.value])
+    @extend_schema(
+        tags=['Dashboard - Task'],
+        description="Retrieve the authenticated learner's accepted tasks.",
+        responses={200: inline_serializer("TaskAcceptedListResponse", fields={
+            "data": s.ListField(child=s.DictField()),
+            "pagination": s.DictField(),
+        })},
+    )
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+
+        acceptances = (
+            TaskAcceptance.objects
+            .filter(user_id=user_id, task__is_deleted=False)
+            .select_related(
+                "task", "task__type", "task__level", "task__ig", "task__org",
+                "task__channel", "task__created_by", "task__updated_by",
+            )
+            .order_by("-accepted_at")
+        )
+
+        paginated = CommonUtils.get_paginated_queryset(
+            acceptances,
+            request,
+            search_fields=["task__title", "task__hashtag", "task__description"],
+            sort_fields={"accepted_at": "accepted_at", "title": "task__title"},
+        )
+
+        serializer_data = TaskAcceptanceSerializer(paginated.get("queryset"), many=True).data
+
+        return CustomResponse().paginated_response(
+            data=serializer_data,
+            pagination=paginated.get("pagination"),
+        )

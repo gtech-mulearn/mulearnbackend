@@ -2,7 +2,8 @@ import uuid
 
 from rest_framework import serializers
 
-from db.task import KarmaActivityLog, TaskList, TaskType
+from db.task import KarmaActivityLog, TaskAcceptance, TaskList, TaskType
+
 from utils.permission import JWTUtils
 from utils.utils import DateTimeUtils
 
@@ -288,3 +289,28 @@ class TaskAdminApprovalSerializer(serializers.ModelSerializer):
         if not obj.requested_by:
             return None
         return {"id": str(obj.requested_by.id), "full_name": obj.requested_by.full_name}
+
+
+class TaskAcceptanceSerializer(serializers.ModelSerializer):
+    user_id = serializers.CharField(source="user.id", read_only=True)
+    user_full_name = serializers.CharField(source="user.full_name", read_only=True)
+    task_id = serializers.CharField(source="task.id", read_only=True)
+    task_title = serializers.CharField(source="task.title", read_only=True)
+    task_hashtag = serializers.CharField(source="task.hashtag", read_only=True)
+    task = TaskListSerializer(read_only=True)
+
+    class Meta:
+        model = TaskAcceptance
+        fields = [
+            "id",
+            "user_id",
+            "user_full_name",
+            "task_id",
+            "task_title",
+            "task_hashtag",
+            "status",
+            "accepted_at",
+            "created_at",
+            "updated_at",
+            "task",
+        ]

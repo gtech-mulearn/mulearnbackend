@@ -25,6 +25,9 @@ urlpatterns = [
     path("events/", dash_task_view.EventDropDownApi.as_view()),
     # Admin task approval workflow
     path("pending/", dash_task_view.AdminTaskApprovalAPI.as_view(), name="admin-task-pending"),
+    # Learner task acceptance workflow
+    path("accepted/", dash_task_view.TaskAcceptedListAPI.as_view(), name="task-accepted-list"),
+    path("<str:task_id>/accept/", dash_task_view.TaskAcceptanceAPI.as_view(), name="task-accept"),
     path("<str:task_id>/review/", dash_task_view.AdminTaskApprovalAPI.as_view(), name="admin-task-review"),
     path("<str:task_id>/", dash_task_view.TaskAPI.as_view()),  # get task, edit, delete
 ]
