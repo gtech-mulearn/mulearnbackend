@@ -265,13 +265,27 @@ class TaskAcceptanceTestCase(TransactionTestCase):
             created_by=self.learner_user,
             updated_by=self.learner_user,
         )
+        skill = Skill.objects.create(
+            id=str(uuid.uuid4()),
+            name="Python",
+            code="PY",
+            is_active=True,
+            created_by=self.learner_user,
+            updated_by=self.learner_user,
+        )
+        TaskSkillLink.objects.create(
+            id=str(uuid.uuid4()),
+            task=self.approved_task,
+            skill=skill,
+            created_by=self.learner_user,
+        )
         TaskAcceptance.objects.create(id=str(uuid.uuid4()), user=self.learner_user, task=self.approved_task)
         TaskAcceptance.objects.create(id=str(uuid.uuid4()), user=self.learner_user, task=task2)
         TaskAcceptance.objects.create(id=str(uuid.uuid4()), user=self.learner_user, task=task3)
 
         client = self.get_client(user=self.learner_user, roles=[RoleType.STUDENT.value])
-        # Execute GET request within assertNumQueries block to prove static query count (3 queries: pagination COUNT query + main annotated query + prefetch skills query)
-        with self.assertNumQueries(3):
+        # Execute GET request within assertNumQueries block to prove static query count (4 queries: pagination COUNT query + main annotated query + prefetch task_skill_link + prefetch skill)
+        with self.assertNumQueries(4):
             resp = client.get("/api/v1/dashboard/task/accepted/")
 
         self.assertEqual(resp.status_code, 200)
