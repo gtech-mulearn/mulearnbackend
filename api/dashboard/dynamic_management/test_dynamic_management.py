@@ -2,16 +2,61 @@ import uuid
 from datetime import timedelta
 import jwt
 from django.conf import settings
-from django.test import TestCase
+from django.db import connection
+from django.test import TransactionTestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
+from db.organization import Country, State, Zone, District
 from db.user import User, Role, DynamicRole, DynamicUser
 from utils.types import RoleType
 
 
-class TestDynamicRolePaginationSorting(TestCase):
+class BaseDynamicManagementTestCase(TransactionTestCase):
+    UNMANAGED_MODELS = [
+        User,
+        Country,
+        State,
+        Zone,
+        District,
+        Role,
+        DynamicRole,
+        DynamicUser,
+    ]
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._created_models = []
+        try:
+            with connection.schema_editor() as editor:
+                for model in cls.UNMANAGED_MODELS:
+                    editor.create_model(model)
+                    cls._created_models.append(model)
+        except Exception:
+            cls._cleanup_tables()
+            raise
+
+    @classmethod
+    def tearDownClass(cls):
+        try:
+            cls._cleanup_tables()
+        finally:
+            super().tearDownClass()
+
+    @classmethod
+    def _cleanup_tables(cls):
+        if hasattr(cls, "_created_models") and cls._created_models:
+            with connection.schema_editor() as editor:
+                for model in reversed(cls._created_models):
+                    try:
+                        editor.delete_model(model)
+                    except Exception:
+                        pass
+            cls._created_models = []
+
     def setUp(self):
+        super().setUp()
         self.client = APIClient()
         self.admin_user = User.objects.create(
             id=str(uuid.uuid4()),
@@ -29,6 +74,18 @@ class TestDynamicRolePaginationSorting(TestCase):
         }
         token = jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+
+    def tearDown(self):
+        DynamicUser.objects.all().delete()
+        DynamicRole.objects.all().delete()
+        Role.objects.all().delete()
+        User.objects.all().delete()
+        super().tearDown()
+
+
+class TestDynamicRolePaginationSorting(BaseDynamicManagementTestCase):
+    def setUp(self):
+        super().setUp()
 
         self.role_admin = Role.objects.create(
             id=str(uuid.uuid4()),
@@ -110,25 +167,9 @@ class TestDynamicRolePaginationSorting(TestCase):
         self.assertEqual(set(all_returned), {"TypeA", "TypeB", "TypeC", "TypeD", "TypeE"})
 
 
-class TestDynamicUserPaginationSorting(TestCase):
+class TestDynamicUserPaginationSorting(BaseDynamicManagementTestCase):
     def setUp(self):
-        self.client = APIClient()
-        self.admin_user = User.objects.create(
-            id=str(uuid.uuid4()),
-            full_name="Admin User",
-            email="admin@example.com",
-            muid="admin@mulearn",
-            created_at=timezone.now(),
-        )
-
-        payload = {
-            "id": self.admin_user.id,
-            "expiry": (timezone.now() + timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S%z"),
-            "roles": [RoleType.ADMIN.value],
-            "muid": self.admin_user.muid
-        }
-        token = jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        super().setUp()
 
         self.user_a = User.objects.create(
             id=str(uuid.uuid4()),
