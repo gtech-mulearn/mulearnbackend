@@ -44,7 +44,7 @@ class DynamicRoleAPI(APIView):
             dynamic_roles, request,
             search_fields=["type", "role__title"],
             sort_fields={'type': 'type',
-                         'role': 'role_title'}
+                         'role': ('role_title', 'type')}
         )
         dynamic_role_serializer = DynamicRoleListSerializer(paginated_queryset.get('queryset'), many=True).data
         return CustomResponse().paginated_response(data=dynamic_role_serializer,
@@ -112,7 +112,7 @@ class DynamicUserAPI(APIView):
             dynamic_users, request,
             search_fields=["type", "user__full_name"],
             sort_fields={'type': 'type',
-                         'user': 'user_name'}
+                         'user': ('user_name', 'type')}
         )
         dynamic_user_serializer = DynamicUserListSerializer(paginated_queryset.get('queryset'), many=True).data
         return CustomResponse().paginated_response(data=dynamic_user_serializer,
