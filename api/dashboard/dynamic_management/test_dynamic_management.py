@@ -7,19 +7,15 @@ from django.test import TransactionTestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from db.organization import Country, State, Zone, District
-from db.user import User, Role, DynamicRole, DynamicUser
+from db.user import User, Role, UserRoleLink, DynamicRole, DynamicUser
 from utils.types import RoleType
 
 
 class BaseDynamicManagementTestCase(TransactionTestCase):
     UNMANAGED_MODELS = [
         User,
-        Country,
-        State,
-        Zone,
-        District,
         Role,
+        UserRoleLink,
         DynamicRole,
         DynamicUser,
     ]
@@ -47,13 +43,16 @@ class BaseDynamicManagementTestCase(TransactionTestCase):
     @classmethod
     def _cleanup_tables(cls):
         if hasattr(cls, "_created_models") and cls._created_models:
+            cleanup_errors = []
             with connection.schema_editor() as editor:
                 for model in reversed(cls._created_models):
                     try:
                         editor.delete_model(model)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        cleanup_errors.append((model, exc))
             cls._created_models = []
+            if cleanup_errors:
+                raise RuntimeError(f"Errors occurred during test schema cleanup: {cleanup_errors}")
 
     def setUp(self):
         super().setUp()
@@ -78,6 +77,7 @@ class BaseDynamicManagementTestCase(TransactionTestCase):
     def tearDown(self):
         DynamicUser.objects.all().delete()
         DynamicRole.objects.all().delete()
+        UserRoleLink.objects.all().delete()
         Role.objects.all().delete()
         User.objects.all().delete()
         super().tearDown()
