@@ -193,7 +193,7 @@ class OrganizerOptionsAPI(APIView):
                     'id': company.org.id,
                     'title': company.org.title,
                 }
-                    
+
         if RoleType.MENTOR.value in roles:
             from db.user import MentorScopeGrant
             from db.task import UserIgLink
@@ -348,21 +348,69 @@ class EventTypesScopesAPI(APIView):
         responses={200: inline_serializer(
             name='EventTypesScopesResponse',
             fields={
-                'event_type': s.ListField(child=s.CharField()),
-                'event_scope': s.ListField(child=s.CharField()),
+                'event_type': s.ListField(child=inline_serializer(
+                    name='EventTypeItem',
+                    fields={
+                        'value': s.CharField(),
+                        'label': s.CharField(),
+                        'description': s.CharField(),
+                    }
+                )),
+                'event_scope': s.ListField(child=inline_serializer(
+                    name='EventScopeItem',
+                    fields={
+                        'value': s.CharField(),
+                        'label': s.CharField(),
+                        'description': s.CharField(),
+                    }
+                )),
             }
         )},
     )
     def get(self, request):
+        type_descriptions = {
+            Event.EventType.HACKATHON.value: 'An intensive, collaborative coding event focused on building software projects.',
+            Event.EventType.WORKSHOP.value: 'An interactive, hands-on session focusing on learning specific skills or techniques.',
+            Event.EventType.WEBINAR.value: 'An online educational presentation or seminar.',
+            Event.EventType.SEMINAR.value: 'A formal presentation or educational session on a specific topic.',
+            Event.EventType.BOOTCAMP.value: 'A short, intensive training program designed to teach practical skills quickly.',
+            Event.EventType.MEETUP.value: 'An informal gathering of individuals with a shared interest or profession.',
+            Event.EventType.CONFERENCE.value: 'A formal meeting for discussion and presentations within a specific field.',
+            Event.EventType.COMPETITION.value: 'An event where individuals or teams compete against each other for a prize.',
+            Event.EventType.IDEATHON.value: 'A short, intensive brainstorming event that focuses on generating new ideas.',
+            Event.EventType.CULTURAL_EVENT.value: 'An event celebrating arts, music, or other cultural activities.',
+            Event.EventType.SPORTS_EVENT.value: 'An athletic competition or physical activity event.',
+            Event.EventType.COMMUNITY_EVENT.value: 'A gathering or activity designed to bring the community together.',
+            Event.EventType.EXPO.value: 'A large-scale exhibition showcasing products, services, or innovations.',
+            Event.EventType.NETWORKING_EVENT.value: 'A gathering specifically designed for professionals to connect and build relationships.',
+            Event.EventType.TECH_TALK.value: 'A concise presentation on a technical topic, tool, or innovation.',
+            Event.EventType.OTHERS.value: 'Any event that does not fit into the standard categories.',
+        }
+
+        scope_descriptions = {
+            Event.EventScope.MAKER.value: 'Events focused on hardware, electronics, and physical prototyping.',
+            Event.EventScope.CODER.value: 'Events focused on software development and programming.',
+            Event.EventScope.MANAGER.value: 'Events focused on leadership, product management, and business.',
+            Event.EventScope.CREATIVE.value: 'Events focused on design, digital art, and creative media.',
+        }
+
         return CustomResponse(
             general_message='Event types and scopes retrieved.',
             response={
                 "event_type": [
-                    {"value": v, "label": l}
+                    {
+                        "value": v,
+                        "label": l,
+                        "description": type_descriptions.get(v, "")
+                    }
                     for v, l in zip(Event.EventType.values, Event.EventType.labels)
                 ],
                 "event_scope": [
-                    {"value": v, "label": l}
+                    {
+                        "value": v,
+                        "label": l,
+                        "description": scope_descriptions.get(v, "")
+                    }
                     for v, l in zip(Event.EventScope.values, Event.EventScope.labels)
                 ],
             },
