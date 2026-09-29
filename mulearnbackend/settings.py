@@ -377,4 +377,11 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'mu_celery.learning_circle_aggregates_cron.refresh_learning_circle_aggregates',
         'schedule': crontab(minute='*/15'),
     },
+    # Sweeps R2 for uploads (POST /api/v1/media/upload/) that were never
+    # attached to a record and are now past ORPHAN_GRACE_PERIOD. Hourly is
+    # plenty given the 24h grace period.
+    'delete-orphaned-r2-uploads-cron': {
+        'task': 'mu_celery.r2_storage_tasks.delete_orphaned_r2_uploads',
+        'schedule': crontab(minute=0),
+    },
 }
