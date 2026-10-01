@@ -51,53 +51,22 @@ class StudentsMonthlyLeaderboard(APIView):
         )},
     )
     def get(self, request):
-        start_date, end_date = DateTimeUtils.get_start_and_end_of_previous_month()
-        student_monthly_leaderboard = (
-            User.objects.filter(
-                user_role_link_user__role__title=RoleType.STUDENT.value,
-                user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-                exist_in_guild=True,
-            )
-            .annotate(
-                institution=F("user_organization_link_user__org__title"),
-                total_karma=Coalesce(
-                    Sum(
-                        "karma_activity_log_user__karma",
-                        filter=Q(
-                            karma_activity_log_user__created_at__range=(
-                                start_date,
-                                end_date,
-                            )
-                        ),
-                    ),
-                    Value(0),
-                ),
-            )
-            .values(
-                "id",
-                "muid",
-                "full_name",
-                "total_karma",
-                "institution",
-            )
-            .order_by("-total_karma")[:20]
-        )
+        from mu_celery.leaderboard_cron import _build_students_monthly_leaderboard
+        import datetime
 
-        fs = FileSystemStorage()
-        result = []
-        for student in student_monthly_leaderboard:
-            user_id = student.pop("id")
-            path = f"user/profile/{user_id}.png"
-            student["profile_pic"] = (
-                f"{decouple_config('BE_DOMAIN_NAME')}{fs.url(path)}"
-                if fs.exists(path)
-                else None
-            )
-            result.append(student)
+        month_label = datetime.datetime.utcnow().strftime("%Y-%m")
+        monthly_key = f"leaderboard:students:month:{month_label}"
 
-        return CustomResponse(
-            response=result
-        ).get_success_response()
+        # 1. Try Redis first
+        cached = cache.get(monthly_key)
+        if cached:
+            return CustomResponse(response=json.loads(cached)).get_success_response()
+
+        # 2. Cache miss — run query live, push to Redis, return result
+        data = _build_students_monthly_leaderboard()
+        cache.set(monthly_key, json.dumps(data), timeout=TTL)
+        return CustomResponse(response=data).get_success_response()
+
 
 
 class CollegeLeaderboard(APIView):
@@ -134,13 +103,13 @@ class CollegeLeaderboard(APIView):
 
 
 class CollegeMonthlyLeaderboard(APIView):
-    @method_decorator(cache_page(60 * 5))
     @extend_schema(tags=['Leaderboard'], description="Retrieve College Monthly Leaderboard.",
         responses={200: inline_serializer(
             name='LeaderboardCollegeMonthlyItem',
             fields={
                 'id': s.CharField(),
                 'code': s.CharField(),
+                'title': s.CharField(),
                 'total_karma': s.IntegerField(),
                 'students': s.IntegerField(),
             },
@@ -148,14 +117,12 @@ class CollegeMonthlyLeaderboard(APIView):
         )},
     )
     def get(self, request):
-        start_date, end_date = DateTimeUtils.get_start_and_end_of_previous_month()
+        start_date, next_month = DateTimeUtils.get_current_month_range()
         college_monthly_leaderboard = (
             Organization.objects.filter(
                 org_type=OrganizationType.COLLEGE.value,
-                user_organization_link_org__user__karma_activity_log_user__created_at__range=(
-                    start_date,
-                    end_date,
-                ),
+                user_organization_link_org__user__karma_activity_log_user__created_at__gte=start_date,
+                user_organization_link_org__user__karma_activity_log_user__created_at__lt=next_month,
                 user_organization_link_org__user__karma_activity_log_user__appraiser_approved=True,
             )
             .annotate(
@@ -163,10 +130,8 @@ class CollegeMonthlyLeaderboard(APIView):
                     Sum(
                         "user_organization_link_org__user__karma_activity_log_user__karma",
                         filter=Q(
-                            user_organization_link_org__user__karma_activity_log_user__created_at__range=(
-                                start_date,
-                                end_date,
-                            )
+                            user_organization_link_org__user__karma_activity_log_user__created_at__gte=start_date,
+                            user_organization_link_org__user__karma_activity_log_user__created_at__lt=next_month,
                         ),
                     ),
                     Value(0),
@@ -174,7 +139,7 @@ class CollegeMonthlyLeaderboard(APIView):
                 students=Count("user_organization_link_org__user", distinct=True),
                 institution=F("title"),
             )
-            .values("id", "code", "total_karma", "students")
+            .values("id", "code", "title", "total_karma", "students")
             .order_by("-total_karma")[:20]
         )
 
