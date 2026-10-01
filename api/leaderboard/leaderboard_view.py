@@ -1,10 +1,6 @@
-from django.core.files.storage import FileSystemStorage
 from django.db.models import Sum, F, Value, Count, Q, Prefetch, Subquery, OuterRef, IntegerField
 from django.db.models.functions import Concat, Coalesce
-from django.utils.decorators import method_decorator
-from django.views.decorators.cache import cache_page
 from rest_framework.views import APIView
-from decouple import config as decouple_config
 from . import serializers
 from db.task import TaskList, InterestGroup
 from db.organization import Organization, UserOrganizationLink
@@ -84,22 +80,23 @@ class CollegeLeaderboard(APIView):
         )},
     )
     def get(self, request):
+        # cached_total_karma and cached_member_count are pre-computed columns on
+        # Organization, refreshed every 15 min by refresh_org_aggregates cron.
+        # Reading them avoids a 4-table JOIN + SUM over all college members.
         college_leaderboard = (
-            Organization.objects.filter(
-                org_type=OrganizationType.COLLEGE.value,
-                user_organization_link_org__user__user_role_link_user__role__title=RoleType.STUDENT.value,
-                user_organization_link_org__user__exist_in_guild=True,
-            )
-            .distinct()
-            .annotate(
-                total_students=Count("user_organization_link_org__user"),
-                total_karma=Sum("user_organization_link_org__user__wallet_user__karma"),
-            )
-            .values("id", "code", "title", "total_students", "total_karma")
-            .order_by("-total_karma")[:20]
+            Organization.objects
+            .filter(org_type=OrganizationType.COLLEGE.value)
+            .order_by("-cached_total_karma")
+            .values(
+                "id",
+                "code",
+                "title",
+                total_karma=F("cached_total_karma"),
+                total_students=F("cached_member_count"),
+            )[:20]
         )
 
-        return CustomResponse(response=college_leaderboard).get_success_response()
+        return CustomResponse(response=list(college_leaderboard)).get_success_response()
 
 
 class CollegeMonthlyLeaderboard(APIView):
@@ -117,35 +114,21 @@ class CollegeMonthlyLeaderboard(APIView):
         )},
     )
     def get(self, request):
-        start_date, next_month = DateTimeUtils.get_current_month_range()
-        college_monthly_leaderboard = (
-            Organization.objects.filter(
-                org_type=OrganizationType.COLLEGE.value,
-                user_organization_link_org__user__karma_activity_log_user__created_at__gte=start_date,
-                user_organization_link_org__user__karma_activity_log_user__created_at__lt=next_month,
-                user_organization_link_org__user__karma_activity_log_user__appraiser_approved=True,
-            )
-            .annotate(
-                total_karma=Coalesce(
-                    Sum(
-                        "user_organization_link_org__user__karma_activity_log_user__karma",
-                        filter=Q(
-                            user_organization_link_org__user__karma_activity_log_user__created_at__gte=start_date,
-                            user_organization_link_org__user__karma_activity_log_user__created_at__lt=next_month,
-                        ),
-                    ),
-                    Value(0),
-                ),
-                students=Count("user_organization_link_org__user", distinct=True),
-                institution=F("title"),
-            )
-            .values("id", "code", "title", "total_karma", "students")
-            .order_by("-total_karma")[:20]
-        )
+        from mu_celery.leaderboard_cron import _build_college_monthly_leaderboard
+        import datetime
 
-        return CustomResponse(
-            response=college_monthly_leaderboard
-        ).get_success_response()
+        month_label = datetime.datetime.utcnow().strftime("%Y-%m")
+        college_monthly_key = f"leaderboard:college:month:{month_label}"
+
+        # 1. Try Redis first
+        cached = cache.get(college_monthly_key)
+        if cached:
+            return CustomResponse(response=json.loads(cached)).get_success_response()
+
+        # 2. Cache miss — run query live, push to Redis, return result
+        data = _build_college_monthly_leaderboard()
+        cache.set(college_monthly_key, json.dumps(data), timeout=TTL)
+        return CustomResponse(response=data).get_success_response()
 
 class WadhwaniCollegeLeaderboard(APIView):
     @extend_schema(

@@ -129,3 +129,47 @@ def refresh_leaderboards():
     cache.set(monthly_key, json.dumps(monthly_data), timeout=TTL)
     print(f"[leaderboard_cron] students:month:{month_label} pushed — {len(monthly_data)} rows")
 
+    # Board 3 — college monthly
+    college_monthly_key = f"leaderboard:college:month:{month_label}"
+    college_monthly_data = _build_college_monthly_leaderboard()
+    cache.set(college_monthly_key, json.dumps(college_monthly_data), timeout=TTL)
+    print(f"[leaderboard_cron] college:month:{month_label} pushed — {len(college_monthly_data)} rows")
+
+
+def _build_college_monthly_leaderboard():
+    """Build the monthly college board and return a plain list of dicts."""
+    from django.db.models import Sum, Q, Count, F
+    from django.db.models.functions import Coalesce
+    from django.db.models import Value
+    from db.organization import Organization
+    from utils.types import OrganizationType
+
+    start, next_month = DateTimeUtils.get_current_month_range()
+
+    colleges = (
+        Organization.objects.filter(
+            org_type=OrganizationType.COLLEGE.value,
+            user_organization_link_org__user__karma_activity_log_user__created_at__gte=start,
+            user_organization_link_org__user__karma_activity_log_user__created_at__lt=next_month,
+            user_organization_link_org__user__karma_activity_log_user__appraiser_approved=True,
+        )
+        .annotate(
+            total_karma=Coalesce(
+                Sum(
+                    "user_organization_link_org__user__karma_activity_log_user__karma",
+                    filter=Q(
+                        user_organization_link_org__user__karma_activity_log_user__created_at__gte=start,
+                        user_organization_link_org__user__karma_activity_log_user__created_at__lt=next_month,
+                    ),
+                ),
+                Value(0),
+            ),
+            students=Count("user_organization_link_org__user", distinct=True),
+        )
+        .values("id", "code", "title", "total_karma", "students")
+        .order_by("-total_karma")[:20]
+    )
+
+    return list(colleges)
+
+
