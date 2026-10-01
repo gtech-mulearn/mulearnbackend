@@ -15,7 +15,9 @@ from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers as s
-
+import json
+from django.core.cache import cache
+from mu_celery.leaderboard_cron import _build_students_leaderboard, STUDENTS_ALL_KEY, TTL
 
 class StudentsLeaderboard(APIView):
     @extend_schema(
@@ -24,33 +26,14 @@ class StudentsLeaderboard(APIView):
         responses={200: serializers.StudentLeaderboardSerializer},
     )
     def get(self, request):
-        students_leaderboard = (
-            User.objects.filter(
-                user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-                user_role_link_user__role__title=RoleType.STUDENT.value,
-                exist_in_guild=True,
-            )
-            .distinct()
-            .select_related("wallet_user")
-            .only("muid", "full_name", "wallet_user__karma")
-            .prefetch_related(
-                Prefetch(
-                    "user_organization_link_user",
-                    queryset=UserOrganizationLink.objects.filter(
-                        org__org_type=OrganizationType.COLLEGE.value
-                    ).select_related("org").only("user_id", "org__title"),
-                    to_attr="colleges",
-                )
-            )
-            .order_by("-wallet_user__karma")[:20]
-        )
-        serialized_students_leaderboard = serializers.StudentLeaderboardSerializer(
-            students_leaderboard, many=True
-        )
-
-        return CustomResponse(
-            response=serialized_students_leaderboard.data
-        ).get_success_response()
+        # 1. Try Redis first
+        cached = cache.get(STUDENTS_ALL_KEY)
+        if cached:
+            return CustomResponse(response=json.loads(cached)).get_success_response()
+        # 2. Cache miss — run query live, populate Redis, return result
+        data = _build_students_leaderboard()
+        cache.set(STUDENTS_ALL_KEY, json.dumps(data), timeout=TTL)
+        return CustomResponse(response=data).get_success_response()
 
 
 class StudentsMonthlyLeaderboard(APIView):
