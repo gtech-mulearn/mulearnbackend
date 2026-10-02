@@ -26,6 +26,14 @@ from .serializers import (
 )
 
 
+def _safe_int(value):
+    """Safely attempt to convert a string to int without raising ValueError for unicode digits like ²."""
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return None
+
+
 def _is_learner_role(roles):
     """
     Returns True if caller is not exclusively a Company user.
@@ -57,14 +65,16 @@ class ProblemStatementListAPI(APIView):
         ).select_related('company')
 
         if category := request.query_params.get('category'):
-            if category.isdigit():
-                queryset = queryset.filter(Q(categories__contains=int(category)) | Q(categories__contains=category))
+            cat_int = _safe_int(category)
+            if cat_int is not None:
+                queryset = queryset.filter(Q(categories__contains=cat_int) | Q(categories__contains=category))
             else:
                 queryset = queryset.filter(categories__contains=category)
 
         if skill := request.query_params.get('skill'):
-            if skill.isdigit():
-                queryset = queryset.filter(Q(skills__contains=int(skill)) | Q(skills__contains=skill))
+            skill_int = _safe_int(skill)
+            if skill_int is not None:
+                queryset = queryset.filter(Q(skills__contains=skill_int) | Q(skills__contains=skill))
             else:
                 queryset = queryset.filter(skills__contains=skill)
 
@@ -83,19 +93,16 @@ class ProblemStatementListAPI(APIView):
         user_id = None
         interested_ps_ids = set()
         if JWTUtils.is_logged_in(request):
-            try:
-                user_id = JWTUtils.fetch_user_id(request)
-                ps_ids = [ps.id for ps in paginated['queryset']]
-                if user_id and ps_ids:
-                    interested_ps_ids = set(
-                        ProblemStatementInterest.objects.filter(
-                            problem_statement_id__in=ps_ids,
-                            user_id=user_id,
-                            status=ProblemStatementInterest.Status.INTERESTED,
-                        ).values_list('problem_statement_id', flat=True)
-                    )
-            except (AttributeError, KeyError, ValueError):
-                pass
+            user_id = JWTUtils.fetch_user_id(request)
+            ps_ids = [ps.id for ps in paginated['queryset']]
+            if user_id and ps_ids:
+                interested_ps_ids = set(
+                    ProblemStatementInterest.objects.filter(
+                        problem_statement_id__in=ps_ids,
+                        user_id=user_id,
+                        status=ProblemStatementInterest.Status.INTERESTED,
+                    ).values_list('problem_statement_id', flat=True)
+                )
 
         serialized_data = []
         for ps in paginated['queryset']:
@@ -139,16 +146,13 @@ class ProblemStatementDetailAPI(APIView):
 
         viewer_interested = False
         if JWTUtils.is_logged_in(request):
-            try:
-                user_id = JWTUtils.fetch_user_id(request)
-                if user_id:
-                    viewer_interested = ProblemStatementInterest.objects.filter(
-                        problem_statement=ps,
-                        user_id=user_id,
-                        status=ProblemStatementInterest.Status.INTERESTED,
-                    ).exists()
-            except (AttributeError, KeyError, ValueError):
-                pass
+            user_id = JWTUtils.fetch_user_id(request)
+            if user_id:
+                viewer_interested = ProblemStatementInterest.objects.filter(
+                    problem_statement=ps,
+                    user_id=user_id,
+                    status=ProblemStatementInterest.Status.INTERESTED,
+                ).exists()
 
         detail_data = ProblemStatementDetailSerializer(
             ps, context={'request': request}

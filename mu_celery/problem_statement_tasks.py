@@ -40,8 +40,7 @@ def close_expired_problem_statements():
 
             ps_locked.status = ProblemStatement.Status.CLOSED
             ps_locked.closed_at = loop_now
-            ps_locked.updated_by_id = settings.SYSTEM_ADMIN_ID
-            ps_locked.save(update_fields=['status', 'closed_at', 'updated_by', 'updated_at'])
+            ps_locked.save(update_fields=['status', 'closed_at', 'updated_at'])
 
             log_ps_action(
                 problem_statement=ps_locked,

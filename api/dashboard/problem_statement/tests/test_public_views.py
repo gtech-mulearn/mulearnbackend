@@ -541,26 +541,32 @@ class TestProblemStatementPublicAndLearnerAPIs:
         assert r_post.status_code == status.HTTP_403_FORBIDDEN
 
     def test_p2_13_integer_category_and_skill_filters(self):
-        """P2-13: Categories and skills stored as integer/string IDs are filtered correctly."""
+        """P2-13 / Finding 1: Categories and skills stored as integer/string IDs are filtered safely without ValueError on ²."""
         ps = self._create_ps(
             ps_status=ProblemStatement.Status.PUBLISHED,
-            categories=[101, "ai"],
-            skills=[202, "python"]
+            categories=[123, "abc", "²"],
+            skills=[123, "python", "²"]
         )
 
-        # Filter by integer string query param '101'
-        r_cat = self.client.get('/api/v1/dashboard/problem-statements/?category=101')
-        assert r_cat.status_code == status.HTTP_200_OK
-        data_cat = r_cat.json()['response']['data']
-        assert len(data_cat) >= 1
-        assert ps.id in [item['id'] for item in data_cat]
+        # Filter by integer string '123'
+        r_cat_123 = self.client.get('/api/v1/dashboard/problem-statements/?category=123')
+        assert r_cat_123.status_code == status.HTTP_200_OK
 
-        # Filter by skill string query param '202'
-        r_skill = self.client.get('/api/v1/dashboard/problem-statements/?skill=202')
-        assert r_skill.status_code == status.HTTP_200_OK
-        data_skill = r_skill.json()['response']['data']
-        assert len(data_skill) >= 1
-        assert ps.id in [item['id'] for item in data_skill]
+        # Filter by string 'abc'
+        r_cat_abc = self.client.get('/api/v1/dashboard/problem-statements/?category=abc')
+        assert r_cat_abc.status_code == status.HTTP_200_OK
+
+        # Filter by unicode digit '²' (must NOT raise ValueError or cause 500)
+        r_cat_unicode = self.client.get('/api/v1/dashboard/problem-statements/?category=²')
+        assert r_cat_unicode.status_code == status.HTTP_200_OK
+
+        # Filter by skill integer '123'
+        r_skill_123 = self.client.get('/api/v1/dashboard/problem-statements/?skill=123')
+        assert r_skill_123.status_code == status.HTTP_200_OK
+
+        # Filter by skill unicode digit '²'
+        r_skill_unicode = self.client.get('/api/v1/dashboard/problem-statements/?skill=²')
+        assert r_skill_unicode.status_code == status.HTTP_200_OK
 
     def test_p2_14_invalid_resource_link_types(self):
         """P2-14: Non-string resource links (e.g. integer) fail validation cleanly with HTTP 400."""

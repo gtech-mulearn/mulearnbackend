@@ -235,14 +235,15 @@ class TestAuditLoggerAndCronTask:
         self.ps.refresh_from_db()
         assert self.ps.closed_at is not None
 
-    def test_17_updated_by_is_system_admin_id(self):
+    def test_17_updated_by_remains_unchanged_on_model(self):
+        original_updated_by = self.ps.updated_by_id
         self.ps.status = ProblemStatement.Status.PUBLISHED
         self.ps.deadline = timezone.now() - timedelta(hours=2)
         self.ps.save()
 
         close_expired_problem_statements()
         self.ps.refresh_from_db()
-        assert str(self.ps.updated_by_id) == str(self.sys_admin_id)
+        assert self.ps.updated_by_id == original_updated_by
 
     def test_18_closed_audit_row_is_created(self):
         self.ps.status = ProblemStatement.Status.PUBLISHED
