@@ -367,6 +367,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'mu_celery.event_cron.transition_event_statuses_task',
         'schedule': crontab(hour=0, minute=35),
     },
+    'expire-stale-problem-statements': {
+        'task': 'mu_celery.problem_statement_tasks.close_expired_problem_statements',
+        'schedule': crontab(hour=0, minute=40),
+    },
     # Keeps organization.cached_total_karma / .cached_member_count fresh for the
     # campus search sort. Every 15 minutes: these drive ranking, not correctness,
     # so some lag is acceptable, but a daily refresh would visibly stale the
