@@ -27,6 +27,8 @@ urlpatterns = [
     path("channels/", include("api.dashboard.channels.urls")),
     path("discord-moderator/", include("api.dashboard.discord_moderator.urls")),
     path("events/", include("api.dashboard.events.urls")),
+    path("problem-statements/", include("api.dashboard.problem_statement.urls")),
+    path("problem-statement/", include("api.dashboard.problem_statement.urls")),
     path("coupon/", include("api.dashboard.coupon.urls")),
     path("projects/", include("api.dashboard.projects.urls")),
     path("achievement/", include("api.dashboard.achievement.urls")),
