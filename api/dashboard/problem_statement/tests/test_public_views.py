@@ -551,22 +551,32 @@ class TestProblemStatementPublicAndLearnerAPIs:
         # Filter by integer string '123'
         r_cat_123 = self.client.get('/api/v1/dashboard/problem-statements/?category=123')
         assert r_cat_123.status_code == status.HTTP_200_OK
+        ids_cat_123 = [item['id'] for item in r_cat_123.json().get('response', {}).get('data', [])]
+        assert ps.id in ids_cat_123
 
         # Filter by string 'abc'
         r_cat_abc = self.client.get('/api/v1/dashboard/problem-statements/?category=abc')
         assert r_cat_abc.status_code == status.HTTP_200_OK
+        ids_cat_abc = [item['id'] for item in r_cat_abc.json().get('response', {}).get('data', [])]
+        assert ps.id in ids_cat_abc
 
         # Filter by unicode digit '²' (must NOT raise ValueError or cause 500)
         r_cat_unicode = self.client.get('/api/v1/dashboard/problem-statements/?category=²')
         assert r_cat_unicode.status_code == status.HTTP_200_OK
+        ids_cat_unicode = [item['id'] for item in r_cat_unicode.json().get('response', {}).get('data', [])]
+        assert ps.id in ids_cat_unicode
 
         # Filter by skill integer '123'
         r_skill_123 = self.client.get('/api/v1/dashboard/problem-statements/?skill=123')
         assert r_skill_123.status_code == status.HTTP_200_OK
+        ids_skill_123 = [item['id'] for item in r_skill_123.json().get('response', {}).get('data', [])]
+        assert ps.id in ids_skill_123
 
         # Filter by skill unicode digit '²'
         r_skill_unicode = self.client.get('/api/v1/dashboard/problem-statements/?skill=²')
         assert r_skill_unicode.status_code == status.HTTP_200_OK
+        ids_skill_unicode = [item['id'] for item in r_skill_unicode.json().get('response', {}).get('data', [])]
+        assert ps.id in ids_skill_unicode
 
     def test_p2_14_invalid_resource_link_types(self):
         """P2-14: Non-string resource links (e.g. integer) fail validation cleanly with HTTP 400."""
