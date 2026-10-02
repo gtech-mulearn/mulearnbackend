@@ -11,25 +11,40 @@ from api.dashboard.problem_statement.ps_logger import log_ps_action
 def close_expired_problem_statements():
     """
     Nightly task to close published problem statements whose deadline has passed.
+    Uses select_for_update() to prevent race conditions and avoid overwriting later transitions.
     """
-    expired_statements = ProblemStatement.objects.filter(
-        status=ProblemStatement.Status.PUBLISHED,
-        deadline__isnull=False,
-        deadline__lt=timezone.now(),
-        deleted_at__isnull=True,
+    now = timezone.now()
+    expired_ids = list(
+        ProblemStatement.objects.filter(
+            status=ProblemStatement.Status.PUBLISHED,
+            deadline__isnull=False,
+            deadline__lt=now,
+            deleted_at__isnull=True,
+        ).values_list('id', flat=True)
     )
 
     closed_count = 0
-    for ps in expired_statements:
-        now = timezone.now()
+    for ps_id in expired_ids:
+        loop_now = timezone.now()
         with transaction.atomic():
-            ps.status = ProblemStatement.Status.CLOSED
-            ps.closed_at = now
-            ps.updated_by_id = settings.SYSTEM_ADMIN_ID
-            ps.save(update_fields=['status', 'closed_at', 'updated_by', 'updated_at'])
+            ps_locked = ProblemStatement.objects.select_for_update().filter(
+                id=ps_id,
+                status=ProblemStatement.Status.PUBLISHED,
+                deadline__isnull=False,
+                deadline__lt=loop_now,
+                deleted_at__isnull=True,
+            ).first()
+
+            if not ps_locked:
+                continue
+
+            ps_locked.status = ProblemStatement.Status.CLOSED
+            ps_locked.closed_at = loop_now
+            ps_locked.updated_by_id = settings.SYSTEM_ADMIN_ID
+            ps_locked.save(update_fields=['status', 'closed_at', 'updated_by', 'updated_at'])
 
             log_ps_action(
-                problem_statement=ps,
+                problem_statement=ps_locked,
                 action=ProblemStatementAuditLog.Action.CLOSED,
                 actor_id=settings.SYSTEM_ADMIN_ID,
                 actor_role="System/Cron",

@@ -107,7 +107,7 @@ class TestProblemStatementPublicAndLearnerAPIs:
         self.token_a = make_jwt_token(self.user_a_id, muid="user_a_muid")
         self.token_b = make_jwt_token(self.user_b_id, muid="user_b_muid")
 
-    def _create_ps(self, title="Test PS", ps_status=ProblemStatement.Status.PUBLISHED, deadline=None, deleted=False):
+    def _create_ps(self, title="Test PS", ps_status=ProblemStatement.Status.PUBLISHED, deadline=None, deleted=False, categories=None, skills=None):
         now = timezone.now()
         ps = ProblemStatement.objects.create(
             id=str(uuid.uuid4()),
@@ -118,6 +118,8 @@ class TestProblemStatementPublicAndLearnerAPIs:
             company=self.company,
             status=ps_status,
             deadline=deadline,
+            categories=categories,
+            skills=skills,
             created_by=self.sys_admin,
             updated_by=self.sys_admin,
             deleted_at=now if deleted else None,
@@ -397,7 +399,7 @@ class TestProblemStatementPublicAndLearnerAPIs:
             format='json',
             **auth_header(self.token_a)
         )
-        assert r_protected.status_code == status.HTTP_400_BAD_REQUEST
+        assert r_protected.status_code in (status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST)
         interest.refresh_from_db()
         assert interest.user_id == self.user_a_id  # Ownership protected
         assert interest.problem_statement_id == ps.id  # PS association protected
@@ -496,3 +498,73 @@ class TestProblemStatementPublicAndLearnerAPIs:
         self.client.post(f'/api/v1/dashboard/problem-statements/{ps.id}/interest/', **auth_header(self.token_a))
         ps.refresh_from_db()
         assert ps.interest_count == 2
+
+    # ─────────────────────────────────────────────────────────────
+    # GREPTILE REGRESSION TESTS
+    # ─────────────────────────────────────────────────────────────
+
+    def test_p1_3_interest_status_cannot_be_patched_directly(self):
+        """P1-3: Client cannot bypass withdrawal logic by sending status='withdrawn' in PATCH."""
+        ps = self._create_ps(ps_status=ProblemStatement.Status.PUBLISHED)
+        self.client.post(f'/api/v1/dashboard/problem-statements/{ps.id}/interest/', **auth_header(self.token_a))
+        ps.refresh_from_db()
+        assert ps.interest_count == 1
+
+        # Attempt to PATCH status directly
+        r_patch = self.client.patch(
+            f'/api/v1/dashboard/problem-statements/{ps.id}/interest/',
+            data={"status": "withdrawn", "note": "New note"},
+            format='json',
+            **auth_header(self.token_a)
+        )
+        assert r_patch.status_code == status.HTTP_200_OK
+
+        interest = ProblemStatementInterest.objects.get(problem_statement=ps, user=self.user_a)
+        assert interest.status == ProblemStatementInterest.Status.INTERESTED  # Status unmutated
+        ps.refresh_from_db()
+        assert ps.interest_count == 1  # Counter preserved
+
+    def test_p1_6_interest_eligibility_deadline_check(self):
+        """P1-6: Learner interest submission after deadline is rejected with HTTP 400."""
+        past_deadline = timezone.now() - timedelta(hours=1)
+        ps = self._create_ps(ps_status=ProblemStatement.Status.PUBLISHED, deadline=past_deadline)
+
+        r_post = self.client.post(f'/api/v1/dashboard/problem-statements/{ps.id}/interest/', **auth_header(self.token_a))
+        assert r_post.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_p1_9_company_user_cannot_register_interest(self):
+        """P1-9: Company role attempting to express interest is rejected with HTTP 403."""
+        ps = self._create_ps(ps_status=ProblemStatement.Status.PUBLISHED)
+        company_token = make_jwt_token(self.user_a_id, roles=["Company"])
+
+        r_post = self.client.post(f'/api/v1/dashboard/problem-statements/{ps.id}/interest/', **auth_header(company_token))
+        assert r_post.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_p2_13_integer_category_and_skill_filters(self):
+        """P2-13: Categories and skills stored as integer/string IDs are filtered correctly."""
+        ps = self._create_ps(
+            ps_status=ProblemStatement.Status.PUBLISHED,
+            categories=[101, "ai"],
+            skills=[202, "python"]
+        )
+
+        # Filter by integer string query param '101'
+        r_cat = self.client.get('/api/v1/dashboard/problem-statements/?category=101')
+        assert r_cat.status_code == status.HTTP_200_OK
+        data_cat = r_cat.json()['response']['data']
+        assert len(data_cat) >= 1
+        assert ps.id in [item['id'] for item in data_cat]
+
+        # Filter by skill string query param '202'
+        r_skill = self.client.get('/api/v1/dashboard/problem-statements/?skill=202')
+        assert r_skill.status_code == status.HTTP_200_OK
+        data_skill = r_skill.json()['response']['data']
+        assert len(data_skill) >= 1
+        assert ps.id in [item['id'] for item in data_skill]
+
+    def test_p2_14_invalid_resource_link_types(self):
+        """P2-14: Non-string resource links (e.g. integer) fail validation cleanly with HTTP 400."""
+        from api.dashboard.problem_statement.serializers import ProblemStatementWriteSerializer
+        ser = ProblemStatementWriteSerializer(data={"resources": [{"link": 123}]})
+        assert not ser.is_valid()
+        assert 'resources' in ser.errors

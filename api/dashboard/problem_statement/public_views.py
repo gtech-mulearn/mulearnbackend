@@ -5,10 +5,10 @@ Provides unauthenticated public listing & detail view, and authenticated learner
 import uuid
 from django.utils import timezone
 from django.db import transaction
-from django.db.models import F
+from django.db.models import F, Q
 from rest_framework.views import APIView
 from rest_framework import status
-
+from drf_spectacular.utils import extend_schema
 
 from db.problem_statement import (
     ProblemStatement,
@@ -17,12 +17,25 @@ from db.problem_statement import (
 from utils.permission import CustomizePermission, OptionalAuthentication, JWTUtils
 from utils.response import CustomResponse
 from utils.utils import CommonUtils
+from utils.types import RoleType
 
 from .serializers import (
     ProblemStatementListItemSerializer,
     ProblemStatementDetailSerializer,
     ProblemStatementInterestSerializer,
 )
+
+
+def _is_learner_role(roles):
+    """
+    Returns True if caller is not exclusively a Company user.
+    """
+    if isinstance(roles, list):
+        if len(roles) == 1 and roles[0] == RoleType.COMPANY.value:
+            return False
+    elif isinstance(roles, str) and roles == RoleType.COMPANY.value:
+        return False
+    return True
 
 
 class ProblemStatementListAPI(APIView):
@@ -33,6 +46,10 @@ class ProblemStatementListAPI(APIView):
     """
     authentication_classes = [OptionalAuthentication]
 
+    @extend_schema(
+        tags=['Problem Statement'],
+        description="Public feed of published problem statements with optional category, skill, difficulty, and reward filters.",
+    )
     def get(self, request):
         queryset = ProblemStatement.objects.filter(
             status=ProblemStatement.Status.PUBLISHED,
@@ -40,9 +57,17 @@ class ProblemStatementListAPI(APIView):
         ).select_related('company')
 
         if category := request.query_params.get('category'):
-            queryset = queryset.filter(categories__contains=category)
+            if category.isdigit():
+                queryset = queryset.filter(Q(categories__contains=int(category)) | Q(categories__contains=category))
+            else:
+                queryset = queryset.filter(categories__contains=category)
+
         if skill := request.query_params.get('skill'):
-            queryset = queryset.filter(skills__contains=skill)
+            if skill.isdigit():
+                queryset = queryset.filter(Q(skills__contains=int(skill)) | Q(skills__contains=skill))
+            else:
+                queryset = queryset.filter(skills__contains=skill)
+
         if difficulty := request.query_params.get('difficulty'):
             queryset = queryset.filter(difficulty=difficulty)
         if reward_type := request.query_params.get('reward_type'):
@@ -61,7 +86,7 @@ class ProblemStatementListAPI(APIView):
             try:
                 user_id = JWTUtils.fetch_user_id(request)
                 ps_ids = [ps.id for ps in paginated['queryset']]
-                if ps_ids:
+                if user_id and ps_ids:
                     interested_ps_ids = set(
                         ProblemStatementInterest.objects.filter(
                             problem_statement_id__in=ps_ids,
@@ -69,7 +94,7 @@ class ProblemStatementListAPI(APIView):
                             status=ProblemStatementInterest.Status.INTERESTED,
                         ).values_list('problem_statement_id', flat=True)
                     )
-            except Exception:
+            except (AttributeError, KeyError, ValueError):
                 pass
 
         serialized_data = []
@@ -92,6 +117,10 @@ class ProblemStatementDetailAPI(APIView):
     """
     authentication_classes = [OptionalAuthentication]
 
+    @extend_schema(
+        tags=['Problem Statement'],
+        description="Public detail view for a published problem statement. Increments view_count atomically.",
+    )
     def get(self, request, ps_id):
         ps = ProblemStatement.objects.filter(
             id=ps_id,
@@ -112,12 +141,13 @@ class ProblemStatementDetailAPI(APIView):
         if JWTUtils.is_logged_in(request):
             try:
                 user_id = JWTUtils.fetch_user_id(request)
-                viewer_interested = ProblemStatementInterest.objects.filter(
-                    problem_statement=ps,
-                    user_id=user_id,
-                    status=ProblemStatementInterest.Status.INTERESTED,
-                ).exists()
-            except Exception:
+                if user_id:
+                    viewer_interested = ProblemStatementInterest.objects.filter(
+                        problem_statement=ps,
+                        user_id=user_id,
+                        status=ProblemStatementInterest.Status.INTERESTED,
+                    ).exists()
+            except (AttributeError, KeyError, ValueError):
                 pass
 
         detail_data = ProblemStatementDetailSerializer(
@@ -139,48 +169,49 @@ class ProblemStatementInterestAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
-    def _get_published_ps(self, ps_id):
-        ps = ProblemStatement.objects.filter(
-            id=ps_id, deleted_at__isnull=True
-        ).select_related('company').first()
-
-        if not ps:
-            return None, CustomResponse(
-                general_message="Problem Statement not found."
-            ).get_failure_response(status_code=404, http_status_code=status.HTTP_404_NOT_FOUND)
-
-
-        if ps.status != ProblemStatement.Status.PUBLISHED:
-            return None, CustomResponse(
-                general_message=f"Problem Statement is not open for interest (status: {ps.status})."
-            ).get_failure_response(status_code=400)
-
-        return ps, None
-
+    @extend_schema(
+        tags=['Problem Statement'],
+        description="Register learner interest in a published problem statement before deadline.",
+    )
     def post(self, request, ps_id):
         user_id = JWTUtils.fetch_user_id(request)
-        ps, error_response = self._get_published_ps(ps_id)
-        if error_response:
-            return error_response
+        roles = JWTUtils.fetch_role(request)
 
-        # Real-time deadline validation
-        now = timezone.now()
-        if ps.deadline and ps.deadline < now:
+        if not _is_learner_role(roles):
             return CustomResponse(
-                general_message="The deadline to register interest for this Problem Statement has passed."
-            ).get_failure_response(status_code=400)
+                general_message="Company accounts cannot register interest in Problem Statements."
+            ).get_failure_response(status_code=403, http_status_code=status.HTTP_403_FORBIDDEN)
 
         serializer = ProblemStatementInterestSerializer(data=request.data)
         if not serializer.is_valid():
             return CustomResponse(
                 general_message=serializer.errors
-            ).get_failure_response(status_code=400)
+            ).get_failure_response(status_code=400, http_status_code=status.HTTP_400_BAD_REQUEST)
 
         note = serializer.validated_data.get('note')
         work_link = serializer.validated_data.get('work_link')
 
         with transaction.atomic():
-            ps_locked = ProblemStatement.objects.select_for_update().get(id=ps.id)
+            ps_locked = ProblemStatement.objects.select_for_update().filter(
+                id=ps_id, deleted_at__isnull=True
+            ).first()
+
+            if not ps_locked:
+                return CustomResponse(
+                    general_message="Problem Statement not found."
+                ).get_failure_response(status_code=404, http_status_code=status.HTTP_404_NOT_FOUND)
+
+            if ps_locked.status != ProblemStatement.Status.PUBLISHED:
+                return CustomResponse(
+                    general_message=f"Problem Statement is not open for interest (status: {ps_locked.status})."
+                ).get_failure_response(status_code=400, http_status_code=status.HTTP_400_BAD_REQUEST)
+
+            now = timezone.now()
+            if ps_locked.deadline and ps_locked.deadline <= now:
+                return CustomResponse(
+                    general_message="The deadline to register interest for this Problem Statement has passed."
+                ).get_failure_response(status_code=400, http_status_code=status.HTTP_400_BAD_REQUEST)
+
             existing_interest = ProblemStatementInterest.objects.filter(
                 problem_statement=ps_locked, user_id=user_id
             ).first()
@@ -190,7 +221,6 @@ class ProblemStatementInterestAPI(APIView):
                     return CustomResponse(
                         general_message="You have already registered interest for this Problem Statement."
                     ).get_failure_response(status_code=409, http_status_code=status.HTTP_409_CONFLICT)
-
 
                 # Reactivate withdrawn interest
                 existing_interest.status = ProblemStatementInterest.Status.INTERESTED
@@ -226,40 +256,59 @@ class ProblemStatementInterestAPI(APIView):
             response=ProblemStatementInterestSerializer(interest).data,
         ).get_success_response()
 
+    @extend_schema(
+        tags=['Problem Statement'],
+        description="Modify work_link or note on an active interest before deadline.",
+    )
     def patch(self, request, ps_id):
         user_id = JWTUtils.fetch_user_id(request)
-        ps, error_response = self._get_published_ps(ps_id)
-        if error_response:
-            return error_response
+        roles = JWTUtils.fetch_role(request)
 
-        # Deadline validation for edits
-        now = timezone.now()
-        if ps.deadline and ps.deadline < now:
+        if not _is_learner_role(roles):
             return CustomResponse(
-                general_message="The deadline to modify interest details has passed."
-            ).get_failure_response(status_code=400)
-
-        interest = ProblemStatementInterest.objects.filter(
-            problem_statement=ps,
-            user_id=user_id,
-            status=ProblemStatementInterest.Status.INTERESTED,
-        ).first()
-
-        if not interest:
-            return CustomResponse(
-                general_message="No active interest registration found to modify."
-            ).get_failure_response(status_code=404, http_status_code=status.HTTP_404_NOT_FOUND)
-
-
-        serializer = ProblemStatementInterestSerializer(
-            interest, data=request.data, partial=True
-        )
-        if not serializer.is_valid():
-            return CustomResponse(
-                general_message=serializer.errors
-            ).get_failure_response(status_code=400)
+                general_message="Company accounts cannot manage interest in Problem Statements."
+            ).get_failure_response(status_code=403, http_status_code=status.HTTP_403_FORBIDDEN)
 
         with transaction.atomic():
+            ps_locked = ProblemStatement.objects.select_for_update().filter(
+                id=ps_id, deleted_at__isnull=True
+            ).first()
+
+            if not ps_locked:
+                return CustomResponse(
+                    general_message="Problem Statement not found."
+                ).get_failure_response(status_code=404, http_status_code=status.HTTP_404_NOT_FOUND)
+
+            if ps_locked.status != ProblemStatement.Status.PUBLISHED:
+                return CustomResponse(
+                    general_message=f"Problem Statement is not open for interest modification (status: {ps_locked.status})."
+                ).get_failure_response(status_code=400, http_status_code=status.HTTP_400_BAD_REQUEST)
+
+            now = timezone.now()
+            if ps_locked.deadline and ps_locked.deadline <= now:
+                return CustomResponse(
+                    general_message="The deadline to modify interest details has passed."
+                ).get_failure_response(status_code=400, http_status_code=status.HTTP_400_BAD_REQUEST)
+
+            interest = ProblemStatementInterest.objects.filter(
+                problem_statement=ps_locked,
+                user_id=user_id,
+                status=ProblemStatementInterest.Status.INTERESTED,
+            ).first()
+
+            if not interest:
+                return CustomResponse(
+                    general_message="No active interest registration found to modify."
+                ).get_failure_response(status_code=404, http_status_code=status.HTTP_404_NOT_FOUND)
+
+            serializer = ProblemStatementInterestSerializer(
+                interest, data=request.data, partial=True
+            )
+            if not serializer.is_valid():
+                return CustomResponse(
+                    general_message=serializer.errors
+                ).get_failure_response(status_code=400, http_status_code=status.HTTP_400_BAD_REQUEST)
+
             serializer.save()
 
         return CustomResponse(
@@ -267,19 +316,29 @@ class ProblemStatementInterestAPI(APIView):
             response=ProblemStatementInterestSerializer(interest).data,
         ).get_success_response()
 
+    @extend_schema(
+        tags=['Problem Statement'],
+        description="Withdraw registered interest in a problem statement and update interest counter.",
+    )
     def delete(self, request, ps_id):
         user_id = JWTUtils.fetch_user_id(request)
-        ps = ProblemStatement.objects.filter(
-            id=ps_id, deleted_at__isnull=True
-        ).first()
+        roles = JWTUtils.fetch_role(request)
 
-        if not ps:
+        if not _is_learner_role(roles):
             return CustomResponse(
-                general_message="Problem Statement not found."
-            ).get_failure_response(status_code=404, http_status_code=status.HTTP_404_NOT_FOUND)
+                general_message="Company accounts cannot manage interest in Problem Statements."
+            ).get_failure_response(status_code=403, http_status_code=status.HTTP_403_FORBIDDEN)
 
         with transaction.atomic():
-            ps_locked = ProblemStatement.objects.select_for_update().get(id=ps.id)
+            ps_locked = ProblemStatement.objects.select_for_update().filter(
+                id=ps_id, deleted_at__isnull=True
+            ).first()
+
+            if not ps_locked:
+                return CustomResponse(
+                    general_message="Problem Statement not found."
+                ).get_failure_response(status_code=404, http_status_code=status.HTTP_404_NOT_FOUND)
+
             interest = ProblemStatementInterest.objects.filter(
                 problem_statement=ps_locked,
                 user_id=user_id,
@@ -290,7 +349,6 @@ class ProblemStatementInterestAPI(APIView):
                 return CustomResponse(
                     general_message="No active interest registration found to withdraw."
                 ).get_failure_response(status_code=404, http_status_code=status.HTTP_404_NOT_FOUND)
-
 
             interest.status = ProblemStatementInterest.Status.WITHDRAWN
             interest.status_updated_by_id = user_id
@@ -316,8 +374,18 @@ class LearnerMyInterestsAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Problem Statement'],
+        description="Retrieve a paginated list of problem statements where the authenticated learner has active interest.",
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
+
+        if not _is_learner_role(roles):
+            return CustomResponse(
+                general_message="Company accounts do not have a learner interests feed."
+            ).get_failure_response(status_code=403, http_status_code=status.HTTP_403_FORBIDDEN)
 
         interests = ProblemStatementInterest.objects.filter(
             user_id=user_id,

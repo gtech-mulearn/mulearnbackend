@@ -19,10 +19,13 @@ _URL_SCHEME_RE = re.compile(r'^https?://', re.IGNORECASE)
 
 
 def _require_full_url(value, example):
-    """Reject a URL link missing its http:// or https:// scheme."""
+    """Reject a URL link missing its http:// or https:// scheme or invalid type."""
     if not value:
         return value
-
+    if not isinstance(value, str):
+        raise serializers.ValidationError(
+            f'Enter a full link starting with https:// (e.g. {example}).'
+        )
     candidate = value.strip()
     if not _URL_SCHEME_RE.match(candidate) or not urlparse(candidate).netloc:
         raise serializers.ValidationError(
@@ -56,21 +59,38 @@ class ProblemStatementWriteSerializer(serializers.ModelSerializer):
             'is_featured',
         ]
         extra_kwargs = {
-            'summary': {'required': False, 'allow_null': True},
-            'description': {'required': False, 'allow_null': True},
+            'title': {'required': True, 'allow_null': False, 'allow_blank': False},
+            'summary': {'required': True, 'allow_null': False, 'allow_blank': False},
+            'description': {'required': True, 'allow_null': False, 'allow_blank': False},
+            'difficulty': {'required': False, 'allow_null': False, 'allow_blank': False},
+            'reward_type': {'required': False, 'allow_null': False, 'allow_blank': False},
             'cover_image': {'required': False, 'allow_null': True},
             'categories': {'required': False, 'allow_null': True},
             'skills': {'required': False, 'allow_null': True},
             'requirements': {'required': False, 'allow_null': True},
             'expected_outcome': {'required': False, 'allow_null': True},
             'resources': {'required': False, 'allow_null': True},
-            'reward_type': {'required': False},
             'reward_details': {'required': False, 'allow_null': True},
             'contact_email': {'required': False, 'allow_null': True},
             'external_link': {'required': False, 'allow_null': True},
             'deadline': {'required': False, 'allow_null': True},
             'is_featured': {'required': False},
         }
+
+    def validate_title(self, value):
+        if value is None or not str(value).strip():
+            raise serializers.ValidationError('title cannot be null or empty.')
+        return str(value).strip()
+
+    def validate_summary(self, value):
+        if value is None or not str(value).strip():
+            raise serializers.ValidationError('summary cannot be null or empty.')
+        return str(value).strip()
+
+    def validate_description(self, value):
+        if value is None or not str(value).strip():
+            raise serializers.ValidationError('description cannot be null or empty.')
+        return str(value).strip()
 
     def validate_external_link(self, value):
         if not value:
@@ -80,6 +100,8 @@ class ProblemStatementWriteSerializer(serializers.ModelSerializer):
     def validate_contact_email(self, value):
         if not value:
             return value
+        if not isinstance(value, str):
+            raise serializers.ValidationError('Enter a valid email address.')
         email = value.strip()
         if '@' not in email or '.' not in email.split('@')[-1]:
             raise serializers.ValidationError('Enter a valid email address.')
@@ -120,8 +142,13 @@ class ProblemStatementWriteSerializer(serializers.ModelSerializer):
             if isinstance(item, str):
                 _require_full_url(item, 'https://example.com/resource')
             elif isinstance(item, dict):
-                if 'link' in item and item['link']:
-                    _require_full_url(item['link'], 'https://example.com/resource')
+                if 'link' in item and item['link'] is not None:
+                    link_val = item['link']
+                    if not isinstance(link_val, str):
+                        raise serializers.ValidationError('Resource link must be a valid URL string.')
+                    _require_full_url(link_val, 'https://example.com/resource')
+                else:
+                    raise serializers.ValidationError('Resource object must contain a non-empty "link" string field.')
             else:
                 raise serializers.ValidationError('Resource item must be a string URL or object with a "link" field.')
         return value
@@ -178,23 +205,16 @@ class ProblemStatementInterestSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProblemStatementInterest
         fields = ['note', 'work_link', 'status']
+        read_only_fields = ['status']
         extra_kwargs = {
             'note': {'required': False, 'allow_null': True},
             'work_link': {'required': False, 'allow_null': True},
-            'status': {'required': False},
         }
 
     def validate_work_link(self, value):
         if not value:
             return value
         return _require_full_url(value, 'https://github.com/username/project')
-
-    def validate_status(self, value):
-        if value and value not in ProblemStatementInterest.Status.values:
-            raise serializers.ValidationError(
-                f'Invalid status. Allowed values: {", ".join(ProblemStatementInterest.Status.values)}.'
-            )
-        return value
 
 
 class ProblemStatementAuditLogSerializer(serializers.ModelSerializer):

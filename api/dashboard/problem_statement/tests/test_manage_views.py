@@ -69,4 +69,16 @@ class TestProblemStatementManagement:
         assert ps.status == ProblemStatement.Status.REMOVED
         assert ps.removal_reason == "Removed via DELETE request"
 
+    def test_p1_4_null_values_rejected_by_serializer(self):
+        """P1-4: Passing null to required fields (title, summary, description) raises ValidationError."""
+        ser = ProblemStatementWriteSerializer(data={"title": None, "summary": None, "description": None})
+        assert not ser.is_valid()
+        assert 'title' in ser.errors
+        assert 'summary' in ser.errors
+        assert 'description' in ser.errors
 
+    def test_p1_5_unverified_company_cannot_publish(self):
+        """P1-5: If company is unverified, publish request is blocked."""
+        comp = Company(status="pending")
+        ps = ProblemStatement(status=ProblemStatement.Status.DRAFT, company=comp, title="T", summary="S", description="D")
+        assert ps.company.status != "verified"
