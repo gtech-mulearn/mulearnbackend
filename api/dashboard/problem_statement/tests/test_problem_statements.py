@@ -294,3 +294,28 @@ def test_deleting_an_actor_keeps_the_statement_and_interactions(world):
     ps = ProblemStatement.objects.get(id=sid)  # still there
     assert ps.updated_by_id == str(settings.SYSTEM_ADMIN_ID)
     assert ProblemStatementInteraction.objects.filter(problem_statement_id=sid).count() == 1
+
+
+# ----------------------------------------------------------------- review regressions
+
+def test_skill_filter_matches_decoded_values_ignoring_case(world):
+    sid = create(world["a"], skills=["Python\ML", 'Say "Hi"', "C++", "Ünï"]).json()["response"]["id"]
+    world["a"].post(f"{BASE}company/{sid}/publish/")
+    for skill in ["python\ml", 'say "hi"', "c++", "ÜNÏ"]:
+        res = world["learner"].get(BASE, {"skill": skill}).json()["response"]
+        assert [s["id"] for s in res["data"]] == [sid], skill
+    for skill in ["python", "ML", "%", "_", '"']:  # whole values only, no substring / wildcard hits
+        assert world["learner"].get(BASE, {"skill": skill}).json()["response"]["data"] == [], skill
+
+
+def test_interaction_on_statement_deleted_mid_request_is_not_found(world, monkeypatch):
+    from api.dashboard.problem_statement import learner_views
+
+    sid = create_published(world)
+    stale = ProblemStatement.objects.get(id=sid)
+    ProblemStatement.objects.filter(id=sid).delete()
+    # the view looked the statement up just before it was deleted
+    monkeypatch.setattr(learner_views, "_published_or_none", lambda _id: stale)
+    res = world["learner"].put(f"{BASE}{sid}/interaction/", {"status": "Trying"}, format="json")
+    assert res.status_code == 404
+    assert res.json()["message"]["general"] == ["Problem statement not found."]

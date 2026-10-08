@@ -1,10 +1,12 @@
 from django.db import IntegrityError, transaction
-from django.db.models import Q
+from django.db.models import BooleanField, Q
+from django.db.models.expressions import RawSQL
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework.views import APIView
 
 from db.problem_statement import ProblemStatement, ProblemStatementInteraction
+from db.user import User
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils import problem_statement as ps_utils
@@ -38,8 +40,14 @@ class ProblemStatementListAPI(APIView):
         if params.get("category"):
             qs = qs.filter(category__iexact=params["category"])
         if params.get("skill"):
-            # case-insensitive, matching how skills are de-duplicated on save
-            qs = qs.filter(skills__icontains=f'"{params["skill"].strip()}"')
+            # Compare decoded array values (not JSON text, where quotes and
+            # backslashes are escaped), ignoring case like de-duplication on save.
+            qs = qs.alias(has_skill=RawSQL(
+                "EXISTS (SELECT 1 FROM JSON_TABLE(problem_statement.skills, '$[*]' "
+                "COLUMNS (skill VARCHAR(50) PATH '$')) AS s WHERE LOWER(s.skill) = LOWER(%s))",
+                [params["skill"].strip()],
+                output_field=BooleanField(),
+            )).filter(has_skill=True)
         if params.get("company_id"):
             qs = qs.filter(company_id=params["company_id"])
         if params.get("open_only") == "true":
@@ -112,18 +120,24 @@ class ProblemStatementInteractionAPI(APIView):
             return CustomResponse(message=serializer.errors).get_failure_response()
         # update_or_create + the (statement, user) unique key: repeated or
         # concurrent calls end up as one row.
+        user_id = JWTUtils.fetch_user_id(request)
         try:
             with transaction.atomic():
                 interaction, _ = ProblemStatementInteraction.objects.update_or_create(
                     problem_statement=statement,
-                    user_id=JWTUtils.fetch_user_id(request),
+                    user_id=user_id,
                     defaults={"status": serializer.validated_data.get(
                         "status", ProblemStatementInteraction.Status.TRYING
                     )},
                 )
         except IntegrityError:
-            # valid token for a user that no longer exists (FK on user_id)
-            return ps_utils.failure("User not found.", 404)
+            # FK failure: the statement was deleted meanwhile, or the token's user
+            # no longer exists. Anything else goes to the normal error handler.
+            if not ProblemStatement.objects.filter(id=statement.id).exists():
+                return ps_utils.not_found()
+            if not User.objects.filter(id=user_id).exists():
+                return ps_utils.failure("User not found.", 404)
+            raise
         return CustomResponse(
             general_message="Interaction saved.",
             response={"status": interaction.status, "counts": ps_utils.counts_for(statement.id)},

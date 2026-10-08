@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 
 from db.company import Company
 from db.problem_statement import ProblemStatement, ProblemStatementInteraction
+from db.user import User
 from utils import problem_statement as ps_utils
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
@@ -139,8 +140,13 @@ class ListCreateBase(ManageBase):
                     updated_by_id=user_id,
                 )
         except IntegrityError:
-            # valid token for a user that no longer exists (FK on created_by)
-            return ps_utils.failure("User not found.", 404)
+            # FK failure: the company was deleted meanwhile, or the token's user
+            # no longer exists. Anything else goes to the normal error handler.
+            if not Company.objects.filter(id=company.id).exists():
+                return ps_utils.failure("Company not found.", 404)
+            if not User.objects.filter(id=user_id).exists():
+                return ps_utils.failure("User not found.", 404)
+            raise
         statement = self.fresh(statement.id)
         return CustomResponse(
             general_message="Problem statement created.", response=self.render(statement)
