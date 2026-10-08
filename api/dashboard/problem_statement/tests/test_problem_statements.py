@@ -254,3 +254,43 @@ def test_admin_creates_for_any_company(world):
     assert res.status_code == 200 and res.json()["response"]["company"]["id"] == str(world["company_b"].id)
     missing = world["admin"].post(BASE + "admin/", PAYLOAD, format="json")
     assert missing.status_code == 400
+
+
+# ----------------------------------------------------------------- P1 regressions
+
+def test_edit_after_publish_does_not_undo_publication(world):
+    """A PATCH only writes the columns it changes, so it can't restore stale status/published_*."""
+    from utils import problem_statement as ps_utils
+
+    sid = create(world["a"]).json()["response"]["id"]
+    stale = ProblemStatement.objects.get(id=sid)  # read while still a draft
+    assert stale.status == "Draft"
+    world["a"].post(f"{BASE}company/{sid}/publish/")
+
+    assert ps_utils.apply_changes(sid, {"title": "Edited while publishing"}, world["company_a"].company_user_id) is None
+    ps = ProblemStatement.objects.get(id=sid)
+    assert ps.title == "Edited while publishing"
+    assert ps.status == "Published" and ps.published_at is not None and ps.published_by_id
+
+
+def test_publish_does_not_overwrite_concurrent_edit(world):
+    from utils import problem_statement as ps_utils
+
+    sid = create(world["a"]).json()["response"]["id"]
+    ps_utils.apply_changes(sid, {"title": "Edited before publish"}, world["company_a"].company_user_id)
+    assert world["a"].post(f"{BASE}company/{sid}/publish/").status_code == 200
+    assert ProblemStatement.objects.get(id=sid).title == "Edited before publish"
+
+
+def test_deleting_an_actor_keeps_the_statement_and_interactions(world):
+    sid = create_published(world)
+    world["learner"].put(f"{BASE}{sid}/interaction/", {"status": "Trying"}, format="json")
+    admin_user = User.objects.get(id="pstest_admin")
+    world["admin"].patch(f"{BASE}admin/{sid}/", {"title": "Edited by admin"}, format="json")
+    assert ProblemStatement.objects.get(id=sid).updated_by_id == admin_user.id
+
+    admin_user.delete()
+
+    ps = ProblemStatement.objects.get(id=sid)  # still there
+    assert ps.updated_by_id == str(settings.SYSTEM_ADMIN_ID)
+    assert ProblemStatementInteraction.objects.filter(problem_statement_id=sid).count() == 1

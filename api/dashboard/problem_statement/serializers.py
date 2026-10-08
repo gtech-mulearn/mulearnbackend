@@ -18,15 +18,19 @@ def _clean_skills(value):
     return cleaned
 
 
-class ProblemStatementWriteSerializer(serializers.Serializer):
+class ProblemStatementWriteSerializer(serializers.ModelSerializer):
     """Create / partial-update payload. Ownership fields are never accepted from the body."""
-    title = serializers.CharField(min_length=5, max_length=150)
-    description = serializers.CharField(min_length=20, max_length=20000)
-    category = serializers.CharField(max_length=100)
     skills = serializers.ListField(
         child=serializers.CharField(max_length=50), required=False, allow_empty=True
     )
-    deadline = serializers.DateTimeField(required=False, allow_null=True)
+
+    class Meta:
+        model = ProblemStatement
+        fields = ["title", "description", "category", "skills", "deadline"]
+        extra_kwargs = {
+            "title": {"min_length": 5},
+            "description": {"min_length": 20, "max_length": 20000},
+        }
 
     def validate_skills(self, value):
         return _clean_skills(value)
@@ -40,12 +44,16 @@ class ProblemStatementWriteSerializer(serializers.Serializer):
 class AdminProblemStatementCreateSerializer(ProblemStatementWriteSerializer):
     company_id = serializers.CharField(max_length=36)
 
+    class Meta(ProblemStatementWriteSerializer.Meta):
+        fields = [*ProblemStatementWriteSerializer.Meta.fields, "company_id"]
 
-class InteractionWriteSerializer(serializers.Serializer):
-    status = serializers.ChoiceField(
-        choices=ProblemStatementInteraction.Status.values,
-        default=ProblemStatementInteraction.Status.TRYING,
-    )
+
+class InteractionWriteSerializer(serializers.ModelSerializer):
+    """`status` is optional; the view falls back to the model default (Trying)."""
+
+    class Meta:
+        model = ProblemStatementInteraction
+        fields = ["status"]
 
 
 class ProblemStatementSerializer(serializers.ModelSerializer):

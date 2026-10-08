@@ -7,16 +7,17 @@ from rest_framework.views import APIView
 from db.problem_statement import ProblemStatement, ProblemStatementInteraction
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
+from utils import problem_statement as ps_utils
 from utils.utils import CommonUtils
 
-from . import serializers, services
+from . import serializers
 
 TAGS = ["Dashboard - Problem Statements (Learner)"]
 
 
 def _published():
     """Only published statements are ever visible to learners."""
-    return services.statement_queryset().filter(status=ProblemStatement.Status.PUBLISHED)
+    return ps_utils.statement_queryset().filter(status=ProblemStatement.Status.PUBLISHED)
 
 
 def _published_or_none(statement_id):
@@ -50,13 +51,13 @@ class ProblemStatementListAPI(APIView):
         items = list(page["queryset"])
         ids = [s.id for s in items]
         ctx = {
-            "counts": services.interaction_counts(ids),
-            "my_interactions": services.my_interactions(user_id, ids),
+            "counts": ps_utils.interaction_counts(ids),
+            "my_interactions": ps_utils.my_interactions(user_id, ids),
         }
-        return CustomResponse(response={
-            "data": serializers.ProblemStatementSerializer(items, many=True, context=ctx).data,
-            "pagination": page["pagination"],
-        }).get_success_response()
+        return CustomResponse().paginated_response(
+            data=serializers.ProblemStatementSerializer(items, many=True, context=ctx).data,
+            pagination=page["pagination"],
+        )
 
 
 class ProblemStatementDetailAPI(APIView):
@@ -66,11 +67,11 @@ class ProblemStatementDetailAPI(APIView):
     def get(self, request, statement_id):
         statement = _published_or_none(statement_id)
         if not statement:
-            return services.failure("Problem statement not found.", 404)
+            return ps_utils.not_found()
         user_id = JWTUtils.fetch_user_id(request)
         ctx = {
-            "counts": services.interaction_counts([statement.id]),
-            "my_interactions": services.my_interactions(user_id, [statement.id]),
+            "counts": ps_utils.interaction_counts([statement.id]),
+            "my_interactions": ps_utils.my_interactions(user_id, [statement.id]),
         }
         return CustomResponse(
             response=serializers.ProblemStatementSerializer(statement, context=ctx).data
@@ -85,7 +86,7 @@ class ProblemStatementInteractionAPI(APIView):
     def get(self, request, statement_id):
         statement = _published_or_none(statement_id)
         if not statement:
-            return services.failure("Problem statement not found.", 404)
+            return ps_utils.not_found()
         interaction = ProblemStatementInteraction.objects.filter(
             problem_statement=statement, user_id=JWTUtils.fetch_user_id(request)
         ).first()
@@ -102,9 +103,9 @@ class ProblemStatementInteractionAPI(APIView):
     def put(self, request, statement_id):
         statement = _published_or_none(statement_id)
         if not statement:
-            return services.failure("Problem statement not found.", 404)
+            return ps_utils.not_found()
         if statement.deadline and statement.deadline <= timezone.now():
-            return services.failure("This problem statement is no longer accepting interactions.", 409)
+            return ps_utils.failure("This problem statement is no longer accepting interactions.", 409)
         serializer = serializers.InteractionWriteSerializer(data=request.data)
         if not serializer.is_valid():
             return CustomResponse(message=serializer.errors).get_failure_response()
@@ -114,9 +115,11 @@ class ProblemStatementInteractionAPI(APIView):
             interaction, _ = ProblemStatementInteraction.objects.update_or_create(
                 problem_statement=statement,
                 user_id=JWTUtils.fetch_user_id(request),
-                defaults={"status": serializer.validated_data["status"]},
+                defaults={"status": serializer.validated_data.get(
+                    "status", ProblemStatementInteraction.Status.TRYING
+                )},
             )
-        counts = services.interaction_counts([statement.id]).get(statement.id, {})
+        counts = ps_utils.interaction_counts([statement.id]).get(statement.id, {})
         return CustomResponse(
             general_message="Interaction saved.",
             response={"status": interaction.status, "counts": counts},
@@ -126,12 +129,12 @@ class ProblemStatementInteractionAPI(APIView):
     def delete(self, request, statement_id):
         statement = _published_or_none(statement_id)
         if not statement:
-            return services.failure("Problem statement not found.", 404)
+            return ps_utils.not_found()
         deleted, _ = ProblemStatementInteraction.objects.filter(
             problem_statement=statement, user_id=JWTUtils.fetch_user_id(request)
         ).delete()
         if not deleted:
-            return services.failure("You have no interaction with this problem statement.", 404)
+            return ps_utils.failure("You have no interaction with this problem statement.", 404)
         return CustomResponse(general_message="Interaction removed.").get_success_response()
 
 
@@ -142,8 +145,8 @@ class ProblemStatementInteractionCountsAPI(APIView):
     def get(self, request, statement_id):
         statement = _published_or_none(statement_id)
         if not statement:
-            return services.failure("Problem statement not found.", 404)
-        counts = services.interaction_counts([statement.id]).get(statement.id, {})
+            return ps_utils.not_found()
+        counts = ps_utils.interaction_counts([statement.id]).get(statement.id, {})
         return CustomResponse(response={
             s: counts.get(s, 0) for s in ProblemStatementInteraction.Status.values
         }).get_success_response()
