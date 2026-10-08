@@ -1,4 +1,4 @@
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
@@ -38,7 +38,8 @@ class ProblemStatementListAPI(APIView):
         if params.get("category"):
             qs = qs.filter(category__iexact=params["category"])
         if params.get("skill"):
-            qs = qs.filter(skills__contains=[params["skill"]])
+            # case-insensitive, matching how skills are de-duplicated on save
+            qs = qs.filter(skills__icontains=f'"{params["skill"].strip()}"')
         if params.get("company_id"):
             qs = qs.filter(company_id=params["company_id"])
         if params.get("open_only") == "true":
@@ -111,27 +112,29 @@ class ProblemStatementInteractionAPI(APIView):
             return CustomResponse(message=serializer.errors).get_failure_response()
         # update_or_create + the (statement, user) unique key: repeated or
         # concurrent calls end up as one row.
-        with transaction.atomic():
-            interaction, _ = ProblemStatementInteraction.objects.update_or_create(
-                problem_statement=statement,
-                user_id=JWTUtils.fetch_user_id(request),
-                defaults={"status": serializer.validated_data.get(
-                    "status", ProblemStatementInteraction.Status.TRYING
-                )},
-            )
-        counts = ps_utils.interaction_counts([statement.id]).get(statement.id, {})
+        try:
+            with transaction.atomic():
+                interaction, _ = ProblemStatementInteraction.objects.update_or_create(
+                    problem_statement=statement,
+                    user_id=JWTUtils.fetch_user_id(request),
+                    defaults={"status": serializer.validated_data.get(
+                        "status", ProblemStatementInteraction.Status.TRYING
+                    )},
+                )
+        except IntegrityError:
+            # valid token for a user that no longer exists (FK on user_id)
+            return ps_utils.failure("User not found.", 404)
         return CustomResponse(
             general_message="Interaction saved.",
-            response={"status": interaction.status, "counts": counts},
+            response={"status": interaction.status, "counts": ps_utils.counts_for(statement.id)},
         ).get_success_response()
 
-    @extend_schema(tags=TAGS, description="Remove my interaction.")
+    @extend_schema(tags=TAGS, description="Remove my interaction. Works even if the statement was unpublished.")
     def delete(self, request, statement_id):
-        statement = _published_or_none(statement_id)
-        if not statement:
-            return ps_utils.not_found()
+        # Not limited to published statements: a learner must always be able to
+        # withdraw, otherwise an unpublished-then-republished statement keeps them counted.
         deleted, _ = ProblemStatementInteraction.objects.filter(
-            problem_statement=statement, user_id=JWTUtils.fetch_user_id(request)
+            problem_statement_id=statement_id, user_id=JWTUtils.fetch_user_id(request)
         ).delete()
         if not deleted:
             return ps_utils.failure("You have no interaction with this problem statement.", 404)
@@ -146,7 +149,4 @@ class ProblemStatementInteractionCountsAPI(APIView):
         statement = _published_or_none(statement_id)
         if not statement:
             return ps_utils.not_found()
-        counts = ps_utils.interaction_counts([statement.id]).get(statement.id, {})
-        return CustomResponse(response={
-            s: counts.get(s, 0) for s in ProblemStatementInteraction.Status.values
-        }).get_success_response()
+        return CustomResponse(response=ps_utils.counts_for(statement.id)).get_success_response()
