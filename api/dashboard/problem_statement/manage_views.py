@@ -4,6 +4,7 @@ caller's scope is resolved (``company_scope`` / ``admin_scope``), so a company
 user can never reach another company's rows: every lookup goes through the
 scoped queryset and a miss is a 404.
 """
+from django.db import IntegrityError, transaction
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework.views import APIView
 
@@ -124,17 +125,22 @@ class ListCreateBase(ManageBase):
             company = Company.objects.filter(id=data["company_id"]).first()
             if not company:
                 return ps_utils.failure("Company not found.", 404)
-        statement = ProblemStatement.objects.create(
-            company=company,
-            title=data["title"],
-            description=data["description"],
-            category=data["category"],
-            skills=data.get("skills", []),
-            deadline=data.get("deadline"),
-            status=ProblemStatement.Status.DRAFT,
-            created_by_id=user_id,
-            updated_by_id=user_id,
-        )
+        try:
+            with transaction.atomic():
+                statement = ProblemStatement.objects.create(
+                    company=company,
+                    title=data["title"],
+                    description=data["description"],
+                    category=data["category"],
+                    skills=data.get("skills", []),
+                    deadline=data.get("deadline"),
+                    status=ProblemStatement.Status.DRAFT,
+                    created_by_id=user_id,
+                    updated_by_id=user_id,
+                )
+        except IntegrityError:
+            # valid token for a user that no longer exists (FK on created_by)
+            return ps_utils.failure("User not found.", 404)
         statement = self.fresh(statement.id)
         return CustomResponse(
             general_message="Problem statement created.", response=self.render(statement)
@@ -211,10 +217,9 @@ class InteractionsBase(ManageBase):
             }
             for i in page["queryset"]
         ]
-        counts = ps_utils.interaction_counts([statement.id]).get(statement.id, {})
-        return CustomResponse(response={
-            "counts": {s: counts.get(s, 0) for s in ProblemStatementInteraction.Status.values},
-        }).paginated_response(data=users, pagination=page["pagination"])
+        return CustomResponse(response={"counts": ps_utils.counts_for(statement.id)}).paginated_response(
+            data=users, pagination=page["pagination"]
+        )
 
 
 # --------------------------------------------------------------------------- company
