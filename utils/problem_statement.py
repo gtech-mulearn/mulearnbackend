@@ -36,6 +36,12 @@ def interaction_counts(statement_ids):
     return result
 
 
+def counts_for(statement_id):
+    """Counts for one statement, with every status present (0 when none)."""
+    counts = interaction_counts([statement_id]).get(statement_id, {})
+    return {status: counts.get(status, 0) for status in ProblemStatementInteraction.Status.values}
+
+
 def my_interactions(user_id, statement_ids):
     return dict(
         ProblemStatementInteraction.objects.filter(
