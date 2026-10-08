@@ -1,5 +1,6 @@
 import uuid
 
+from django.conf import settings
 from django.db import models
 
 
@@ -17,10 +18,11 @@ class ProblemStatement(models.Model):
     skills = models.JSONField(default=list)
     deadline = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
-    created_by = models.ForeignKey('User', on_delete=models.CASCADE, db_column='created_by',
+    # Deleting an actor must never delete company content: reassign to the system admin.
+    created_by = models.ForeignKey('User', on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='created_by',
                                    related_name='problem_statements_created')
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_by = models.ForeignKey('User', on_delete=models.CASCADE, db_column='updated_by',
+    updated_by = models.ForeignKey('User', on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='updated_by',
                                    related_name='problem_statements_updated')
     updated_at = models.DateTimeField(auto_now=True)
     published_by = models.ForeignKey('User', on_delete=models.SET_NULL, null=True, blank=True,

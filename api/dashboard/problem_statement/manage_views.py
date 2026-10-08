@@ -9,11 +9,13 @@ from rest_framework.views import APIView
 
 from db.company import Company
 from db.problem_statement import ProblemStatement, ProblemStatementInteraction
-from utils.permission import CustomizePermission, JWTUtils
+from utils import problem_statement as ps_utils
+from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
+from utils.types import RoleType
 from utils.utils import CommonUtils
 
-from . import serializers, services
+from . import serializers
 
 COMPANY = ["Dashboard - Problem Statements (Company)"]
 ADMIN = ["Dashboard - Problem Statements (Admin)"]
@@ -27,6 +29,36 @@ SORT_FIELDS = {
 }
 
 
+def role_guarded(roles):
+    """Class decorator: wraps every HTTP handler of the view in ``role_required(roles)``."""
+    def decorator(cls):
+        for method in ("get", "post", "patch", "delete"):
+            handler = getattr(cls, method, None)
+            if handler:
+                setattr(cls, method, role_required(roles)(handler))
+        return cls
+    return decorator
+
+
+def company_scope(request):
+    """
+    (queryset, company, error). The Company role is enforced by ``role_required``;
+    this adds ownership: the verified company registered by the caller. Co-admins
+    and company mentors are not accepted.
+    """
+    company = Company.objects.filter(
+        company_user_id=JWTUtils.fetch_user_id(request), status="verified"
+    ).first()
+    if not company:
+        return None, None, ps_utils.failure("Verified company profile not found or access denied.", 403)
+    return ps_utils.statement_queryset().filter(company=company), company, None
+
+
+def admin_scope(request):
+    """(queryset, company, error) for an admin (role enforced by ``role_required``): every statement."""
+    return ps_utils.statement_queryset(), None, None
+
+
 class ManageBase(APIView):
     permission_classes = [CustomizePermission]
     scope_fn = None  # set by subclasses
@@ -36,7 +68,7 @@ class ManageBase(APIView):
 
     def render(self, statements, many=False):
         items = list(statements) if many else [statements]
-        ctx = {"counts": services.interaction_counts([s.id for s in items]), "show_audit": True}
+        ctx = {"counts": ps_utils.interaction_counts([s.id for s in items]), "show_audit": True}
         return serializers.ProblemStatementSerializer(
             items if many else statements, many=many, context=ctx
         ).data
@@ -48,8 +80,12 @@ class ManageBase(APIView):
             return None, error
         statement = qs.filter(id=statement_id).first()
         if not statement:
-            return None, services.failure("Problem statement not found.", 404)
+            return None, ps_utils.not_found()
         return statement, None
+
+    def fresh(self, statement_id):
+        """Re-read after a locked write so the response shows the stored values."""
+        return ps_utils.statement_queryset().filter(id=statement_id).first()
 
 
 class ListCreateBase(ManageBase):
@@ -67,10 +103,9 @@ class ListCreateBase(ManageBase):
         page = CommonUtils.get_paginated_queryset(
             qs.order_by("-updated_at"), request, ["title", "category", "company__name"], SORT_FIELDS
         )
-        return CustomResponse(response={
-            "data": self.render(page["queryset"], many=True),
-            "pagination": page["pagination"],
-        }).get_success_response()
+        return CustomResponse().paginated_response(
+            data=self.render(page["queryset"], many=True), pagination=page["pagination"]
+        )
 
     def post(self, request):
         _, company, error = self.scope(request)
@@ -88,7 +123,7 @@ class ListCreateBase(ManageBase):
         if company is None:  # admin: the target company comes from the body
             company = Company.objects.filter(id=data["company_id"]).first()
             if not company:
-                return services.failure("Company not found.", 404)
+                return ps_utils.failure("Company not found.", 404)
         statement = ProblemStatement.objects.create(
             company=company,
             title=data["title"],
@@ -100,7 +135,7 @@ class ListCreateBase(ManageBase):
             created_by_id=user_id,
             updated_by_id=user_id,
         )
-        statement = services.statement_queryset().get(id=statement.id)
+        statement = self.fresh(statement.id)
         return CustomResponse(
             general_message="Problem statement created.", response=self.render(statement)
         ).get_success_response()
@@ -120,9 +155,13 @@ class DetailBase(ManageBase):
         serializer = serializers.ProblemStatementWriteSerializer(data=request.data, partial=True)
         if not serializer.is_valid():
             return CustomResponse(message=serializer.errors).get_failure_response()
-        services.apply_changes(statement, serializer.validated_data, JWTUtils.fetch_user_id(request))
+        error = ps_utils.apply_changes(
+            statement.id, serializer.validated_data, JWTUtils.fetch_user_id(request)
+        )
+        if error:
+            return error
         return CustomResponse(
-            general_message="Problem statement updated.", response=self.render(statement)
+            general_message="Problem statement updated.", response=self.render(self.fresh(statement.id))
         ).get_success_response()
 
     def delete(self, request, statement_id):
@@ -134,18 +173,18 @@ class DetailBase(ManageBase):
 
 
 class StatusActionBase(ManageBase):
-    action = None  # services.publish / services.unpublish
+    mutation = None  # ps_utils.publish / ps_utils.unpublish
     message = ""
 
     def post(self, request, statement_id):
         statement, error = self.find(request, statement_id)
         if error:
             return error
-        error = type(self).action(statement, JWTUtils.fetch_user_id(request))
+        error = type(self).mutation(statement.id, JWTUtils.fetch_user_id(request))
         if error:
             return error
         return CustomResponse(
-            general_message=self.message, response=self.render(statement)
+            general_message=self.message, response=self.render(self.fresh(statement.id))
         ).get_success_response()
 
 
@@ -172,12 +211,10 @@ class InteractionsBase(ManageBase):
             }
             for i in page["queryset"]
         ]
-        counts = services.interaction_counts([statement.id]).get(statement.id, {})
+        counts = ps_utils.interaction_counts([statement.id]).get(statement.id, {})
         return CustomResponse(response={
             "counts": {s: counts.get(s, 0) for s in ProblemStatementInteraction.Status.values},
-            "data": users,
-            "pagination": page["pagination"],
-        }).get_success_response()
+        }).paginated_response(data=users, pagination=page["pagination"])
 
 
 # --------------------------------------------------------------------------- company
@@ -187,8 +224,9 @@ class InteractionsBase(ManageBase):
     post=extend_schema(tags=COMPANY, description="Create a problem statement (saved as Draft).",
                        request=serializers.ProblemStatementWriteSerializer),
 )
+@role_guarded([RoleType.COMPANY.value])
 class CompanyProblemStatementListAPI(ListCreateBase):
-    scope_fn = staticmethod(services.company_scope)
+    scope_fn = staticmethod(company_scope)
 
 
 @extend_schema_view(
@@ -196,27 +234,31 @@ class CompanyProblemStatementListAPI(ListCreateBase):
     delete=extend_schema(tags=COMPANY),
     patch=extend_schema(tags=COMPANY, request=serializers.ProblemStatementWriteSerializer),
 )
+@role_guarded([RoleType.COMPANY.value])
 class CompanyProblemStatementDetailAPI(DetailBase):
-    scope_fn = staticmethod(services.company_scope)
+    scope_fn = staticmethod(company_scope)
 
 
 @extend_schema_view(post=extend_schema(tags=COMPANY, description="Publish a problem statement.", request=None))
+@role_guarded([RoleType.COMPANY.value])
 class CompanyProblemStatementPublishAPI(StatusActionBase):
-    scope_fn = staticmethod(services.company_scope)
-    action = staticmethod(services.publish)
+    scope_fn = staticmethod(company_scope)
+    mutation = staticmethod(ps_utils.publish)
     message = "Problem statement published."
 
 
 @extend_schema_view(post=extend_schema(tags=COMPANY, description="Unpublish a problem statement.", request=None))
+@role_guarded([RoleType.COMPANY.value])
 class CompanyProblemStatementUnpublishAPI(StatusActionBase):
-    scope_fn = staticmethod(services.company_scope)
-    action = staticmethod(services.unpublish)
+    scope_fn = staticmethod(company_scope)
+    mutation = staticmethod(ps_utils.unpublish)
     message = "Problem statement unpublished."
 
 
 @extend_schema_view(get=extend_schema(tags=COMPANY, description="Interaction counts and users."))
+@role_guarded([RoleType.COMPANY.value])
 class CompanyProblemStatementInteractionsAPI(InteractionsBase):
-    scope_fn = staticmethod(services.company_scope)
+    scope_fn = staticmethod(company_scope)
 
 
 # --------------------------------------------------------------------------- admin
@@ -226,8 +268,9 @@ class CompanyProblemStatementInteractionsAPI(InteractionsBase):
     post=extend_schema(tags=ADMIN, description="Create a problem statement for any company.",
                        request=serializers.AdminProblemStatementCreateSerializer),
 )
+@role_guarded([RoleType.ADMIN.value])
 class AdminProblemStatementListAPI(ListCreateBase):
-    scope_fn = staticmethod(services.admin_scope)
+    scope_fn = staticmethod(admin_scope)
 
 
 @extend_schema_view(
@@ -235,33 +278,38 @@ class AdminProblemStatementListAPI(ListCreateBase):
     delete=extend_schema(tags=ADMIN),
     patch=extend_schema(tags=ADMIN, request=serializers.ProblemStatementWriteSerializer),
 )
+@role_guarded([RoleType.ADMIN.value])
 class AdminProblemStatementDetailAPI(DetailBase):
-    scope_fn = staticmethod(services.admin_scope)
+    scope_fn = staticmethod(admin_scope)
 
 
 @extend_schema_view(post=extend_schema(tags=ADMIN, request=None))
+@role_guarded([RoleType.ADMIN.value])
 class AdminProblemStatementPublishAPI(StatusActionBase):
-    scope_fn = staticmethod(services.admin_scope)
-    action = staticmethod(services.publish)
+    scope_fn = staticmethod(admin_scope)
+    mutation = staticmethod(ps_utils.publish)
     message = "Problem statement published."
 
 
 @extend_schema_view(post=extend_schema(tags=ADMIN, request=None))
+@role_guarded([RoleType.ADMIN.value])
 class AdminProblemStatementUnpublishAPI(StatusActionBase):
-    scope_fn = staticmethod(services.admin_scope)
-    action = staticmethod(services.unpublish)
+    scope_fn = staticmethod(admin_scope)
+    mutation = staticmethod(ps_utils.unpublish)
     message = "Problem statement unpublished."
 
 
 @extend_schema_view(get=extend_schema(tags=ADMIN))
+@role_guarded([RoleType.ADMIN.value])
 class AdminProblemStatementInteractionsAPI(InteractionsBase):
-    scope_fn = staticmethod(services.admin_scope)
+    scope_fn = staticmethod(admin_scope)
 
 
 class AdminProblemStatementInteractionDetailAPI(ManageBase):
-    scope_fn = staticmethod(services.admin_scope)
+    scope_fn = staticmethod(admin_scope)
 
     @extend_schema(tags=ADMIN, description="Remove a user's interaction from a problem statement.")
+    @role_required([RoleType.ADMIN.value])
     def delete(self, request, statement_id, user_id):
         statement, error = self.find(request, statement_id)
         if error:
@@ -270,5 +318,5 @@ class AdminProblemStatementInteractionDetailAPI(ManageBase):
             problem_statement=statement, user_id=user_id
         ).delete()
         if not deleted:
-            return services.failure("Interaction not found.", 404)
+            return ps_utils.failure("Interaction not found.", 404)
         return CustomResponse(general_message="Interaction removed.").get_success_response()
