@@ -36,4 +36,5 @@ from db import (  # noqa: F401
     url_shortener,
     user,
     job,
+    problem_statement,
 )
