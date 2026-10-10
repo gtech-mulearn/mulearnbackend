@@ -386,13 +386,25 @@ class DateTimeUtils:
         return date_time.replace(microsecond=0)
 
     @staticmethod
-    def get_start_and_end_of_previous_month():
-        today = DateTimeUtils.get_current_utc_time()
-        start_date = today.replace(day=1)
-        end_date = start_date.replace(
-            day=1, month=start_date.month % 12 + 1
-        ) - timedelta(days=1)
-        return start_date, end_date
+    def get_current_month_range():
+        """Return (start, next_month_start) for the current UTC month.
+
+        Both boundaries are at midnight so no karma is missed at the edges.
+        Use __gte=start and __lt=next_month_start in queries (not __range,
+        which is inclusive on both ends).
+
+        Handles December correctly: rolls the year forward instead of
+        wrapping month to 1 with the same year.
+        """
+        today = datetime.datetime.utcnow().replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        start = today.replace(day=1)
+        if today.month == 12:
+            next_month = start.replace(year=today.year + 1, month=1)
+        else:
+            next_month = start.replace(month=today.month + 1)
+        return start, next_month
 
 
 class _CustomHTTPHandler:
