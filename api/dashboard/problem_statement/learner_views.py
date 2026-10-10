@@ -52,10 +52,15 @@ class ProblemStatementListAPI(APIView):
             qs = qs.filter(company_id=params["company_id"])
         if params.get("open_only") == "true":
             qs = qs.filter(Q(deadline__isnull=True) | Q(deadline__gt=timezone.now()))
+        search_query = params.get("search")
+        # "company__name" can't match muLearn-sourced rows (company is null); searching the
+        # display label shown for them needs an explicit extra condition.
+        extra_q = Q(source=ProblemStatement.Source.MULEARN) if search_query and "mulearn" in search_query.lower() else None
         page = CommonUtils.get_paginated_queryset(
             qs.order_by("-published_at"), request,
             ["title", "description", "category", "company__name"],
             {"published_at": "published_at", "deadline": "deadline", "title": "title"},
+            extra_q=extra_q,
         )
         items = list(page["queryset"])
         ids = [s.id for s in items]

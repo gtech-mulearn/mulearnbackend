@@ -48,6 +48,7 @@ class CommonUtils:
         search_fields,
         sort_fields: dict = None,
         is_pagination: bool = True,
+        extra_q: Q = None,
     ) -> QuerySet:
         """
         Returns a paginated queryset based on the provided parameters.
@@ -58,6 +59,9 @@ class CommonUtils:
             - search_fields (list): The list of fields to search for.
             - sort_fields (dict, optional): A dictionary mapping sort fields. Defaults to None.
             - is_pagination (bool, optional): Flag indicating whether pagination should be applied. Defaults to True.
+            - extra_q (Q, optional): An additional condition OR'd into the search filter, for
+              matching values that aren't backed by a real searchable column (e.g. a display-only
+              label). Ignored unless a search query is present.
 
         Returns:
             - QuerySet or dict: The paginated queryset or a dictionary containing the paginated queryset and pagination information.
@@ -86,6 +90,8 @@ class CommonUtils:
             query = Q()
             for field in search_fields:
                 query |= Q(**{f"{field}__icontains": search_query})
+            if extra_q:
+                query |= extra_q
 
             queryset = queryset.filter(query)
 

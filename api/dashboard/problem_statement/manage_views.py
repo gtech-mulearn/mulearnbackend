@@ -5,6 +5,7 @@ user can never reach another company's rows: every lookup goes through the
 scoped queryset and a miss is a 404.
 """
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework.views import APIView
 
@@ -102,8 +103,13 @@ class ListCreateBase(ManageBase):
             qs = qs.filter(category__iexact=params["category"])
         if params.get("company_id"):
             qs = qs.filter(company_id=params["company_id"])
+        search_query = params.get("search")
+        # "company__name" can't match muLearn-sourced rows (company is null); searching the
+        # display label shown for them needs an explicit extra condition.
+        extra_q = Q(source=ProblemStatement.Source.MULEARN) if search_query and "mulearn" in search_query.lower() else None
         page = CommonUtils.get_paginated_queryset(
-            qs.order_by("-updated_at"), request, ["title", "category", "company__name"], SORT_FIELDS
+            qs.order_by("-updated_at"), request, ["title", "category", "company__name"], SORT_FIELDS,
+            extra_q=extra_q,
         )
         return CustomResponse().paginated_response(
             data=self.render(page["queryset"], many=True), pagination=page["pagination"]
