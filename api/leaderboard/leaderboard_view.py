@@ -12,8 +12,76 @@ from utils.utils import DateTimeUtils
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers as s
 import json
+import logging
+import time
 from django.core.cache import cache
 from mu_celery.leaderboard_cron import _build_students_leaderboard, STUDENTS_ALL_KEY, TTL
+
+logger = logging.getLogger(__name__)
+
+
+def safe_cache_get(key):
+    try:
+        return cache.get(key)
+    except Exception as e:
+        logger.warning(f"Cache get failed for key '{key}': {e}")
+        return None
+
+
+def safe_cache_set(key, value, timeout=None):
+    try:
+        cache.set(key, value, timeout=timeout)
+    except Exception as e:
+        logger.warning(f"Cache set failed for key '{key}': {e}")
+
+
+def get_or_rebuild_leaderboard(cache_key, builder_fn, timeout=TTL):
+    """Retrieves leaderboard from cache, or rebuilds with an atomic lock guard
+
+    to prevent cache stampedes when concurrent requests miss the cache.
+    """
+    # 1. Fast path: check cache
+    cached = safe_cache_get(cache_key)
+    if cached:
+        return json.loads(cached)
+
+    # 2. Try acquiring atomic rebuild lock (auto-expires in 30s to prevent deadlocks)
+    lock_key = f"lock:{cache_key}"
+    acquired_lock = False
+    try:
+        acquired_lock = cache.add(lock_key, "1", timeout=30)
+    except Exception:
+        # If Redis is unavailable or lock fails, fail open and execute builder directly
+        acquired_lock = True
+
+    if acquired_lock:
+        try:
+            # Re-check cache in case another worker just finished writing it
+            cached = safe_cache_get(cache_key)
+            if cached:
+                return json.loads(cached)
+
+            # Only a single worker executes the DB query
+            data = builder_fn()
+            safe_cache_set(cache_key, json.dumps(data), timeout=timeout)
+            return data
+        finally:
+            try:
+                cache.delete(lock_key)
+            except Exception:
+                pass
+    else:
+        # Another worker is already rebuilding this board.
+        # Wait briefly (up to 3 seconds) for it to complete and read from cache.
+        for _ in range(6):
+            time.sleep(0.5)
+            cached = safe_cache_get(cache_key)
+            if cached:
+                return json.loads(cached)
+
+        # Fallback if building took longer or timed out
+        return builder_fn()
+
 
 class StudentsLeaderboard(APIView):
     @extend_schema(
@@ -22,13 +90,7 @@ class StudentsLeaderboard(APIView):
         responses={200: serializers.StudentLeaderboardSerializer},
     )
     def get(self, request):
-        # 1. Try Redis first
-        cached = cache.get(STUDENTS_ALL_KEY)
-        if cached:
-            return CustomResponse(response=json.loads(cached)).get_success_response()
-        # 2. Cache miss — run query live, populate Redis, return result
-        data = _build_students_leaderboard()
-        cache.set(STUDENTS_ALL_KEY, json.dumps(data), timeout=TTL)
+        data = get_or_rebuild_leaderboard(STUDENTS_ALL_KEY, _build_students_leaderboard)
         return CustomResponse(response=data).get_success_response()
 
 
@@ -53,14 +115,7 @@ class StudentsMonthlyLeaderboard(APIView):
         month_label = datetime.datetime.utcnow().strftime("%Y-%m")
         monthly_key = f"leaderboard:students:month:{month_label}"
 
-        # 1. Try Redis first
-        cached = cache.get(monthly_key)
-        if cached:
-            return CustomResponse(response=json.loads(cached)).get_success_response()
-
-        # 2. Cache miss — run query live, push to Redis, return result
-        data = _build_students_monthly_leaderboard()
-        cache.set(monthly_key, json.dumps(data), timeout=TTL)
+        data = get_or_rebuild_leaderboard(monthly_key, _build_students_monthly_leaderboard)
         return CustomResponse(response=data).get_success_response()
 
 
@@ -120,14 +175,7 @@ class CollegeMonthlyLeaderboard(APIView):
         month_label = datetime.datetime.utcnow().strftime("%Y-%m")
         college_monthly_key = f"leaderboard:college:month:{month_label}"
 
-        # 1. Try Redis first
-        cached = cache.get(college_monthly_key)
-        if cached:
-            return CustomResponse(response=json.loads(cached)).get_success_response()
-
-        # 2. Cache miss — run query live, push to Redis, return result
-        data = _build_college_monthly_leaderboard()
-        cache.set(college_monthly_key, json.dumps(data), timeout=TTL)
+        data = get_or_rebuild_leaderboard(college_monthly_key, _build_college_monthly_leaderboard)
         return CustomResponse(response=data).get_success_response()
 
 class WadhwaniCollegeLeaderboard(APIView):

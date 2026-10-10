@@ -14,6 +14,13 @@ STUDENTS_ALL_KEY = "leaderboard:students:all"
 TTL = 60 * 60 * 13  # 13 hours
 
 
+def _get_user_karma(user):
+    try:
+        return user.wallet_user.karma or 0
+    except Exception:
+        return 0
+
+
 def _build_students_leaderboard():
     """Runs the DB query and returns a plain list of dicts."""
     is_student = UserRoleLink.objects.filter(
@@ -48,7 +55,7 @@ def _build_students_leaderboard():
         {
             "muid": u.muid,
             "full_name": u.full_name,
-            "total_karma": u.wallet_user.karma if u.wallet_user else 0,
+            "total_karma": _get_user_karma(u),
             "institution": u.colleges[0].org.title if u.colleges else None,
             "profile_pic": str(u.profile_pic) if u.profile_pic else None,
         }
