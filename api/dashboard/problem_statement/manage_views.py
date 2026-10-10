@@ -114,18 +114,13 @@ class ListCreateBase(ManageBase):
         if error:
             return error
         user_id = JWTUtils.fetch_user_id(request)
-        serializer_class = (
-            serializers.ProblemStatementWriteSerializer
-            if company else serializers.AdminProblemStatementCreateSerializer
-        )
-        serializer = serializer_class(data=request.data)
+        # Admin-authored statements aren't attributed to any company (source=MULEARN);
+        # admin cannot target another company's profile here.
+        serializer = serializers.ProblemStatementWriteSerializer(data=request.data)
         if not serializer.is_valid():
             return CustomResponse(message=serializer.errors).get_failure_response()
         data = serializer.validated_data
-        if company is None:  # admin: the target company comes from the body
-            company = Company.objects.filter(id=data["company_id"]).first()
-            if not company:
-                return ps_utils.failure("Company not found.", 404)
+        source = ProblemStatement.Source.COMPANY if company else ProblemStatement.Source.MULEARN
         try:
             with transaction.atomic():
                 statement = ProblemStatement.objects.create(
@@ -136,13 +131,14 @@ class ListCreateBase(ManageBase):
                     skills=data.get("skills", []),
                     deadline=data.get("deadline"),
                     status=ProblemStatement.Status.DRAFT,
+                    source=source,
                     created_by_id=user_id,
                     updated_by_id=user_id,
                 )
         except IntegrityError:
             # FK failure: the company was deleted meanwhile, or the token's user
             # no longer exists. Anything else goes to the normal error handler.
-            if not Company.objects.filter(id=company.id).exists():
+            if company and not Company.objects.filter(id=company.id).exists():
                 return ps_utils.failure("Company not found.", 404)
             if not User.objects.filter(id=user_id).exists():
                 return ps_utils.failure("User not found.", 404)
@@ -276,8 +272,8 @@ class CompanyProblemStatementInteractionsAPI(InteractionsBase):
 
 @extend_schema_view(
     get=extend_schema(tags=ADMIN, description="List problem statements of all companies."),
-    post=extend_schema(tags=ADMIN, description="Create a problem statement for any company.",
-                       request=serializers.AdminProblemStatementCreateSerializer),
+    post=extend_schema(tags=ADMIN, description="Create a problem statement from muLearn (not attributed to a company).",
+                       request=serializers.ProblemStatementWriteSerializer),
 )
 @role_guarded([RoleType.ADMIN.value])
 class AdminProblemStatementListAPI(ListCreateBase):

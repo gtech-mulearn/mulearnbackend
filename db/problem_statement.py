@@ -10,14 +10,21 @@ class ProblemStatement(models.Model):
         PUBLISHED = "Published"
         UNPUBLISHED = "Unpublished"
 
+    class Source(models.TextChoices):
+        COMPANY = "company"
+        MULEARN = "mulearn"
+
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
-    company = models.ForeignKey('Company', on_delete=models.CASCADE, related_name='problem_statements')
+    # Null for admin-authored (source=MULEARN) statements, which aren't attributed to any company.
+    company = models.ForeignKey('Company', on_delete=models.CASCADE, null=True, blank=True,
+                                related_name='problem_statements')
     title = models.CharField(max_length=150)
     description = models.TextField()
     category = models.CharField(max_length=100)
     skills = models.JSONField(default=list)
     deadline = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    source = models.CharField(max_length=20, choices=Source.choices, default=Source.COMPANY)
     # Deleting an actor must never delete company content: reassign to the system admin.
     created_by = models.ForeignKey('User', on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='created_by',
                                    related_name='problem_statements_created')
