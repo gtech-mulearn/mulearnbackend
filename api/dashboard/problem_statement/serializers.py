@@ -41,13 +41,6 @@ class ProblemStatementWriteSerializer(serializers.ModelSerializer):
         return value
 
 
-class AdminProblemStatementCreateSerializer(ProblemStatementWriteSerializer):
-    company_id = serializers.CharField(max_length=36)
-
-    class Meta(ProblemStatementWriteSerializer.Meta):
-        fields = [*ProblemStatementWriteSerializer.Meta.fields, "company_id"]
-
-
 class InteractionWriteSerializer(serializers.ModelSerializer):
     """`status` is optional; the view falls back to the model default (Trying)."""
 
@@ -88,6 +81,8 @@ class ProblemStatementSerializer(serializers.ModelSerializer):
             self.fields.pop("my_interaction")
 
     def get_company(self, obj):
+        if obj.source == ProblemStatement.Source.MULEARN:
+            return {"id": None, "name": "muLearn", "logo": None}
         return {"id": obj.company_id, "name": obj.company.name, "logo": obj.company.logo}
 
     def get_interaction_counts(self, obj):
