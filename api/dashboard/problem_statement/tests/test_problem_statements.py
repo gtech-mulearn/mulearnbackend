@@ -247,13 +247,34 @@ def test_admin_has_full_control(world):
     assert not ProblemStatement.objects.filter(id=sid).exists()
 
 
-def test_admin_creates_for_any_company(world):
+def test_admin_cannot_target_a_company(world):
     res = world["admin"].post(
         BASE + "admin/", {**PAYLOAD, "company_id": world["company_b"].id}, format="json"
     )
-    assert res.status_code == 200 and res.json()["response"]["company"]["id"] == str(world["company_b"].id)
-    missing = world["admin"].post(BASE + "admin/", PAYLOAD, format="json")
-    assert missing.status_code == 400
+    assert res.status_code == 400  # unknown field is rejected, same as the company-side create
+    assert not ProblemStatement.objects.filter(
+        title=PAYLOAD["title"], company=world["company_b"]
+    ).exists()
+
+
+def test_admin_create_is_mulearn_sourced(world):
+    res = world["admin"].post(BASE + "admin/", PAYLOAD, format="json")
+    assert res.status_code == 200
+    body = res.json()["response"]
+    assert body["company"] == {"id": None, "name": "muLearn", "logo": None}
+
+    sid = body["id"]
+    ps = ProblemStatement.objects.get(id=sid)
+    assert ps.source == ProblemStatement.Source.MULEARN
+    assert ps.company_id is None
+
+    world["admin"].post(f"{BASE}admin/{sid}/publish/")
+
+    admin_row = next(r for r in world["admin"].get(BASE + "admin/").json()["response"]["data"] if r["id"] == sid)
+    assert admin_row["company"] == {"id": None, "name": "muLearn", "logo": None}
+
+    learner_row = next(r for r in world["learner"].get(BASE).json()["response"]["data"] if r["id"] == sid)
+    assert learner_row["company"] == {"id": None, "name": "muLearn", "logo": None}
 
 
 # ----------------------------------------------------------------- P1 regressions
