@@ -67,11 +67,44 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = "mulearnbackend.urls"
-CORS_ALLOW_ALL_ORIGINS = True
+
+# F17: was CORS_ALLOW_ALL_ORIGINS = True, which allowed any origin to drive
+# this API from any visitor's browser.
+#
+# The default below lists the known μLearn dashboard origins so that deploying
+# this change without setting CORS_ALLOWED_ORIGINS does NOT take production
+# down. Set the env var explicitly per environment and treat the default as a
+# safety net, not configuration.
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in decouple_config(
+        "CORS_ALLOWED_ORIGINS",
+        default=(
+            "http://localhost:3000,"
+            "https://dev.mulearn.org,"
+            "https://mulearn-dashboard.vercel.app,"
+            "https://app.mulearn.org"
+        ),
+    ).split(",")
+    if origin.strip()
+]
 
 REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": ("rest_framework.renderers.JSONRenderer",),
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    # F7/F8: no throttling existed anywhere, so the account-existence oracle,
+    # the password-reset mailer and registration were all unbounded.
+    # Applied per-view via `throttle_scope`, NOT globally — a global default
+    # would silently rate-limit authenticated dashboard traffic too.
+    "DEFAULT_THROTTLE_CLASSES": ("rest_framework.throttling.ScopedRateThrottle",),
+    "DEFAULT_THROTTLE_RATES": {
+        # Deliberately generous: a signup form legitimately checks several
+        # addresses, and these must not make real users unusable (brief §29).
+        # The goal is to stop bulk enumeration, not careful use.
+        "email_check": "20/min",
+        "password_reset": "5/hour",
+        "registration": "10/hour",
+    },
 }
 
 SPECTACULAR_SETTINGS = {
@@ -226,6 +259,16 @@ LOGGING = {
             "filename": f"{LOG_PATH}/sql.log",
             "formatter": "verbose",
         },
+        # Migration counters for "Sign in with muLearn": which token format each
+        # request used, and every use of the legacy signup. The legacy paths
+        # are removed only after these show zero use for a week, so they get a
+        # file of their own rather than being buried in root.log.
+        "auth_migration_log": {
+            "level": "INFO",
+            "class": "logging.FileHandler",
+            "filename": f"{LOG_PATH}/auth_migration.log",
+            "formatter": "verbose",
+        },
         "root_log": {
             "level": "DEBUG",
             "class": "logging.FileHandler",
@@ -234,6 +277,16 @@ LOGGING = {
         },
     },
     "loggers": {
+        "mulearn.token_format": {
+            "handlers": ["auth_migration_log"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "mulearn.legacy_signup": {
+            "handlers": ["auth_migration_log"],
+            "level": "INFO",
+            "propagate": False,
+        },
         "django.request": {
             "handlers": ["request_log"],
             "level": "INFO",
@@ -382,4 +435,37 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'mu_celery.learning_circle_aggregates_cron.refresh_learning_circle_aggregates',
         'schedule': crontab(minute='*/15'),
     },
+    # Deletes expired OAuth tokens/codes in authserver via its internal API, so
+    # the oauth2_provider_* tables stay bounded. Minute 50 keeps it clear of
+    # the */15 aggregate jobs.
+    'clear-expired-auth-tokens-cron': {
+        'task': 'mu_celery.auth_token_cleanup_cron.clear_expired_auth_tokens',
+        'schedule': crontab(minute=50),
+    },
+    # Retries "sign out everywhere" for members whose password was reset while
+    # authserver could not revoke every session. Never gives up; see
+    # mu_celery/auth_session_tasks.py.
+    'retry-pending-session-revocations-cron': {
+        'task': 'mu_celery.auth_session_tasks.retry_pending_session_revocations',
+        'schedule': crontab(minute='7,22,37,52'),
+    },
 }
+
+# ============================================================================
+# "Sign in with muLearn" - verifying the new token format
+#
+# This service is a RESOURCE SERVER: it verifies tokens and mints none. It
+# fetches authserver's PUBLIC keys from JWKS, so compromising this service no
+# longer means being able to forge a session for any member - which is exactly
+# what the shared SECRET_KEY allows today, and why a second app cannot safely
+# be added until this lands.
+#
+# Both formats are accepted during the transition. The legacy branch is removed
+# only when the per-format counter shows zero legacy validations for seven
+# consecutive days.
+#
+# Empty issuer is tolerated on purpose: until authserver is deployed there is
+# nothing to fetch, and only legacy tokens exist. A token CLAIMING RS256 with no
+# issuer configured fails closed at verification rather than being waved through.
+OIDC_ISSUER = decouple_config("OIDC_ISSUER", default="")
+OIDC_AUDIENCE = decouple_config("OIDC_AUDIENCE", default="mulearn-api")
