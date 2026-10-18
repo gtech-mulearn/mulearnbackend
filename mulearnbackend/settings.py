@@ -435,6 +435,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'mu_celery.learning_circle_aggregates_cron.refresh_learning_circle_aggregates',
         'schedule': crontab(minute='*/15'),
     },
+    'refresh-leaderboards-cron': {
+        'task': 'mu_celery.leaderboard_cron.refresh_leaderboards',
+        'schedule': crontab(hour='0,12', minute=0),  # 00:00 and 12:00 UTC
+    },
     # Deletes expired OAuth tokens/codes in authserver via its internal API, so
     # the oauth2_provider_* tables stay bounded. Minute 50 keeps it clear of
     # the */15 aggregate jobs.

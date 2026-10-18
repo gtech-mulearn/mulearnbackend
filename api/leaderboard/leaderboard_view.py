@@ -1,10 +1,6 @@
-from django.core.files.storage import FileSystemStorage
 from django.db.models import Sum, F, Value, Count, Q, Prefetch, Subquery, OuterRef, IntegerField
 from django.db.models.functions import Concat, Coalesce
-from django.utils.decorators import method_decorator
-from django.views.decorators.cache import cache_page
 from rest_framework.views import APIView
-from decouple import config as decouple_config
 from . import serializers
 from db.task import TaskList, InterestGroup
 from db.organization import Organization, UserOrganizationLink
@@ -15,6 +11,76 @@ from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers as s
+import json
+import logging
+import time
+from django.core.cache import cache
+from mu_celery.leaderboard_cron import _build_students_leaderboard, STUDENTS_ALL_KEY, TTL
+
+logger = logging.getLogger(__name__)
+
+
+def safe_cache_get(key):
+    try:
+        return cache.get(key)
+    except Exception as e:
+        logger.warning(f"Cache get failed for key '{key}': {e}")
+        return None
+
+
+def safe_cache_set(key, value, timeout=None):
+    try:
+        cache.set(key, value, timeout=timeout)
+    except Exception as e:
+        logger.warning(f"Cache set failed for key '{key}': {e}")
+
+
+def get_or_rebuild_leaderboard(cache_key, builder_fn, timeout=TTL):
+    """Retrieves leaderboard from cache, or rebuilds with an atomic lock guard
+
+    to prevent cache stampedes when concurrent requests miss the cache.
+    """
+    # 1. Fast path: check cache
+    cached = safe_cache_get(cache_key)
+    if cached:
+        return json.loads(cached)
+
+    # 2. Try acquiring atomic rebuild lock (auto-expires in 30s to prevent deadlocks)
+    lock_key = f"lock:{cache_key}"
+    acquired_lock = False
+    try:
+        acquired_lock = cache.add(lock_key, "1", timeout=30)
+    except Exception:
+        # If Redis is unavailable or lock fails, fail open and execute builder directly
+        acquired_lock = True
+
+    if acquired_lock:
+        try:
+            # Re-check cache in case another worker just finished writing it
+            cached = safe_cache_get(cache_key)
+            if cached:
+                return json.loads(cached)
+
+            # Only a single worker executes the DB query
+            data = builder_fn()
+            safe_cache_set(cache_key, json.dumps(data), timeout=timeout)
+            return data
+        finally:
+            try:
+                cache.delete(lock_key)
+            except Exception:
+                pass
+    else:
+        # Another worker is already rebuilding this board.
+        # Wait briefly (up to 3 seconds) for it to complete and read from cache.
+        for _ in range(6):
+            time.sleep(0.5)
+            cached = safe_cache_get(cache_key)
+            if cached:
+                return json.loads(cached)
+
+        # Fallback if building took longer or timed out
+        return builder_fn()
 
 
 class StudentsLeaderboard(APIView):
@@ -24,33 +90,8 @@ class StudentsLeaderboard(APIView):
         responses={200: serializers.StudentLeaderboardSerializer},
     )
     def get(self, request):
-        students_leaderboard = (
-            User.objects.filter(
-                user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-                user_role_link_user__role__title=RoleType.STUDENT.value,
-                exist_in_guild=True,
-            )
-            .distinct()
-            .select_related("wallet_user")
-            .only("muid", "full_name", "wallet_user__karma")
-            .prefetch_related(
-                Prefetch(
-                    "user_organization_link_user",
-                    queryset=UserOrganizationLink.objects.filter(
-                        org__org_type=OrganizationType.COLLEGE.value
-                    ).select_related("org").only("user_id", "org__title"),
-                    to_attr="colleges",
-                )
-            )
-            .order_by("-wallet_user__karma")[:20]
-        )
-        serialized_students_leaderboard = serializers.StudentLeaderboardSerializer(
-            students_leaderboard, many=True
-        )
-
-        return CustomResponse(
-            response=serialized_students_leaderboard.data
-        ).get_success_response()
+        data = get_or_rebuild_leaderboard(STUDENTS_ALL_KEY, _build_students_leaderboard)
+        return CustomResponse(response=data).get_success_response()
 
 
 class StudentsMonthlyLeaderboard(APIView):
@@ -68,53 +109,15 @@ class StudentsMonthlyLeaderboard(APIView):
         )},
     )
     def get(self, request):
-        start_date, end_date = DateTimeUtils.get_start_and_end_of_previous_month()
-        student_monthly_leaderboard = (
-            User.objects.filter(
-                user_role_link_user__role__title=RoleType.STUDENT.value,
-                user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-                exist_in_guild=True,
-            )
-            .annotate(
-                institution=F("user_organization_link_user__org__title"),
-                total_karma=Coalesce(
-                    Sum(
-                        "karma_activity_log_user__karma",
-                        filter=Q(
-                            karma_activity_log_user__created_at__range=(
-                                start_date,
-                                end_date,
-                            )
-                        ),
-                    ),
-                    Value(0),
-                ),
-            )
-            .values(
-                "id",
-                "muid",
-                "full_name",
-                "total_karma",
-                "institution",
-            )
-            .order_by("-total_karma")[:20]
-        )
+        from mu_celery.leaderboard_cron import _build_students_monthly_leaderboard
+        import datetime
 
-        fs = FileSystemStorage()
-        result = []
-        for student in student_monthly_leaderboard:
-            user_id = student.pop("id")
-            path = f"user/profile/{user_id}.png"
-            student["profile_pic"] = (
-                f"{decouple_config('BE_DOMAIN_NAME')}{fs.url(path)}"
-                if fs.exists(path)
-                else None
-            )
-            result.append(student)
+        month_label = datetime.datetime.utcnow().strftime("%Y-%m")
+        monthly_key = f"leaderboard:students:month:{month_label}"
 
-        return CustomResponse(
-            response=result
-        ).get_success_response()
+        data = get_or_rebuild_leaderboard(monthly_key, _build_students_monthly_leaderboard)
+        return CustomResponse(response=data).get_success_response()
+
 
 
 class CollegeLeaderboard(APIView):
@@ -132,32 +135,33 @@ class CollegeLeaderboard(APIView):
         )},
     )
     def get(self, request):
+        # cached_total_karma and cached_member_count are pre-computed columns on
+        # Organization, refreshed every 15 min by refresh_org_aggregates cron.
+        # Reading them avoids a 4-table JOIN + SUM over all college members.
         college_leaderboard = (
-            Organization.objects.filter(
-                org_type=OrganizationType.COLLEGE.value,
-                user_organization_link_org__user__user_role_link_user__role__title=RoleType.STUDENT.value,
-                user_organization_link_org__user__exist_in_guild=True,
-            )
-            .distinct()
-            .annotate(
-                total_students=Count("user_organization_link_org__user"),
-                total_karma=Sum("user_organization_link_org__user__wallet_user__karma"),
-            )
-            .values("id", "code", "title", "total_students", "total_karma")
-            .order_by("-total_karma")[:20]
+            Organization.objects
+            .filter(org_type=OrganizationType.COLLEGE.value)
+            .order_by("-cached_total_karma")
+            .values(
+                "id",
+                "code",
+                "title",
+                total_karma=F("cached_total_karma"),
+                total_students=F("cached_member_count"),
+            )[:20]
         )
 
-        return CustomResponse(response=college_leaderboard).get_success_response()
+        return CustomResponse(response=list(college_leaderboard)).get_success_response()
 
 
 class CollegeMonthlyLeaderboard(APIView):
-    @method_decorator(cache_page(60 * 5))
     @extend_schema(tags=['Leaderboard'], description="Retrieve College Monthly Leaderboard.",
         responses={200: inline_serializer(
             name='LeaderboardCollegeMonthlyItem',
             fields={
                 'id': s.CharField(),
                 'code': s.CharField(),
+                'title': s.CharField(),
                 'total_karma': s.IntegerField(),
                 'students': s.IntegerField(),
             },
@@ -165,39 +169,14 @@ class CollegeMonthlyLeaderboard(APIView):
         )},
     )
     def get(self, request):
-        start_date, end_date = DateTimeUtils.get_start_and_end_of_previous_month()
-        college_monthly_leaderboard = (
-            Organization.objects.filter(
-                org_type=OrganizationType.COLLEGE.value,
-                user_organization_link_org__user__karma_activity_log_user__created_at__range=(
-                    start_date,
-                    end_date,
-                ),
-                user_organization_link_org__user__karma_activity_log_user__appraiser_approved=True,
-            )
-            .annotate(
-                total_karma=Coalesce(
-                    Sum(
-                        "user_organization_link_org__user__karma_activity_log_user__karma",
-                        filter=Q(
-                            user_organization_link_org__user__karma_activity_log_user__created_at__range=(
-                                start_date,
-                                end_date,
-                            )
-                        ),
-                    ),
-                    Value(0),
-                ),
-                students=Count("user_organization_link_org__user", distinct=True),
-                institution=F("title"),
-            )
-            .values("id", "code", "total_karma", "students")
-            .order_by("-total_karma")[:20]
-        )
+        from mu_celery.leaderboard_cron import _build_college_monthly_leaderboard
+        import datetime
 
-        return CustomResponse(
-            response=college_monthly_leaderboard
-        ).get_success_response()
+        month_label = datetime.datetime.utcnow().strftime("%Y-%m")
+        college_monthly_key = f"leaderboard:college:month:{month_label}"
+
+        data = get_or_rebuild_leaderboard(college_monthly_key, _build_college_monthly_leaderboard)
+        return CustomResponse(response=data).get_success_response()
 
 class WadhwaniCollegeLeaderboard(APIView):
     @extend_schema(
