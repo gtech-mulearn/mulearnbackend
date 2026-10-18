@@ -48,6 +48,7 @@ class CommonUtils:
         search_fields,
         sort_fields: dict = None,
         is_pagination: bool = True,
+        extra_q: Q = None,
     ) -> QuerySet:
         """
         Returns a paginated queryset based on the provided parameters.
@@ -58,6 +59,9 @@ class CommonUtils:
             - search_fields (list): The list of fields to search for.
             - sort_fields (dict, optional): A dictionary mapping sort fields. Defaults to None.
             - is_pagination (bool, optional): Flag indicating whether pagination should be applied. Defaults to True.
+            - extra_q (Q, optional): An additional condition OR'd into the search filter, for
+              matching values that aren't backed by a real searchable column (e.g. a display-only
+              label). Ignored unless a search query is present.
 
         Returns:
             - QuerySet or dict: The paginated queryset or a dictionary containing the paginated queryset and pagination information.
@@ -86,6 +90,8 @@ class CommonUtils:
             query = Q()
             for field in search_fields:
                 query |= Q(**{f"{field}__icontains": search_query})
+            if extra_q:
+                query |= extra_q
 
             queryset = queryset.filter(query)
 
@@ -99,12 +105,22 @@ class CommonUtils:
         # GROUP BY, silently corrupting any aggregate() computed there.
         is_grouped = queryset._fields is not None
         if sort_by:
-            sort = sort_by[1:] if sort_by.startswith("-") else sort_by
-            if sort_field_name := sort_fields.get(sort):
-                if sort_by.startswith("-"):
-                    sort_field_name = f"-{sort_field_name}"
+            is_descending = sort_by.startswith("-")
+            sort = sort_by[1:] if is_descending else sort_by
+            if sort_mapped := sort_fields.get(sort):
+                if isinstance(sort_mapped, (list, tuple)):
+                    order_fields = [
+                        f if f.startswith("-") else f"-{f}" if is_descending else f
+                        for f in sort_mapped
+                    ]
+                else:
+                    order_fields = [
+                        sort_mapped if sort_mapped.startswith("-") else f"-{sort_mapped}" if is_descending else sort_mapped
+                    ]
 
-                order_fields = (sort_field_name,) if is_grouped else (sort_field_name, "pk")
+                if not is_grouped and "pk" not in order_fields and "-pk" not in order_fields:
+                    order_fields.append("pk")
+
                 queryset = queryset.order_by(*order_fields)
         elif is_pagination and not is_grouped and not queryset.ordered:
             # Paginator does LIMIT/OFFSET, which MySQL does not guarantee a
