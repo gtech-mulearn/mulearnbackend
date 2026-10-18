@@ -23,6 +23,31 @@ def statement_queryset():
     return ProblemStatement.objects.select_related("company")
 
 
+def filter_source(qs, params):
+    """Apply ``?source=company|mulearn``; any other value is ignored."""
+    source = params.get("source")
+    if source in ProblemStatement.Source.values:
+        qs = qs.filter(source=source)
+    return qs
+
+
+def deadline_passed(statement):
+    return statement.deadline is not None and statement.deadline <= timezone.now()
+
+
+def lock_statement(statement_id):
+    """
+    Lock and re-read the statement row; must run inside ``transaction.atomic``.
+
+    Every write that depends on the statement's status or deadline locks this row
+    first and checks against the value it returns, after any lock wait. Edits,
+    publish/unpublish and delete take the same lock, so the deadline or status
+    can't change between the check and the write, and every writer locks the
+    statement before any interaction row (one lock order, no deadlocks).
+    """
+    return ProblemStatement.objects.select_for_update().filter(id=statement_id).first()
+
+
 def interaction_counts(statement_ids):
     """{statement_id: {status: n}} for the given ids in a single query."""
     rows = (
@@ -74,7 +99,7 @@ def publish(statement_id, user_id):
             return not_found()
         if statement.status == ProblemStatement.Status.PUBLISHED:
             return failure("Problem statement is already published.", 409)
-        if statement.deadline and statement.deadline <= timezone.now():
+        if deadline_passed(statement):
             return failure("Cannot publish a problem statement whose deadline has passed.", 409)
         statement.status = ProblemStatement.Status.PUBLISHED
         statement.published_by_id = user_id
