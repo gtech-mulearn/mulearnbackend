@@ -2,6 +2,7 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from db.problem_statement import ProblemStatement, ProblemStatementInteraction
+from utils.validators import validate_safe_url
 
 MAX_SKILLS = 15
 
@@ -41,12 +42,21 @@ class ProblemStatementWriteSerializer(serializers.ModelSerializer):
         return value
 
 
-class InteractionWriteSerializer(serializers.ModelSerializer):
-    """`status` is optional; the view falls back to the model default (Trying)."""
+class InteractionWriteSerializer(serializers.Serializer):
+    """
+    `status` is optional and only "Trying" is accepted: Submitted is reachable
+    only through the submission endpoint, which also stores the link.
+    """
+    status = serializers.ChoiceField(
+        choices=[ProblemStatementInteraction.Status.TRYING], required=False
+    )
 
-    class Meta:
-        model = ProblemStatementInteraction
-        fields = ["status"]
+
+class SubmissionWriteSerializer(serializers.Serializer):
+    submission_url = serializers.CharField(max_length=500)
+
+    def validate_submission_url(self, value):
+        return validate_safe_url(value)
 
 
 class ProblemStatementSerializer(serializers.ModelSerializer):
@@ -81,7 +91,9 @@ class ProblemStatementSerializer(serializers.ModelSerializer):
             self.fields.pop("my_interaction")
 
     def get_company(self, obj):
-        if obj.source == ProblemStatement.Source.MULEARN:
+        # company is None also guards a source/company mismatch made outside the API
+        # (the DB can't enforce it), so one bad row can't 500 the whole list.
+        if obj.source == ProblemStatement.Source.MULEARN or obj.company is None:
             return {"id": None, "name": "muLearn", "logo": None}
         return {"id": obj.company_id, "name": obj.company.name, "logo": obj.company.logo}
 

@@ -31,11 +31,12 @@ class ProblemStatementListAPI(APIView):
 
     @extend_schema(
         tags=TAGS,
-        description="List published problem statements. Filters: category, skill, company_id, open_only=true.",
+        description="List published problem statements. "
+                    "Filters: category, skill, company_id, source=company|mulearn, open_only=true.",
     )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        qs = _published()
+        qs = ps_utils.filter_source(_published(), request.query_params)
         params = request.query_params
         if params.get("category"):
             qs = qs.filter(category__iexact=params["category"])
@@ -104,60 +105,153 @@ class ProblemStatementInteractionAPI(APIView):
         interaction = ProblemStatementInteraction.objects.filter(
             problem_statement=statement, user_id=JWTUtils.fetch_user_id(request)
         ).first()
-        return CustomResponse(response={
-            "status": interaction.status if interaction else None,
-            "created_at": interaction.created_at if interaction else None,
-            "updated_at": interaction.updated_at if interaction else None,
-        }).get_success_response()
+        return CustomResponse(response=_interaction_payload(interaction)).get_success_response()
 
     @extend_schema(
         tags=TAGS, request=serializers.InteractionWriteSerializer,
-        description="Add or change my interaction (one per problem statement).",
+        description="Mark that I am trying this problem statement (one interaction per statement).",
     )
     def put(self, request, statement_id):
         statement = _published_or_none(statement_id)
         if not statement:
             return ps_utils.not_found()
-        if statement.deadline and statement.deadline <= timezone.now():
+        if ps_utils.deadline_passed(statement):
             return ps_utils.failure("This problem statement is no longer accepting interactions.", 409)
         serializer = serializers.InteractionWriteSerializer(data=request.data)
         if not serializer.is_valid():
             return CustomResponse(message=serializer.errors).get_failure_response()
-        # update_or_create + the (statement, user) unique key: repeated or
-        # concurrent calls end up as one row.
+        # get_or_create, not update_or_create: "Trying" is the only status accepted
+        # here, and an existing Submitted row must not be downgraded (its link would
+        # be left behind on a Trying row). The (statement, user) unique key makes
+        # repeated or concurrent calls end up as one row.
         user_id = JWTUtils.fetch_user_id(request)
         try:
             with transaction.atomic():
-                interaction, _ = ProblemStatementInteraction.objects.update_or_create(
+                interaction, _ = ProblemStatementInteraction.objects.get_or_create(
                     problem_statement=statement,
                     user_id=user_id,
-                    defaults={"status": serializer.validated_data.get(
-                        "status", ProblemStatementInteraction.Status.TRYING
-                    )},
+                    defaults={"status": ProblemStatementInteraction.Status.TRYING},
                 )
         except IntegrityError:
-            # FK failure: the statement was deleted meanwhile, or the token's user
-            # no longer exists. Anything else goes to the normal error handler.
-            if not ProblemStatement.objects.filter(id=statement.id).exists():
-                return ps_utils.not_found()
-            if not User.objects.filter(id=user_id).exists():
-                return ps_utils.failure("User not found.", 404)
+            error = _write_conflict(statement.id, user_id)
+            if error:
+                return error
             raise
         return CustomResponse(
             general_message="Interaction saved.",
             response={"status": interaction.status, "counts": ps_utils.counts_for(statement.id)},
         ).get_success_response()
 
-    @extend_schema(tags=TAGS, description="Remove my interaction. Works even if the statement was unpublished.")
+    @extend_schema(tags=TAGS, description="Remove my interaction. Works even if the statement was unpublished, "
+                                          "except that a submission is locked once the deadline passes.")
     def delete(self, request, statement_id):
         # Not limited to published statements: a learner must always be able to
         # withdraw, otherwise an unpublished-then-republished statement keeps them counted.
-        deleted, _ = ProblemStatementInteraction.objects.filter(
+        interactions = ProblemStatementInteraction.objects.filter(
             problem_statement_id=statement_id, user_id=JWTUtils.fetch_user_id(request)
-        ).delete()
+        )
+        if _submission_locked(statement_id, interactions):
+            return _locked()
+        deleted, _ = interactions.delete()
         if not deleted:
             return ps_utils.failure("You have no interaction with this problem statement.", 404)
         return CustomResponse(general_message="Interaction removed.").get_success_response()
+
+
+class ProblemStatementSubmissionAPI(APIView):
+    """The caller's own submission link. The user always comes from the JWT, never the body."""
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=TAGS, request=serializers.SubmissionWriteSerializer,
+        description="Submit or replace my solution link (https only). Marks me as Submitted; "
+                    "allowed until the deadline.",
+    )
+    def put(self, request, statement_id):
+        statement = _published_or_none(statement_id)
+        if not statement:
+            return ps_utils.not_found()
+        if ps_utils.deadline_passed(statement):
+            return ps_utils.failure("This problem statement is no longer accepting submissions.", 409)
+        serializer = serializers.SubmissionWriteSerializer(data=request.data)
+        if not serializer.is_valid():
+            return CustomResponse(message=serializer.errors).get_failure_response()
+        user_id = JWTUtils.fetch_user_id(request)
+        try:
+            with transaction.atomic():
+                interaction, _ = ProblemStatementInteraction.objects.update_or_create(
+                    problem_statement=statement,
+                    user_id=user_id,
+                    defaults={
+                        "status": ProblemStatementInteraction.Status.SUBMITTED,
+                        "submission_url": serializer.validated_data["submission_url"],
+                        "submitted_at": timezone.now(),
+                    },
+                )
+        except IntegrityError:
+            error = _write_conflict(statement.id, user_id)
+            if error:
+                return error
+            raise
+        return CustomResponse(
+            general_message="Submission saved.",
+            response={**_interaction_payload(interaction), "counts": ps_utils.counts_for(statement.id)},
+        ).get_success_response()
+
+    @extend_schema(tags=TAGS, description="Withdraw my submission (back to Trying). Not allowed after the deadline.")
+    def delete(self, request, statement_id):
+        submissions = ProblemStatementInteraction.objects.filter(
+            problem_statement_id=statement_id,
+            user_id=JWTUtils.fetch_user_id(request),
+            status=ProblemStatementInteraction.Status.SUBMITTED,
+        )
+        if _submission_locked(statement_id, submissions):
+            return _locked()
+        # .update() skips auto_now, so updated_at is set explicitly.
+        updated = submissions.update(
+            status=ProblemStatementInteraction.Status.TRYING,
+            submission_url=None,
+            submitted_at=None,
+            updated_at=timezone.now(),
+        )
+        if not updated:
+            return ps_utils.failure("You have no submission for this problem statement.", 404)
+        return CustomResponse(general_message="Submission withdrawn.").get_success_response()
+
+
+def _interaction_payload(interaction):
+    return {
+        "status": interaction.status if interaction else None,
+        "submission_url": interaction.submission_url if interaction else None,
+        "submitted_at": interaction.submitted_at if interaction else None,
+        "created_at": interaction.created_at if interaction else None,
+        "updated_at": interaction.updated_at if interaction else None,
+    }
+
+
+def _write_conflict(statement_id, user_id):
+    """
+    Response for an IntegrityError on an interaction write, or None to re-raise.
+    FK failure: the statement was deleted meanwhile, or the token's user no longer
+    exists. Anything else goes to the normal error handler.
+    """
+    if not ProblemStatement.objects.filter(id=statement_id).exists():
+        return ps_utils.not_found()
+    if not User.objects.filter(id=user_id).exists():
+        return ps_utils.failure("User not found.", 404)
+    return None
+
+
+def _submission_locked(statement_id, interactions):
+    """A submitted row can't be withdrawn or deleted by the learner after the deadline."""
+    if not interactions.filter(status=ProblemStatementInteraction.Status.SUBMITTED).exists():
+        return False
+    deadline = ProblemStatement.objects.filter(id=statement_id).values_list("deadline", flat=True).first()
+    return deadline is not None and deadline <= timezone.now()
+
+
+def _locked():
+    return ps_utils.failure("The deadline has passed; your submission can no longer be changed.", 409)
 
 
 class ProblemStatementInteractionCountsAPI(APIView):

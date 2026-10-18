@@ -188,13 +188,13 @@ def test_interaction_add_change_remove_and_counts(world):
     assert world["learner"].put(url, {"status": "Trying"}, format="json").status_code == 200  # no duplicate
     assert ProblemStatementInteraction.objects.filter(problem_statement_id=sid).count() == 1
     assert world["learner"].get(url).json()["response"]["status"] == "Trying"
-    assert world["learner"].get(f"{url}counts/").json()["response"] == {"Trying": 1}
+    assert world["learner"].get(f"{url}counts/").json()["response"] == {"Trying": 1, "Submitted": 0}
 
     detail = world["learner"].get(f"{BASE}{sid}/").json()["response"]
-    assert detail["my_interaction"] == "Trying" and detail["interaction_counts"] == {"Trying": 1}
+    assert detail["my_interaction"] == "Trying" and detail["interaction_counts"] == {"Trying": 1, "Submitted": 0}
 
     assert world["learner"].delete(url).status_code == 200
-    assert world["learner"].get(f"{url}counts/").json()["response"] == {"Trying": 0}
+    assert world["learner"].get(f"{url}counts/").json()["response"] == {"Trying": 0, "Submitted": 0}
     assert world["learner"].delete(url).json()["statusCode"] == 404
 
 
@@ -224,7 +224,7 @@ def test_company_sees_interactions_only_for_own_statement(world):
     sid = create_published(world)
     world["learner"].put(f"{BASE}{sid}/interaction/", {"status": "Trying"}, format="json")
     res = world["a"].get(f"{BASE}company/{sid}/interactions/").json()["response"]
-    assert res["counts"] == {"Trying": 1} and res["data"][0]["user_id"] == world["learner_user"].id
+    assert res["counts"] == {"Trying": 1, "Submitted": 0} and res["data"][0]["user_id"] == world["learner_user"].id
     assert world["b"].get(f"{BASE}company/{sid}/interactions/").json()["statusCode"] == 404
 
 
@@ -238,7 +238,7 @@ def test_admin_has_full_control(world):
 
     world["learner"].put(f"{BASE}{sid}/interaction/", {"status": "Trying"}, format="json")
     stats = admin.get(f"{BASE}admin/{sid}/interactions/").json()["response"]
-    assert stats["counts"] == {"Trying": 1}
+    assert stats["counts"] == {"Trying": 1, "Submitted": 0}
     uid = world["learner_user"].id
     assert admin.delete(f"{BASE}admin/{sid}/interactions/{uid}/").status_code == 200
 
@@ -340,3 +340,153 @@ def test_interaction_on_statement_deleted_mid_request_is_not_found(world, monkey
     res = world["learner"].put(f"{BASE}{sid}/interaction/", {"status": "Trying"}, format="json")
     assert res.status_code == 404
     assert res.json()["message"]["general"] == ["Problem statement not found."]
+
+
+# ----------------------------------------------------------------- submissions
+
+LINK = "https://github.com/pstest/solution#readme"
+
+
+def submit(world, sid, url=LINK, client_key="learner"):
+    return world[client_key].put(f"{BASE}{sid}/submission/", {"submission_url": url}, format="json")
+
+
+def expire(sid):
+    ProblemStatement.objects.filter(id=sid).update(deadline=timezone.now() - timedelta(minutes=1))
+
+
+def test_submit_sets_link_status_and_counts(world):
+    sid = create_published(world)
+    res = submit(world, sid)
+    assert res.status_code == 200
+    body = res.json()["response"]
+    assert body["status"] == "Submitted" and body["submission_url"] == LINK
+    assert body["submitted_at"] is not None
+    assert body["counts"] == {"Trying": 0, "Submitted": 1}
+
+    mine = world["learner"].get(f"{BASE}{sid}/interaction/").json()["response"]
+    assert mine["status"] == "Submitted" and mine["submission_url"] == LINK
+    assert world["learner"].get(f"{BASE}{sid}/").json()["response"]["my_interaction"] == "Submitted"
+
+
+def test_resubmit_replaces_link_without_duplicate(world):
+    sid = create_published(world)
+    world["learner"].put(f"{BASE}{sid}/interaction/", {}, format="json")  # Trying first
+    submit(world, sid)
+    assert submit(world, sid, "https://gitlab.com/pstest/v2").status_code == 200
+    rows = ProblemStatementInteraction.objects.filter(problem_statement_id=sid)
+    assert rows.count() == 1 and rows.get().submission_url == "https://gitlab.com/pstest/v2"
+
+
+@pytest.mark.parametrize("url", [
+    "javascript:alert(1)",
+    "data:text/html,<script>alert(1)</script>",
+    "http://github.com/pstest/solution",   # https only
+    "github.com/pstest/solution",          # no scheme
+    "https://",                            # no host
+    "https://user:pass@github.com/x",      # credentials
+    "https://github.com@evil.com/x",
+    "https://evil.com\\@github.com/x",    # backslash
+    "https://github.com/a b",              # whitespace
+    "https://127.0.0.1/x",                 # IP literal
+    "https://2130706433/x",                # integer IP form
+    "https://localhost/x",
+    "https://github.com/" + "a" * 500,     # too long
+])
+def test_submit_rejects_unsafe_or_malformed_links(world, url):
+    sid = create_published(world)
+    assert submit(world, sid, url).status_code == 400
+    assert not ProblemStatementInteraction.objects.filter(problem_statement_id=sid).exists()
+
+
+def test_submit_blocked_on_unpublished_and_after_deadline(world):
+    sid = create_published(world)
+    world["a"].post(f"{BASE}company/{sid}/unpublish/")
+    assert submit(world, sid).json()["statusCode"] == 404
+
+    open_sid = create_published(world)
+    expire(open_sid)
+    assert submit(world, open_sid).json()["statusCode"] == 409
+
+
+def test_withdraw_submission_reverts_to_trying(world):
+    sid = create_published(world)
+    submit(world, sid)
+    assert world["learner"].delete(f"{BASE}{sid}/submission/").status_code == 200
+    row = ProblemStatementInteraction.objects.get(problem_statement_id=sid)
+    assert row.status == "Trying" and row.submission_url is None and row.submitted_at is None
+    assert world["learner"].delete(f"{BASE}{sid}/submission/").json()["statusCode"] == 404
+
+
+def test_submission_locked_after_deadline(world):
+    sid = create_published(world)
+    submit(world, sid)
+    expire(sid)
+    assert world["learner"].delete(f"{BASE}{sid}/submission/").json()["statusCode"] == 409
+    assert world["learner"].delete(f"{BASE}{sid}/interaction/").json()["statusCode"] == 409
+    row = ProblemStatementInteraction.objects.get(problem_statement_id=sid)
+    assert row.status == "Submitted" and row.submission_url == LINK
+
+
+def test_interaction_put_cannot_submit_or_downgrade(world):
+    sid = create_published(world)
+    url = f"{BASE}{sid}/interaction/"
+    assert world["learner"].put(url, {"status": "Submitted"}, format="json").status_code == 400
+    submit(world, sid)
+    res = world["learner"].put(url, {"status": "Trying"}, format="json")
+    assert res.status_code == 200 and res.json()["response"]["status"] == "Submitted"
+    assert ProblemStatementInteraction.objects.get(problem_statement_id=sid).submission_url == LINK
+
+
+def test_submission_ignores_body_user(world):
+    sid = create_published(world)
+    other = make_user("other_sub")
+    res = world["learner"].put(
+        f"{BASE}{sid}/submission/", {"submission_url": LINK, "user_id": other.id}, format="json"
+    )
+    assert res.status_code == 400
+    assert not ProblemStatementInteraction.objects.filter(user_id=other.id).exists()
+
+
+def test_company_sees_submissions_only_for_own_statement(world):
+    sid = create_published(world)
+    submit(world, sid)
+    trier = client_for(make_user("trier"))
+    trier.put(f"{BASE}{sid}/interaction/", {}, format="json")
+
+    res = world["a"].get(f"{BASE}company/{sid}/interactions/", {"status": "Submitted"}).json()["response"]
+    assert res["counts"] == {"Trying": 1, "Submitted": 1}
+    assert [(r["user_id"], r["submission_url"]) for r in res["data"]] == [(world["learner_user"].id, LINK)]
+    assert world["b"].get(f"{BASE}company/{sid}/interactions/").json()["statusCode"] == 404
+
+
+def test_mulearn_statement_submission_visible_to_admin(world):
+    sid = world["admin"].post(BASE + "admin/", PAYLOAD, format="json").json()["response"]["id"]
+    world["admin"].post(f"{BASE}admin/{sid}/publish/")
+    assert submit(world, sid).status_code == 200
+    rows = world["admin"].get(f"{BASE}admin/{sid}/interactions/").json()["response"]["data"]
+    assert rows[0]["submission_url"] == LINK
+
+
+def test_source_filter(world):
+    company_sid = create_published(world)
+    mulearn_sid = world["admin"].post(BASE + "admin/", PAYLOAD, format="json").json()["response"]["id"]
+    world["admin"].post(f"{BASE}admin/{mulearn_sid}/publish/")
+
+    def ids(client, url, source):
+        return {s["id"] for s in client.get(url, {"source": source}).json()["response"]["data"]}
+
+    assert ids(world["learner"], BASE, "mulearn") == {mulearn_sid}
+    assert ids(world["learner"], BASE, "company") == {company_sid}
+    assert ids(world["learner"], BASE, "bogus") == {company_sid, mulearn_sid}  # unknown value ignored
+    assert ids(world["admin"], BASE + "admin/", "mulearn") == {mulearn_sid}
+
+
+def test_company_label_falls_back_when_company_missing(world):
+    """A source/company mismatch made outside the API must not 500 the list."""
+    from api.dashboard.problem_statement.serializers import ProblemStatementSerializer
+
+    sid = create(world["a"]).json()["response"]["id"]
+    ps = ProblemStatement.objects.select_related("company").get(id=sid)
+    ps.company = None  # in memory only; source stays "company"
+    assert ProblemStatementSerializer(ps).data["company"] == {"id": None, "name": "muLearn", "logo": None}

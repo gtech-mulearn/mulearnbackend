@@ -23,6 +23,18 @@ def statement_queryset():
     return ProblemStatement.objects.select_related("company")
 
 
+def filter_source(qs, params):
+    """Apply ``?source=company|mulearn``; any other value is ignored."""
+    source = params.get("source")
+    if source in ProblemStatement.Source.values:
+        qs = qs.filter(source=source)
+    return qs
+
+
+def deadline_passed(statement):
+    return statement.deadline is not None and statement.deadline <= timezone.now()
+
+
 def interaction_counts(statement_ids):
     """{statement_id: {status: n}} for the given ids in a single query."""
     rows = (
@@ -74,7 +86,7 @@ def publish(statement_id, user_id):
             return not_found()
         if statement.status == ProblemStatement.Status.PUBLISHED:
             return failure("Problem statement is already published.", 409)
-        if statement.deadline and statement.deadline <= timezone.now():
+        if deadline_passed(statement):
             return failure("Cannot publish a problem statement whose deadline has passed.", 409)
         statement.status = ProblemStatement.Status.PUBLISHED
         statement.published_by_id = user_id

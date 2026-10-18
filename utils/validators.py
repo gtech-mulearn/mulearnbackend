@@ -1,4 +1,6 @@
+import ipaddress
 import re
+from urllib.parse import urlparse
 
 from django.utils.html import escape, strip_tags
 from rest_framework import serializers
@@ -88,3 +90,51 @@ def validate_safe_filename(value: str) -> None:
 def validate_phone_number(value: str) -> None:
     if not _PHONE_PATTERN.match(value or ""):
         raise SecurityValidationError("Enter a valid phone number.")
+
+
+# https only: these links are rendered back as clickable hrefs, so any other scheme
+# (javascript:, data:, vbscript:, file:, plain http:) is rejected.
+_HTTPS_URL_PATTERN = re.compile(r"^https://", re.IGNORECASE)
+# The last label must be a real TLD. This also rejects the numeric host forms
+# browsers still resolve as IPs (2130706433, 0x7f000001, 127.1) and single-label
+# hosts such as localhost.
+_TLD_PATTERN = re.compile(r"^(?:[a-z]{2,63}|xn--[a-z0-9-]{1,59})$")
+
+
+def validate_safe_url(value: str, max_len: int = 500, example: str = "https://github.com/you/project") -> str:
+    """
+    Validate a user-supplied link that is shown to other users. Returns the trimmed
+    value. Not an SSRF guard: use it only for links the server never fetches.
+    """
+    candidate = (value or "").strip()
+    if not candidate:
+        raise SecurityValidationError("Link is required.")
+    enforce_max_length(candidate, max_len)
+    if _CONTROL_CHAR_PATTERN.search(candidate) or any(c.isspace() for c in candidate):
+        raise SecurityValidationError("Link must not contain spaces or control characters.")
+    if "\\" in candidate:
+        # Browsers read '\' as '/', Python's parser doesn't: the host we check and
+        # the host the browser opens could differ.
+        raise SecurityValidationError("Link must not contain backslashes.")
+    if not _HTTPS_URL_PATTERN.match(candidate):
+        raise SecurityValidationError(f"Enter a full link starting with https:// (e.g. {example}).")
+    try:
+        parsed = urlparse(candidate)
+        hostname = parsed.hostname
+    except ValueError:  # e.g. an unterminated IPv6 literal
+        raise SecurityValidationError("Enter a valid link.")
+    if not hostname:
+        raise SecurityValidationError("Link must include a domain.")
+    if parsed.username is not None or parsed.password is not None:
+        raise SecurityValidationError("Link must not contain credentials.")
+    try:
+        ipaddress.ip_address(hostname)
+        is_ip = True
+    except ValueError:
+        is_ip = False
+    if is_ip:
+        raise SecurityValidationError(f"Link must use a domain name, not an IP address (e.g. {example}).")
+    if "." not in hostname or not _TLD_PATTERN.match(hostname.rsplit(".", 1)[1]):
+        # localhost, intranet names, and numeric IP forms ipaddress doesn't parse (2130706433, 0x7f000001).
+        raise SecurityValidationError(f"Link must use a public domain name (e.g. {example}).")
+    return candidate
