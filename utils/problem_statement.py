@@ -35,6 +35,19 @@ def deadline_passed(statement):
     return statement.deadline is not None and statement.deadline <= timezone.now()
 
 
+def lock_statement(statement_id):
+    """
+    Lock and re-read the statement row; must run inside ``transaction.atomic``.
+
+    Every write that depends on the statement's status or deadline locks this row
+    first and checks against the value it returns, after any lock wait. Edits,
+    publish/unpublish and delete take the same lock, so the deadline or status
+    can't change between the check and the write, and every writer locks the
+    statement before any interaction row (one lock order, no deadlocks).
+    """
+    return ProblemStatement.objects.select_for_update().filter(id=statement_id).first()
+
+
 def interaction_counts(statement_ids):
     """{statement_id: {status: n}} for the given ids in a single query."""
     rows = (

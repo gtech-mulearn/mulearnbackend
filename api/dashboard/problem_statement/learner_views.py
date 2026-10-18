@@ -127,6 +127,9 @@ class ProblemStatementInteractionAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         try:
             with transaction.atomic():
+                statement, error = _lock_open_statement(statement_id, "interactions")
+                if error:
+                    return error
                 interaction, _ = ProblemStatementInteraction.objects.get_or_create(
                     problem_statement=statement,
                     user_id=user_id,
@@ -150,9 +153,10 @@ class ProblemStatementInteractionAPI(APIView):
         interactions = ProblemStatementInteraction.objects.filter(
             problem_statement_id=statement_id, user_id=JWTUtils.fetch_user_id(request)
         )
-        if _submission_locked(statement_id, interactions):
-            return _locked()
-        deleted, _ = interactions.delete()
+        with transaction.atomic():
+            if _submission_locked(statement_id, interactions):
+                return _locked()
+            deleted, _ = interactions.delete()
         if not deleted:
             return ps_utils.failure("You have no interaction with this problem statement.", 404)
         return CustomResponse(general_message="Interaction removed.").get_success_response()
@@ -179,6 +183,9 @@ class ProblemStatementSubmissionAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         try:
             with transaction.atomic():
+                statement, error = _lock_open_statement(statement_id, "submissions")
+                if error:
+                    return error
                 interaction, _ = ProblemStatementInteraction.objects.update_or_create(
                     problem_statement=statement,
                     user_id=user_id,
@@ -205,15 +212,16 @@ class ProblemStatementSubmissionAPI(APIView):
             user_id=JWTUtils.fetch_user_id(request),
             status=ProblemStatementInteraction.Status.SUBMITTED,
         )
-        if _submission_locked(statement_id, submissions):
-            return _locked()
-        # .update() skips auto_now, so updated_at is set explicitly.
-        updated = submissions.update(
-            status=ProblemStatementInteraction.Status.TRYING,
-            submission_url=None,
-            submitted_at=None,
-            updated_at=timezone.now(),
-        )
+        with transaction.atomic():
+            if _submission_locked(statement_id, submissions):
+                return _locked()
+            # .update() skips auto_now, so updated_at is set explicitly.
+            updated = submissions.update(
+                status=ProblemStatementInteraction.Status.TRYING,
+                submission_url=None,
+                submitted_at=None,
+                updated_at=timezone.now(),
+            )
         if not updated:
             return ps_utils.failure("You have no submission for this problem statement.", 404)
         return CustomResponse(general_message="Submission withdrawn.").get_success_response()
@@ -242,12 +250,30 @@ def _write_conflict(statement_id, user_id):
     return None
 
 
+def _lock_open_statement(statement_id, what):
+    """
+    (statement, error) inside a transaction: lock the statement, then re-check that
+    it is still published and open. The view's earlier check is only a fast path;
+    this one runs after any lock wait, so a write can't land after the deadline.
+    """
+    statement = ps_utils.lock_statement(statement_id)
+    if not statement or statement.status != ProblemStatement.Status.PUBLISHED:
+        return None, ps_utils.not_found()
+    if ps_utils.deadline_passed(statement):
+        return None, ps_utils.failure(f"This problem statement is no longer accepting {what}.", 409)
+    return statement, None
+
+
 def _submission_locked(statement_id, interactions):
-    """A submitted row can't be withdrawn or deleted by the learner after the deadline."""
-    if not interactions.filter(status=ProblemStatementInteraction.Status.SUBMITTED).exists():
+    """
+    A submitted row can't be withdrawn or deleted by the learner after the deadline.
+    Must run inside the transaction that then writes: it locks the statement, so the
+    deadline can't change and the check can't go stale before the write.
+    """
+    statement = ps_utils.lock_statement(statement_id)
+    if not statement or not ps_utils.deadline_passed(statement):
         return False
-    deadline = ProblemStatement.objects.filter(id=statement_id).values_list("deadline", flat=True).first()
-    return deadline is not None and deadline <= timezone.now()
+    return interactions.filter(status=ProblemStatementInteraction.Status.SUBMITTED).exists()
 
 
 def _locked():

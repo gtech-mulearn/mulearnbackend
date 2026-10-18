@@ -183,7 +183,12 @@ class DetailBase(ManageBase):
         statement, error = self.find(request, statement_id)
         if error:
             return error
-        statement.delete()  # interactions go with it via the FK cascade
+        with transaction.atomic():
+            # Lock the statement before the cascade touches interaction rows: learner
+            # writes lock statement -> interaction, so the same order here avoids deadlocks.
+            statement = ps_utils.lock_statement(statement.id)
+            if statement:
+                statement.delete()  # interactions go with it via the FK cascade
         return CustomResponse(general_message="Problem statement deleted.").get_success_response()
 
 

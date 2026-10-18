@@ -42,7 +42,7 @@ class ProblemStatementWriteSerializer(serializers.ModelSerializer):
         return value
 
 
-class InteractionWriteSerializer(serializers.Serializer):
+class InteractionWriteSerializer(serializers.ModelSerializer):
     """
     `status` is optional and only "Trying" is accepted: Submitted is reachable
     only through the submission endpoint, which also stores the link.
@@ -51,9 +51,20 @@ class InteractionWriteSerializer(serializers.Serializer):
         choices=[ProblemStatementInteraction.Status.TRYING], required=False
     )
 
+    class Meta:
+        model = ProblemStatementInteraction
+        fields = ["status"]
 
-class SubmissionWriteSerializer(serializers.Serializer):
-    submission_url = serializers.CharField(max_length=500)
+
+class SubmissionWriteSerializer(serializers.ModelSerializer):
+    """The link is required here even though the column is nullable (it is cleared on withdrawal)."""
+
+    class Meta:
+        model = ProblemStatementInteraction
+        fields = ["submission_url"]
+        extra_kwargs = {
+            "submission_url": {"required": True, "allow_null": False, "allow_blank": False},
+        }
 
     def validate_submission_url(self, value):
         return validate_safe_url(value)

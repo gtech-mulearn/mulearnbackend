@@ -12,6 +12,9 @@ from utils.validators import validate_safe_url
     "https://sub.domain.co.in:8443/path",
     "HTTPS://GitHub.com/User/Repo",
     "https://xn--80ak6aa92e.com/",                     # punycode TLD-style host
+    "https://münchen.de/projekt",                      # unicode domain, checked as xn--mnchen-3ya.de
+    "https://my-project.vercel.app/",
+    "https://github.com:443/user/repo",
     "  https://github.com/user/repo  ",                # trimmed
 ])
 def test_accepts(url):
@@ -50,6 +53,15 @@ def test_accepts(url):
     "https://intranet/",
     "https://github.com./",
     "https://github.com/" + "a" * 500,
+    "https://example.com:abc/",                         # non-numeric port
+    "https://example.com:0/",
+    "https://example.com:99999/",                       # out-of-range port
+    "https://a..com/",                                  # empty label
+    "https://.github.com/",
+    "https://-github.com/",
+    "https://github-.com/",
+    "https://git_hub.com/",
+    "https://" + "a" * 64 + ".com/",                    # label over 63 chars
 ])
 def test_rejects(url):
     with pytest.raises(ValidationError):

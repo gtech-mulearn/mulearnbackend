@@ -490,3 +490,58 @@ def test_company_label_falls_back_when_company_missing(world):
     ps = ProblemStatement.objects.select_related("company").get(id=sid)
     ps.company = None  # in memory only; source stays "company"
     assert ProblemStatementSerializer(ps).data["company"] == {"id": None, "name": "muLearn", "logo": None}
+
+
+# ----------------------------------------------------------------- deadline race (check under lock)
+
+def _stale_open_copy(monkeypatch, sid):
+    """
+    Simulate the race: the view's early, unlocked check sees the statement as it was
+    (published, deadline open), while the row has changed by the time the write runs.
+    """
+    from api.dashboard.problem_statement import learner_views
+
+    stale = ProblemStatement.objects.get(id=sid)
+    monkeypatch.setattr(learner_views, "_published_or_none", lambda _id: stale)
+
+
+def test_submit_rechecks_deadline_under_lock(world, monkeypatch):
+    sid = create_published(world)
+    _stale_open_copy(monkeypatch, sid)
+    expire(sid)  # deadline passed while the request was waiting
+    assert submit(world, sid).json()["statusCode"] == 409
+    assert not ProblemStatementInteraction.objects.filter(problem_statement_id=sid).exists()
+
+
+def test_resubmit_rechecks_deadline_under_lock(world, monkeypatch):
+    sid = create_published(world)
+    submit(world, sid)
+    _stale_open_copy(monkeypatch, sid)
+    expire(sid)
+    assert submit(world, sid, "https://gitlab.com/pstest/too-late").json()["statusCode"] == 409
+    row = ProblemStatementInteraction.objects.get(problem_statement_id=sid)
+    assert row.submission_url == LINK  # the closed submission was not replaced
+
+
+def test_submit_rechecks_published_under_lock(world, monkeypatch):
+    sid = create_published(world)
+    _stale_open_copy(monkeypatch, sid)
+    world["a"].post(f"{BASE}company/{sid}/unpublish/")  # unpublished while the request was waiting
+    assert submit(world, sid).json()["statusCode"] == 404
+    assert not ProblemStatementInteraction.objects.filter(problem_statement_id=sid).exists()
+
+
+def test_interaction_put_rechecks_deadline_under_lock(world, monkeypatch):
+    sid = create_published(world)
+    _stale_open_copy(monkeypatch, sid)
+    expire(sid)
+    assert world["learner"].put(f"{BASE}{sid}/interaction/", {}, format="json").json()["statusCode"] == 409
+    assert not ProblemStatementInteraction.objects.filter(problem_statement_id=sid).exists()
+
+
+def test_statement_delete_still_cascades(world):
+    sid = create_published(world)
+    submit(world, sid)
+    assert world["a"].delete(f"{BASE}company/{sid}/").status_code == 200
+    assert not ProblemStatement.objects.filter(id=sid).exists()
+    assert not ProblemStatementInteraction.objects.filter(problem_statement_id=sid).exists()

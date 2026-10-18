@@ -99,6 +99,8 @@ _HTTPS_URL_PATTERN = re.compile(r"^https://", re.IGNORECASE)
 # browsers still resolve as IPs (2130706433, 0x7f000001, 127.1) and single-label
 # hosts such as localhost.
 _TLD_PATTERN = re.compile(r"^(?:[a-z]{2,63}|xn--[a-z0-9-]{1,59})$")
+# One DNS label (LDH rule): 1-63 letters, digits or hyphens, not starting or ending with '-'.
+_HOST_LABEL_PATTERN = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
 
 
 def validate_safe_url(value: str, max_len: int = 500, example: str = "https://github.com/you/project") -> str:
@@ -128,13 +130,28 @@ def validate_safe_url(value: str, max_len: int = 500, example: str = "https://gi
     if parsed.username is not None or parsed.password is not None:
         raise SecurityValidationError("Link must not contain credentials.")
     try:
+        port = parsed.port  # ValueError for a non-numeric or out-of-range port
+    except ValueError:
+        port = 0
+    if port == 0:
+        raise SecurityValidationError("Link has an invalid port.")
+    try:
         ipaddress.ip_address(hostname)
         is_ip = True
     except ValueError:
         is_ip = False
     if is_ip:
         raise SecurityValidationError(f"Link must use a domain name, not an IP address (e.g. {example}).")
-    if "." not in hostname or not _TLD_PATTERN.match(hostname.rsplit(".", 1)[1]):
+    try:
+        # Unicode domains (münchen.de) are checked in their ASCII form (xn--...),
+        # which is what browsers resolve. Empty labels (a..com) fail here.
+        ascii_host = hostname.encode("idna").decode("ascii")
+    except UnicodeError:
+        raise SecurityValidationError("Link has an invalid domain name.")
+    labels = ascii_host.split(".")
+    if len(ascii_host) > 253 or not all(_HOST_LABEL_PATTERN.match(label) for label in labels):
+        raise SecurityValidationError("Link has an invalid domain name.")
+    if len(labels) < 2 or not _TLD_PATTERN.match(labels[-1]):
         # localhost, intranet names, and numeric IP forms ipaddress doesn't parse (2130706433, 0x7f000001).
         raise SecurityValidationError(f"Link must use a public domain name (e.g. {example}).")
     return candidate
