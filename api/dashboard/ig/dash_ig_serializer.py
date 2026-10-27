@@ -171,12 +171,16 @@ class InterestGroupSerializer(serializers.ModelSerializer):
     status = serializers.ChoiceField(
         choices=["active", "inactive", "requested", "cancelled", "rejected"]
     )
+    impact_projects = ImpactProjectSerializer(
+        source="impact_project_ig",
+        many=True,
+        read_only=True
+    )
     media_content_links = serializers.SerializerMethodField()
     is_sponsored = serializers.SerializerMethodField()
     sponsor_company_name = serializers.SerializerMethodField()
     sponsor_company_logo = serializers.SerializerMethodField()
     community_partners = serializers.SerializerMethodField()
-    impact_projects = ImpactProjectSerializer(source="impact_project_ig", many=True, read_only=True)
 
     class Meta:
         model = InterestGroup

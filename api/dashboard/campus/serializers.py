@@ -63,9 +63,7 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
 
     def get_total_karma(self, obj):
         from db.task import Wallet
-        users_in_org = obj.user_organization_link_org.filter(
-            verified=True
-        ).values_list('user', flat=True)
+        users_in_org = obj.user_organization_link_org.filter(verified=True).values_list('user', flat=True)
         return Wallet.objects.filter(
             user__in=users_in_org
         ).aggregate(total_karma=Sum("karma"))["total_karma"] or 0
@@ -321,23 +319,21 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
         last_month = DateTimeUtils.get_current_utc_time() - timedelta(
             weeks=26
         )  # 6months
-        verified_user_ids = obj.org.user_organization_link_org.filter(
-            verified=True
-        ).values_list("user_id", flat=True).distinct()
+        member_user_ids = obj.org.user_organization_link_org.filter(verified=True).values_list("user_id", flat=True).distinct()
         return Wallet.objects.filter(
-            user_id__in=verified_user_ids,
+            user_id__in=member_user_ids,
             karma_last_updated_at__gte=last_month,
         ).count()
 
     def get_total_karma(self, obj):
         from db.task import Wallet
 
-        verified_user_ids = obj.org.user_organization_link_org.filter(
+        member_user_ids = obj.org.user_organization_link_org.filter(
             org__org_type=OrganizationType.COLLEGE.value,
             verified=True,
         ).values_list("user_id", flat=True).distinct()
         return Wallet.objects.filter(
-            user_id__in=verified_user_ids
+            user_id__in=member_user_ids
         ).aggregate(total_karma=Sum("karma"))["total_karma"] or 0
 
     def get_rank(self, obj):
@@ -369,12 +365,10 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
             return position + 1
     def get_karma_last_7_days(self, obj):
         seven_days_ago = DateTimeUtils.get_current_utc_time() - timedelta(days=7)
-        verified_user_ids = obj.org.user_organization_link_org.filter(
-            verified=True
-        ).values_list("user_id", flat=True).distinct()
+        member_user_ids = obj.org.user_organization_link_org.filter(verified=True).values_list("user_id", flat=True).distinct()
         return (
             KarmaActivityLog.objects.filter(
-                user_id__in=verified_user_ids,
+                user_id__in=member_user_ids,
                 created_at__gte=seven_days_ago,
                 appraiser_approved=True,
             ).aggregate(total_karma=Sum("karma"))["total_karma"] or 0
@@ -382,12 +376,10 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
 
     def get_karma_last_30_days(self, obj):
         thirty_days_ago = DateTimeUtils.get_current_utc_time() - timedelta(days=30)
-        verified_user_ids = obj.org.user_organization_link_org.filter(
-            verified=True
-        ).values_list("user_id", flat=True).distinct()
+        member_user_ids = obj.org.user_organization_link_org.filter(verified=True).values_list("user_id", flat=True).distinct()
         return (
             KarmaActivityLog.objects.filter(
-                user_id__in=verified_user_ids,
+                user_id__in=member_user_ids,
                 created_at__gte=thirty_days_ago,
                 appraiser_approved=True,
             ).aggregate(total_karma=Sum("karma"))["total_karma"] or 0
@@ -455,13 +447,11 @@ class WeeklyKarmaSerializer(serializers.ModelSerializer):
         today = DateTimeUtils.get_current_utc_time().date()
         date_range = [today - timedelta(days=i) for i in range(7)]
 
-        verified_user_ids = instance.user_organization_link_org.filter(
-            verified=True
-        ).values_list("user_id", flat=True).distinct()
+        member_user_ids = instance.user_organization_link_org.filter(verified=True).values_list("user_id", flat=True).distinct()
 
         for date in date_range:
             karma_logs = KarmaActivityLog.objects.filter(
-                user_id__in=verified_user_ids,
+                user_id__in=member_user_ids,
                 created_at__date=date,
                 appraiser_approved=True,
             ).aggregate(
@@ -631,6 +621,8 @@ class CampusIGChapterListSerializer(serializers.ModelSerializer):
     ig_name = serializers.ReadOnlyField(source="ig.name")
     ig_code = serializers.ReadOnlyField(source="ig.code")
     ig_icon = serializers.ReadOnlyField(source="ig.icon")
+    ig_cover_image = serializers.ReadOnlyField(source="ig.cover_image")
+    ig_icon_image = serializers.ReadOnlyField(source="ig.icon_image")
     lead_id = serializers.ReadOnlyField(source="lead.id")
     lead_name = serializers.SerializerMethodField()
     campus_ig_member_count = serializers.SerializerMethodField()
@@ -643,6 +635,8 @@ class CampusIGChapterListSerializer(serializers.ModelSerializer):
             "ig_name",
             "ig_code",
             "ig_icon",
+            "ig_cover_image",
+            "ig_icon_image",
             "lead_id",
             "lead_name",
             "description",
@@ -866,10 +860,12 @@ class CampusLCMemberSerializer(serializers.ModelSerializer):
 
 class CampusIGListSerializer(serializers.ModelSerializer):
     campus_member_count = serializers.IntegerField(default=0)
+    cover_image = serializers.ReadOnlyField()
+    icon_image = serializers.ReadOnlyField()
 
     class Meta:
         model = InterestGroup
-        fields = ["id", "name", "code", "campus_member_count"]
+        fields = ["id", "name", "code", "campus_member_count", "cover_image", "icon_image"]
 
 class CampusIGMemberSerializer(serializers.ModelSerializer):
     user_id = serializers.CharField(source="user.id")
