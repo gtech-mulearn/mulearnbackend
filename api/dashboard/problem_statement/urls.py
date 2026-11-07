@@ -23,4 +23,5 @@ urlpatterns = [
     path("<str:statement_id>/interaction/", learner_views.ProblemStatementInteractionAPI.as_view()),
     path("<str:statement_id>/interaction/counts/",
          learner_views.ProblemStatementInteractionCountsAPI.as_view()),
+    path("<str:statement_id>/submission/", learner_views.ProblemStatementSubmissionAPI.as_view()),
 ]
