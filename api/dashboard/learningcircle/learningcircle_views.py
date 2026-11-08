@@ -19,7 +19,9 @@ from db.task import KarmaActivityLog
 from db.user import UserDomains, User
 from django.conf import settings
 from api.notification.broadcast_utils import BroadcastUtils
-from api.notification.notifications_utils import NotificationUtils
+from api.notification.service import NotificationService
+from api.notification.types import NotificationType
+from api.notification.audience import Audience
 from utils.karma import add_karma, remove_karma
 from utils.utils import CommonUtils
 from utils.permission import CustomizePermission, JWTUtils, OptionalAuthentication
@@ -311,7 +313,19 @@ class LearningCircleMeetingView(APIView):
                 general_message="Circle Meeting creation failed",
                 response=serializer.errors,
             ).get_failure_response()
-        serializer.save()
+        with transaction.atomic():
+            serializer.save()
+            NotificationService.dispatch(
+                notif_type = NotificationType.LC_MEETING_SCHEDULED,
+                audience   = Audience.lc_members(circle_id),
+                context    = {
+                    "lc_name":   circle.title,
+                    "meet_time": serializer.instance.meet_time.strftime("%d %b %Y, %I:%M %p"),
+                },
+                entity_id  = str(circle_id),
+                occurrence = str(serializer.instance.id),
+                actor_id   = user_id,
+            )
         return CustomResponse(
             general_message="Circle Meeting created successfully"
         ).get_success_response()
@@ -642,6 +656,7 @@ class LearningCircleAttendeeReportAPI(APIView):
             user_id,
             Lc.ATTENDEE_REPORT_SUBMIT_HASHTAG.value,
             Lc.ATTENDEE_REPORT_SUBMIT_KARMA.value,
+            removed_by=user_id,
         )
         return CustomResponse(
             general_message="You have successfully deleted the report"
@@ -810,6 +825,7 @@ class LearningCircleReportAPI(APIView):
                     karma_user_ids,
                     Lc.LC_REPORT_HASHTAG.value,
                     Lc.LC_REPORT_KARMA.value,
+                    removed_by=user_id,
                 )
         return CustomResponse(
             general_message="The report has been deleted successfully"
@@ -1265,27 +1281,30 @@ class CircleJoinAPI(APIView):
                 general_message="You have a previous link to this circle that prevents joining. Contact the circle lead."
             ).get_failure_response()
 
-        UserCircleLink.objects.create(
-            id=str(uuid.uuid4()),
-            user_id=user_id,
-            circle=circle,
-            lead=False,
-            is_invited=False,
-            accepted=None,
-            accepted_at=None,
-        )
+        requester_name = User.objects.filter(id=user_id).values_list("full_name", flat=True).first() or ""
 
-        # Notify the circle lead about the new join request
-        lead_link = UserCircleLink.objects.filter(circle=circle, lead=True).select_related('user').first()
-        requester = User.objects.filter(id=user_id).first()
-        if lead_link and requester:
-            NotificationUtils.insert_notification(
-                user=lead_link.user,
-                title="Member Request",
-                description=f"{requester.full_name} has requested to join your learning circle '{circle.title}'",
-                button="View",
-                url=f"{settings.FR_DOMAIN_NAME}/dashboard/learningcircle/{circle_id}/",
-                created_by=requester,
+        # Pre-generate the link ID so we can use it as the occurrence discriminator
+        # in the dedupe_key. This ensures that if two different users each request to
+        # join the same LC, the lead gets a separate notification for each one.
+        link_id = str(uuid.uuid4())
+
+        with transaction.atomic():
+            UserCircleLink.objects.create(
+                id=link_id,
+                user_id=user_id,
+                circle=circle,
+                lead=False,
+                is_invited=False,
+                accepted=None,
+                accepted_at=None,
+            )
+            NotificationService.dispatch(
+                notif_type = NotificationType.LC_JOIN_REQUEST,
+                audience   = Audience.lc_lead(circle_id),
+                context    = {"lc_name": circle.title, "requester_name": requester_name},
+                entity_id  = str(circle_id),
+                occurrence = link_id,   # unique per request — prevents cross-user deduplication
+                actor_id   = user_id,
             )
 
         return CustomResponse(
@@ -1358,37 +1377,34 @@ class CircleJoinAPI(APIView):
                 general_message="Invalid action. Must be 'accept' or 'reject'"
             ).get_failure_response()
 
-        lead_user = User.objects.filter(id=user_id).first()
-        requester_user = link.user
-
         if action == "accept":
-            link.accepted = True
-            link.accepted_at = DateTimeUtils.get_current_utc_time()
-            link.save()
-            # Notify the requester that they have been accepted
-            NotificationUtils.insert_notification(
-                user=requester_user,
-                title="Request Approved",
-                description=f"Your request to join the learning circle '{circle.title}' has been approved.",
-                button="View",
-                url=f"{settings.FR_DOMAIN_NAME}/dashboard/learningcircle/{circle_id}/",
-                created_by=lead_user,
-            )
+            with transaction.atomic():
+                link.accepted = True
+                link.accepted_at = DateTimeUtils.get_current_utc_time()
+                link.save()
+                NotificationService.dispatch(
+                    notif_type = NotificationType.LC_JOIN_APPROVED,
+                    audience   = Audience.user(str(link.user_id)),
+                    context    = {"lc_name": circle.title},
+                    entity_id  = str(circle_id),
+                    occurrence = str(link.id),   # unique per join request instance
+                    actor_id   = user_id,
+                )
             return CustomResponse(
                 general_message="Join request accepted. User is now a member."
             ).get_success_response()
 
-        link.accepted = False
-        link.save()
-        # Notify the requester that they have been rejected
-        NotificationUtils.insert_notification(
-            user=requester_user,
-            title="Request Rejected",
-            description=f"Your request to join the learning circle '{circle.title}' has been rejected.",
-            button=None,
-            url=None,
-            created_by=lead_user,
-        )
+        with transaction.atomic():
+            link.accepted = False
+            link.save()
+            NotificationService.dispatch(
+                notif_type = NotificationType.LC_JOIN_REJECTED,
+                audience   = Audience.user(str(link.user_id)),
+                context    = {"lc_name": circle.title},
+                entity_id  = str(circle_id),
+                occurrence = str(link.id),   # unique per join request instance
+                actor_id   = user_id,
+            )
         return CustomResponse(
             general_message="Join request rejected."
         ).get_success_response()
@@ -1502,15 +1518,25 @@ class CircleInviteAPI(APIView):
                 general_message="An invitation is already pending for this user"
             ).get_failure_response()
 
-        UserCircleLink.objects.create(
-            id=str(uuid.uuid4()),
-            user_id=target_user_id,
-            circle=circle,
-            lead=invite_as_lead,
-            is_invited=True,
-            invited_by_id=user_id,
-            accepted=None,
-        )
+        link_id = str(uuid.uuid4())
+        with transaction.atomic():
+            UserCircleLink.objects.create(
+                id=link_id,
+                user_id=target_user_id,
+                circle=circle,
+                lead=invite_as_lead,
+                is_invited=True,
+                invited_by_id=user_id,
+                accepted=None,
+            )
+            NotificationService.dispatch(
+                notif_type = NotificationType.LC_INVITE,
+                audience   = Audience.user(str(target_user_id)),
+                context    = {"lc_name": circle.title},
+                entity_id  = str(circle_id),
+                occurrence = link_id,   # unique per invite — allows re-invite after decline
+                actor_id   = user_id,
+            )
         return CustomResponse(general_message="Invitation sent successfully").get_success_response()
 
 
@@ -1740,7 +1766,18 @@ class CircleLeaveAPI(APIView):
                     general_message="You are the lead. Transfer leadership before leaving."
                 ).get_failure_response()
 
+            left_link_id = str(link.id)
             link.delete()
+
+            leaver_name = User.objects.filter(id=user_id).values_list("full_name", flat=True).first() or ""
+            NotificationService.dispatch(
+                notif_type = NotificationType.LC_MEMBER_LEFT,
+                audience   = Audience.lc_lead(circle_id),
+                context    = {"lc_name": circle.title, "member_name": leaver_name},
+                entity_id  = str(circle_id),
+                occurrence = left_link_id,   # unique per leave — the deleted link's own id
+                actor_id   = user_id,
+            )
 
         return CustomResponse(
             general_message="You have left the circle successfully"
@@ -1817,18 +1854,16 @@ class CircleMemberRemoveAPI(APIView):
                     general_message="Transfer leadership before removing the circle lead"
                 ).get_failure_response()
 
+            removed_link_id = str(link.id)
             link.delete()
 
-        # Notify the removed user
-        lead_user = User.objects.filter(id=user_id).first()
-        if lead_user:
-            NotificationUtils.insert_notification(
-                user=target_user,
-                title="Removed from Circle",
-                description=f"You have been removed from the learning circle '{circle.title}'.",
-                button=None,
-                url=None,
-                created_by=lead_user,
+            NotificationService.dispatch(
+                notif_type = NotificationType.LC_MEMBER_REMOVED,
+                audience   = Audience.user(str(target_user_id)),
+                context    = {"lc_name": circle.title},
+                entity_id  = str(circle_id),
+                occurrence = removed_link_id,   # unique per removal — the deleted link's own id
+                actor_id   = user_id,
             )
 
         return CustomResponse(

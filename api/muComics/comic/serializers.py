@@ -46,22 +46,27 @@ class ContributorSerializer(serializers.ModelSerializer):
 # ─────────────────────────────────────────────────────────────────────────────
 
 class ComicListItemSerializer(serializers.ModelSerializer):
-    created_by = MinimalUserSerializer(read_only=True)
-    genres     = serializers.SerializerMethodField()
- 
+    created_by   = MinimalUserSerializer(read_only=True)
+    genres       = serializers.SerializerMethodField()
+    contributors = serializers.SerializerMethodField()
+
     class Meta:
         model = Comic
         fields = [
             'id', 'title', 'slug', 'cover_image_key',
             'status', 'like_count', 'comment_count', 'bookmark_count',
             'published_at', 'created_by', 'created_at',
-            'genres',
+            'genres', 'contributors',
         ]
 
     def get_genres(self, obj):
         links = obj.genre_links.all()
         active_genres = [link.genre for link in links if link.genre.is_active]
         return MinimalGenreSerializer(active_genres, many=True).data
+
+    def get_contributors(self, obj):
+        links = obj.contributor_links.select_related('user').all()
+        return ContributorSerializer(links, many=True).data
 
 
 
@@ -106,11 +111,13 @@ class ComicWriteSerializer(serializers.ModelSerializer):
     """
     Input serializer for POST /comics/ and PATCH /comics/<id>/.
     The caller never sends: slug, status, *_count, published_at, or audit fields.
+    On create, `creator_muid` specifies the comic owner (resolved to a User).
     """
+    creator_muid = serializers.CharField(required=False, write_only=True)
 
     class Meta:
         model = Comic
-        fields = ['title', 'description', 'cover_image_key']
+        fields = ['title', 'description', 'cover_image_key', 'creator_muid']
         extra_kwargs = {
             'title': {
                 'required': True,
@@ -133,6 +140,18 @@ class ComicWriteSerializer(serializers.ModelSerializer):
         if not value or not value.strip():
             raise serializers.ValidationError('Title must not be blank.')
         return value.strip()
+
+    def validate_creator_muid(self, value):
+        try:
+            return User.objects.get(muid=value, is_active=True)
+        except User.DoesNotExist:
+            raise serializers.ValidationError(f'No active user with muid "{value}" found.')
+
+    def validate(self, attrs):
+        # creator_muid is required on create only
+        if not self.instance and 'creator_muid' not in attrs:
+            raise serializers.ValidationError({'creator_muid': 'This field is required when creating a comic.'})
+        return attrs
 
     def _generate_unique_slug(self, title):
         """
@@ -159,18 +178,20 @@ class ComicWriteSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         user_id = self.context['user_id']
+        creator = validated_data.pop('creator_muid')  # User object from validate_creator_muid
         now     = timezone.now()
 
         validated_data['id']           = str(uuid.uuid4())
         validated_data['slug']         = self._generate_unique_slug(validated_data['title'])
-        validated_data['created_by_id'] = user_id
-        validated_data['updated_by_id'] = user_id
+        validated_data['created_by_id'] = creator.id   # specified creator, not the admin
+        validated_data['updated_by_id'] = user_id      # admin who performed the action
         validated_data['created_at']   = now
         validated_data['updated_at']   = now
         return Comic.objects.create(**validated_data)
 
     def update(self, instance, validated_data):
         user_id = self.context['user_id']
+        validated_data.pop('creator_muid', None)  # creator is not changeable after creation
         now     = timezone.now()
 
         # Re-generate slug only when title changes

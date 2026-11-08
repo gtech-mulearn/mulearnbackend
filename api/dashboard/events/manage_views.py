@@ -4,6 +4,7 @@ Organiser / co-owner access required for all endpoints.
 """
 import uuid
 from django.utils import timezone
+from django.db.models import Q, Case, When, Value, CharField
 from django.db import transaction
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.views import APIView
@@ -14,8 +15,9 @@ from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.utils import CommonUtils
 from utils.types import RoleType
-from api.notification.notifications_utils import NotificationUtils
-from api.notification.broadcast_utils import BroadcastUtils
+from api.notification.service import NotificationService
+from api.notification.types import NotificationType
+from api.notification.audience import Audience
 
 from .serializers import (
     EventListItemSerializer,
@@ -29,6 +31,7 @@ from .serializers import (
     get_live_events,
 )
 from .event_logger import log_event_action
+from .admin_views import _notify_next_approver
 from .event_image_utils import delete_event_media_paths, delete_stale_event_media, merge_event_write_payload
 from .publish_policy import (
     CAMPUS_AUTHORITY_ROLES,
@@ -53,13 +56,16 @@ MANAGEABLE_ROLES = {
     RoleType.MENTOR.value,
 }
 
+# PRD §15 — rate/abuse limit on company event creation volume.
+MAX_OPEN_COMPANY_EVENTS = 5
+
 
 def _can_create_event(roles):
     """True if user holds at least one event-creation role."""
     if MANAGEABLE_ROLES.intersection(set(roles)):
         return True
-    # Dynamic IG/campus roles: e.g. "WEBDEV IGLead", "WEBDEV CampusLead"
-    return any(r.endswith(' IGLead') or r.endswith(' CampusLead') for r in roles)
+    # Dynamic IG/campus roles: e.g. "WEBDEV IGLead", "WEBDEV CampusIGLead"
+    return any(r.endswith(' IGLead') or r.endswith(' CampusIGLead') for r in roles)
 
 
 def _get_manageable_events():
@@ -69,16 +75,30 @@ def _get_manageable_events():
 
 
 def _get_user_company_org_ids(user_id, roles):
-    """Returns a list of Organization IDs for companies where the user is a creator or mentor."""
-    company_org_ids = set()
+    """
+    Returns a list of Organization IDs for companies where the user is the
+    owner, an accepted co-admin delegate, or a COMPANY_MENTOR. Ownership/
+    co-admin membership is checked directly rather than gated on
+    RoleType.COMPANY, since only the true registering owner is ever granted
+    that platform role — an accepted CompanyAdminLink delegate never is.
+    """
+    from db.company import Company, CompanyAdminLink
+    from django.db.models import Q
 
-    if RoleType.COMPANY.value in roles:
-        from db.company import Company
-        company = Company.objects.filter(company_user_id=user_id, status="verified").first()
-        if company and company.org:
+    company_org_ids = set()
+    for company in Company.objects.filter(
+        Q(company_user_id=user_id) | Q(
+            admin_links__user_id=user_id,
+            admin_links__status=CompanyAdminLink.Status.ACCEPTED,
+        ),
+        status="verified",
+    ).distinct():
+        if company.org_id:
             company_org_ids.add(company.org_id)
 
     if RoleType.MENTOR.value in roles:
+        # This part remains as is, for mentors creating events for their company.
+        # The check above handles owners and delegates.
         from db.user import MentorScopeGrant
         from api.dashboard.mentor.dash_mentor_helper import get_scope_ids
         company_org_ids |= get_scope_ids(user_id, MentorScopeGrant.ScopeType.COMPANY_MENTOR)
@@ -233,7 +253,6 @@ class ManageEventListCreateAPI(APIView):
                 ).values_list('event_id', flat=True)
             )
 
-            from django.db.models import Q
             q_filter = Q(created_by_id=user_id) | Q(id__in=co_owned_event_ids)
             
             # Allow Company and Company Mentors to see all events for their company
@@ -255,8 +274,7 @@ class ManageEventListCreateAPI(APIView):
                     # A mentor can hold multiple tiers simultaneously (grants
                     # are additive) — union the pending-approval queues for
                     # every tier they actually hold, instead of picking one
-                    # arbitrary tier via .first().
-                    from django.db.models import Q as _Q
+                    # arbitrary tier via .first().                    from django.db.models import Q as _Q
                     from db.user import MentorScopeGrant
                     from db.task import UserIgLink
                     from api.dashboard.mentor.dash_mentor_helper import get_scope_ids
@@ -270,16 +288,16 @@ class ManageEventListCreateAPI(APIView):
                         ).values_list('ig_id', flat=True)
                     )
 
-                    scope_filter = _Q()
+                    scope_filter = Q()
                     has_any_scope = False
                     if campus_org_ids:
-                        scope_filter |= _Q(
+                        scope_filter |= Q(
                             organiser_type=Event.OrganiserType.CAMPUS_IG,
                             scope_org_id__in=campus_org_ids,
                         )
                         has_any_scope = True
                     if user_ig_ids:
-                        scope_filter |= _Q(
+                        scope_filter |= Q(
                             organiser_type=Event.OrganiserType.GLOBAL_IG,
                             organiser_ig_id__in=user_ig_ids,
                         )
@@ -301,9 +319,24 @@ class ManageEventListCreateAPI(APIView):
             else:
                 events = events.filter(status=status)
 
+        # Map admin events to 'mulearn' so ?search=mulearn finds them.
+        events = events.annotate(
+            organiser_display_name=Case(
+                When(organiser_type=Event.OrganiserType.ADMIN, then=Value('mulearn')),
+                default=Value(''),
+                output_field=CharField(),
+            )
+        )
+
         paginated = CommonUtils.get_paginated_queryset(
             events.select_related('category', 'organiser_ig', 'organiser_org'), request,
-            search_fields=['title', 'venue_city'],
+            search_fields=[
+                'title',
+                'venue_city',
+                'organiser_org__title',
+                'organiser_ig__name',
+                'organiser_display_name',
+            ],
             sort_fields={'created_at': 'created_at', 'start_datetime': 'start_datetime'},
         )
         serializer = EventListItemSerializer(
@@ -704,19 +737,17 @@ class ManageEventDetailAPI(APIView):
             changes={'Status': {'from': old_status, 'to': Event.Status.CANCELLED}},
         )
 
-        # Broadcast cancellation to all users who expressed interest.
-        # url is intentionally None — the event page is no longer valid.
-        actor = User.objects.filter(id=user_id).first()
-        if actor:
-            BroadcastUtils.create_broadcast(
-                title='Event Cancelled',
-                description=f'The event "{event.title}" has been cancelled.',
-                target_type='event_interest',
-                target_id=event.id,
-                created_by=actor,
-                expiry_key='event_cancelled',
-                url=None,
-            )
+        # Notify everyone who expressed interest ("I'm Going") in the event.
+        # No url is set — the event page is no longer valid after cancellation
+        # (same reasoning the old broadcast used url=None for).
+        NotificationService.dispatch(
+            notif_type = NotificationType.EVENT_CANCELLED,
+            audience   = Audience.event_interested(str(event.id)),
+            context    = {"event_title": event.title},
+            entity_id  = str(event.id),
+            occurrence = "1",
+            actor_id   = user_id,
+        )
 
         # Nullify the deep-link URL on all existing broadcast and direct
         # notifications that pointed to this event's page. The page is no
@@ -813,50 +844,21 @@ class ManageEventPublishAPI(APIView):
 
         # Announce the event when it goes live without a review stage. A
         # backdated event resolves straight to COMPLETED and is not announced.
+        # Fans out via the same Audience.event_scope() resolution the 4
+        # review-endpoint publish paths already use — the actor (self-
+        # publisher) is auto-excluded by dispatch().
         if should_announce(new_status):
-            actor = User.objects.filter(id=user_id).first()
-            if actor:
-                if event.organiser_type == Event.OrganiserType.CAMPUS_IG:
-                    BroadcastUtils.create_broadcast(
-                        title='New Event Published',
-                        description=f'A new Campus IG event "{event.title}" is now live!',
-                        target_type='campus_ig',
-                        target_id=event.organiser_ci_id or event.scope_ci_id,
-                        created_by=actor,
-                        expiry_key='event_published',
-                        url=f'/events/{event.id}/',
-                    )
-                elif event.organiser_type == Event.OrganiserType.GLOBAL_IG:
-                    BroadcastUtils.create_broadcast(
-                        title='New Event Published',
-                        description=f'A new Interest Group event "{event.title}" is now live!',
-                        target_type='interest_group',
-                        target_id=event.organiser_ig_id,
-                        created_by=actor,
-                        expiry_key='event_published',
-                        url=f'/events/{event.id}/',
-                    )
-                elif event.organiser_type == Event.OrganiserType.CAMPUS:
-                    BroadcastUtils.create_broadcast(
-                        title='New Event Published',
-                        description=f'A new Campus event "{event.title}" is now live!',
-                        target_type='campus',
-                        target_id=event.scope_org_id,
-                        created_by=actor,
-                        expiry_key='event_published',
-                        url=f'/events/{event.id}/',
-                    )
-                else:
-                    # ADMIN / COMPANY / fallback → global broadcast
-                    BroadcastUtils.create_broadcast(
-                        title='New Event Published',
-                        description=f'A new event "{event.title}" is now available!',
-                        target_type='global',
-                        target_id=None,
-                        created_by=actor,
-                        expiry_key='event_published',
-                        url=f'/events/{event.id}/',
-                    )
+            # Timestamp-based occurrence — see AdminEventApproveAPI for why.
+            NotificationService.dispatch(
+                notif_type = NotificationType.EVENT_PUBLISHED,
+                audience   = Audience.event_scope(str(event.id)),
+                context    = {"event_title": event.title},
+                entity_id  = str(event.id),
+                occurrence = f"{event.id}:{event.updated_at.isoformat()}",
+                actor_id   = user_id,
+            )
+        else:
+            _notify_next_approver(event, user_id)
 
         return CustomResponse(
             general_message=f'Event submitted: status is now "{new_status}".',
@@ -961,6 +963,15 @@ class ManageEventCoOwnerAPI(APIView):
             },
         )
 
+        NotificationService.dispatch(
+            notif_type = NotificationType.EVENT_CO_OWNER_ADDED,
+            audience   = Audience.user(str(target_user_id)),
+            context    = {"event_title": event.title},
+            entity_id  = str(event.id),
+            occurrence = str(conn.id),
+            actor_id   = user_id,
+        )
+
         return CustomResponse(
             general_message='Co-owner added.',
             response=EventCoOwnerSerializer(conn).data,
@@ -995,8 +1006,10 @@ class ManageEventCoOwnerRemoveAPI(APIView):
         if not conn:
             return CustomResponse(general_message='Co-owner record not found.').get_failure_response()
 
-        # Resolve co-owner's name before deleting
+        # Resolve co-owner's name and id before deleting
         co_owner_user = User.objects.filter(id=conn.entity_id).first()
+        removed_user_id = conn.entity_id
+        removed_conn_id = conn.id
         conn.delete()
 
         log_event_action(
@@ -1004,10 +1017,19 @@ class ManageEventCoOwnerRemoveAPI(APIView):
             user_id=user_id,
             action=EventLog.Action.CO_OWNER_REMOVED,
             details={
-                'name': co_owner_user.full_name if co_owner_user else conn.entity_id,
+                'name': co_owner_user.full_name if co_owner_user else removed_user_id,
                 'muid': co_owner_user.muid if co_owner_user else None,
-                'user_id': conn.entity_id,
+                'user_id': removed_user_id,
             },
+        )
+
+        NotificationService.dispatch(
+            notif_type = NotificationType.EVENT_CO_OWNER_REMOVED,
+            audience   = Audience.user(str(removed_user_id)),
+            context    = {"event_title": event.title},
+            entity_id  = str(event.id),
+            occurrence = str(removed_conn_id),
+            actor_id   = user_id,
         )
         return CustomResponse(general_message='Co-owner removed.').get_success_response()
 
@@ -1078,6 +1100,19 @@ def _get_entity_leads(entity_type, entity_id):
                 ],
             ).select_related('user').distinct()
             leads = [link.user for link in lead_links]
+        elif entity_type == EventConnection.EntityType.COLLAB_CAMPUS_IG:
+            # entity_id is the InterestGroup id; the campus-lead-for-this-IG
+            # role is the dynamic "{ig.code} CampusLead" string (same
+            # convention _caller_can_respond checks below).
+            from db.task import InterestGroup
+            from db.user import UserRoleLink
+            ig = InterestGroup.objects.filter(id=entity_id).first()
+            if ig:
+                role_title = RoleType.IG_CAMPUS_LEAD_ROLE(ig.code)
+                lead_links = UserRoleLink.objects.filter(
+                    role__title=role_title, is_active=True
+                ).select_related('user')
+                leads = [link.user for link in lead_links]
     except Exception:
         pass
     return leads
@@ -1111,7 +1146,7 @@ def _caller_can_respond(conn, user_id, roles):
         from db.task import InterestGroup
         ig = InterestGroup.objects.filter(id=conn.entity_id).first()
         if ig:
-            return f'{ig.code} CampusLead' in roles
+            return f'{ig.code} CampusIGLead' in roles
     return False
 
 
@@ -1220,6 +1255,16 @@ class ManageEventCollaboratorAPI(APIView):
             },
         )
 
+        leads = _get_entity_leads(entity_type, entity_id)
+        NotificationService.dispatch(
+            notif_type = NotificationType.EVENT_COLLAB_INVITED,
+            audience   = Audience.users([str(u.id) for u in leads]),
+            context    = {"event_title": event.title, "entity_name": entity_name},
+            entity_id  = str(event.id),
+            occurrence = str(conn.id),
+            actor_id   = user_id,
+        )
+
         return CustomResponse(
             general_message='Collaborator invited.',
             response=EventCollaboratorSerializer(conn).data,
@@ -1254,6 +1299,9 @@ class ManageEventCollaboratorRemoveAPI(APIView):
             return CustomResponse(general_message='Collaborator not found.').get_failure_response()
 
         entity_name = _resolve_entity_name(conn.entity_type, conn.entity_id)
+        removed_entity_type = conn.entity_type
+        removed_entity_id = conn.entity_id
+        removed_conn_id = conn.id
         conn.delete()
 
         log_event_action(
@@ -1261,10 +1309,20 @@ class ManageEventCollaboratorRemoveAPI(APIView):
             user_id=user_id,
             action=EventLog.Action.COLLAB_REMOVED,
             details={
-                'entity_type': conn.entity_type,
-                'entity_id':   conn.entity_id,
+                'entity_type': removed_entity_type,
+                'entity_id':   removed_entity_id,
                 'name':        entity_name,
             },
+        )
+
+        leads = _get_entity_leads(removed_entity_type, removed_entity_id)
+        NotificationService.dispatch(
+            notif_type = NotificationType.EVENT_COLLAB_REMOVED,
+            audience   = Audience.users([str(u.id) for u in leads]),
+            context    = {"event_title": event.title, "entity_name": entity_name},
+            entity_id  = str(event.id),
+            occurrence = str(removed_conn_id),
+            actor_id   = user_id,
         )
         return CustomResponse(general_message='Collaborator removed.').get_success_response()
 
@@ -1324,6 +1382,16 @@ class ManageEventCollaboratorAcceptAPI(APIView):
                 'name':        entity_name,
             },
         )
+
+        if conn.created_by_id:
+            NotificationService.dispatch(
+                notif_type = NotificationType.EVENT_COLLAB_ACCEPTED,
+                audience   = Audience.user(str(conn.created_by_id)),
+                context    = {"event_title": event.title, "entity_name": entity_name},
+                entity_id  = str(event.id),
+                occurrence = str(conn.id),
+                actor_id   = user_id,
+            )
 
         return CustomResponse(
             general_message='Collaboration accepted.',
@@ -1390,6 +1458,16 @@ class ManageEventCollaboratorRejectAPI(APIView):
             },
         )
 
+        if conn.created_by_id:
+            NotificationService.dispatch(
+                notif_type = NotificationType.EVENT_COLLAB_REJECTED,
+                audience   = Audience.user(str(conn.created_by_id)),
+                context    = {"event_title": event.title, "entity_name": entity_name, "reason": conn.rejection_reason or ""},
+                entity_id  = str(event.id),
+                occurrence = str(conn.id),
+                actor_id   = user_id,
+            )
+
         return CustomResponse(
             general_message='Collaboration invite rejected.',
             response=EventCollaboratorSerializer(conn).data,
@@ -1444,7 +1522,7 @@ class MyEventInvitesAPI(APIView):
             if role.endswith(' IGLead'):
                 ig_code = role.replace(' IGLead', '')
                 auth_ig_codes.append(ig_code)
-            if role.endswith(' CampusLead') or role == RoleType.CAMPUS_LEAD.value:
+            if role.endswith(' CampusIGLead') or role == RoleType.CAMPUS_LEAD.value:
                 has_any_campus_lead_role = True
 
         from db.task import InterestGroup
@@ -1470,7 +1548,7 @@ class MyEventInvitesAPI(APIView):
             # Scope campus-IG invites to the specific IGs the user is a campus
             # lead for (entity_id on a campus_ig invite is the InterestGroup id).
             campus_ig_codes = [
-                r.replace(' CampusLead', '') for r in roles if r.endswith(' CampusLead')
+                r.replace(' CampusIGLead', '') for r in roles if r.endswith(' CampusIGLead')
             ]
             if campus_ig_codes:
                 ci_ig_ids = InterestGroup.objects.filter(
@@ -1514,6 +1592,29 @@ class MyEventInvitesAPI(APIView):
 # MENTOR APPROVAL ENDPOINTS
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _is_company_owner_or_delegate(user_id, org_id):
+    """
+    Checks if a user is the owner of a company or an accepted delegate,
+    given the company's organization ID.
+    """
+    if not org_id:
+        return False
+    
+    from db.company import Company, CompanyAdminLink
+    company = Company.objects.filter(org_id=org_id, status="verified").first()
+    if not company:
+        return False
+    
+    if company.company_user_id == user_id:
+        return True
+    
+    return CompanyAdminLink.objects.filter(
+        company=company,
+        user_id=user_id,
+        status='Accepted'
+    ).exists()
+
+
 class MentorEventApproveAPI(APIView):
     authentication_classes = [CustomizePermission]
 
@@ -1555,6 +1656,8 @@ class MentorEventApproveAPI(APIView):
             if not is_assigned:
                 return CustomResponse(general_message='You are not a mentor for this Interest Group.').get_failure_response()
             new_status = Event.Status.PENDING_APPROVAL
+        elif event.organiser_type == Event.OrganiserType.COMPANY:
+            return CustomResponse(general_message='Company events are approved by the company owner via the company approval endpoint, not here.').get_failure_response()
         else:
             return CustomResponse(general_message='Event type not supported for mentor approval.').get_failure_response()
 
@@ -1564,18 +1667,29 @@ class MentorEventApproveAPI(APIView):
 
         log_event_action(event=event, user_id=user_id, action=EventLog.Action.APPROVED, changes={'Status': {'from': Event.Status.PENDING_MENTOR_APPROVAL, 'to': new_status}})
 
+        from db.mentor import SystemActionLog
+        SystemActionLog.objects.create(
+            action_type=SystemActionLog.ActionType.IG_EVENT_APPROVE,
+            actor_user_id=user_id,
+            subject_user_id=event.created_by_id,
+            entity_name='events',
+            entity_id=event.id,
+            old_data={'status': Event.Status.PENDING_MENTOR_APPROVAL},
+            new_data={'status': new_status},
+        )
+
         # Notify the event creator
-        actor = User.objects.filter(id=user_id).first()
-        creator = event.created_by
-        if creator and actor:
-            NotificationUtils.insert_notification(
-                user=creator,
-                title='Event Approved by Mentor',
-                description=f'Your event "{event.title}" has been approved by a mentor.',
-                button=None,
-                url=None,
-                created_by=actor,
+        if event.created_by_id:
+            NotificationService.dispatch(
+                notif_type = NotificationType.EVENT_APPROVAL_STAGE,
+                audience   = Audience.user(str(event.created_by_id)),
+                context    = {"event_title": event.title, "approver_role": "mentor"},
+                entity_id  = str(event.id),
+                occurrence = f"{event.id}:{event.updated_at.isoformat()}",
+                actor_id   = user_id,
             )
+
+        _notify_next_approver(event, user_id)
 
         return CustomResponse(general_message='Event approved successfully.').get_success_response()
 
@@ -1619,6 +1733,8 @@ class MentorEventRejectAPI(APIView):
             ).exists()
             if not is_assigned:
                 return CustomResponse(general_message='You are not a mentor for this Interest Group.').get_failure_response()
+        elif event.organiser_type == Event.OrganiserType.COMPANY:
+            return CustomResponse(general_message='Company events are rejected by the company owner via the company approval endpoint, not here.').get_failure_response()
 
         reason = request.data.get('reason', '').strip()
         if not reason:
@@ -1631,17 +1747,158 @@ class MentorEventRejectAPI(APIView):
 
         log_event_action(event=event, user_id=user_id, action=EventLog.Action.REJECTED, changes={'Status': {'from': old_status, 'to': Event.Status.REJECTED}}, details={'reason': reason})
 
+        from db.mentor import SystemActionLog
+        SystemActionLog.objects.create(
+            action_type=SystemActionLog.ActionType.IG_EVENT_REJECT,
+            actor_user_id=user_id,
+            subject_user_id=event.created_by_id,
+            entity_name='events',
+            entity_id=event.id,
+            old_data={'status': old_status},
+            new_data={'status': Event.Status.REJECTED},
+            remarks=reason,
+        )
+
         # Notify the event creator
-        actor = User.objects.filter(id=user_id).first()
-        creator = event.created_by
-        if creator and actor:
-            NotificationUtils.insert_notification(
-                user=creator,
-                title='Event Rejected by Mentor',
-                description=f'Your event "{event.title}" was rejected by a mentor. Reason: {reason}',
-                button=None,
-                url=None,
-                created_by=actor,
+        if event.created_by_id:
+            NotificationService.dispatch(
+                notif_type = NotificationType.EVENT_REJECTED,
+                audience   = Audience.user(str(event.created_by_id)),
+                context    = {"event_title": event.title, "approver_role": "mentor", "reason": reason},
+                entity_id  = str(event.id),
+                occurrence = f"{event.id}:{event.updated_at.isoformat()}",
+                actor_id   = user_id,
+            )
+
+        return CustomResponse(general_message='Event rejected successfully.').get_success_response()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# COMPANY APPROVAL ENDPOINTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+class CompanyEventApproveAPI(APIView):
+    """
+    Owner leg of the company event double-approval chain (PRD §3.1): a
+    non-owner company mentor's event lands at PENDING_MENTOR_APPROVAL; the
+    owner approves here, which always advances to PENDING_APPROVAL (admin
+    leg) — company events never fast-path past admin, unlike campus/IG.
+    """
+    authentication_classes = [CustomizePermission]
+
+    @extend_schema(tags=['Dashboard - Events'])
+    def post(self, request, event_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
+
+        event = get_live_events().filter(id=event_id).first()
+        if not event:
+            return CustomResponse(general_message='Event not found.').get_failure_response()
+
+        if event.organiser_type != Event.OrganiserType.COMPANY:
+            return CustomResponse(general_message='This event is not a company event.').get_failure_response()
+
+        if event.status != Event.Status.PENDING_MENTOR_APPROVAL:
+            return CustomResponse(general_message='Event is not pending owner approval.').get_failure_response()
+
+        if event.created_by_id == user_id:
+            return CustomResponse(general_message='You cannot approve your own event submission.').get_failure_response(status_code=403)
+
+        from db.company import Company
+        from api.dashboard.company.company_views import is_company_owner_or_admin
+        company = Company.objects.filter(org_id=event.organiser_org_id, status='verified').first()
+        is_owner = is_company_owner_or_admin(user_id, company)
+        if not is_owner and RoleType.ADMIN.value not in roles:
+            return CustomResponse(general_message='You are not authorized to approve events for this company.').get_failure_response()
+
+        new_status = Event.Status.PENDING_APPROVAL
+        event.status = new_status
+        event.updated_by_id = user_id
+        event.save()
+
+        log_event_action(event=event, user_id=user_id, action=EventLog.Action.APPROVED, changes={'Status': {'from': Event.Status.PENDING_MENTOR_APPROVAL, 'to': new_status}})
+
+        from db.mentor import SystemActionLog
+        SystemActionLog.objects.create(
+            action_type=SystemActionLog.ActionType.COMPANY_EVENT_APPROVE,
+            actor_user_id=user_id,
+            subject_user_id=event.created_by_id,
+            entity_name='events',
+            entity_id=event.id,
+            old_data={'status': Event.Status.PENDING_MENTOR_APPROVAL},
+            new_data={'status': new_status},
+        )
+
+        if event.created_by_id:
+            NotificationService.dispatch(
+                notif_type = NotificationType.EVENT_APPROVAL_STAGE,
+                audience   = Audience.user(str(event.created_by_id)),
+                context    = {"event_title": event.title, "approver_role": "company owner"},
+                entity_id  = str(event.id),
+                occurrence = f"{event.id}:{event.updated_at.isoformat()}",
+                actor_id   = user_id,
+            )
+        _notify_next_approver(event, user_id)
+
+        return CustomResponse(general_message='Event approved successfully.').get_success_response()
+
+
+class CompanyEventRejectAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @extend_schema(tags=['Dashboard - Events'])
+    def post(self, request, event_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
+
+        event = get_live_events().filter(id=event_id).first()
+        if not event:
+            return CustomResponse(general_message='Event not found.').get_failure_response()
+
+        if event.organiser_type != Event.OrganiserType.COMPANY:
+            return CustomResponse(general_message='This event is not a company event.').get_failure_response()
+
+        if event.status != Event.Status.PENDING_MENTOR_APPROVAL:
+            return CustomResponse(general_message='Event is not pending owner approval.').get_failure_response()
+
+        from db.company import Company
+        from api.dashboard.company.company_views import is_company_owner_or_admin
+        company = Company.objects.filter(org_id=event.organiser_org_id, status='verified').first()
+        is_owner = is_company_owner_or_admin(user_id, company)
+        if not is_owner and RoleType.ADMIN.value not in roles:
+            return CustomResponse(general_message='You are not authorized to reject events for this company.').get_failure_response()
+
+        reason = request.data.get('reason', '').strip()
+        if not reason:
+            return CustomResponse(general_message='A rejection reason is required.').get_failure_response()
+
+        old_status = event.status
+        event.status = Event.Status.REJECTED
+        event.updated_by_id = user_id
+        event.save()
+
+        log_event_action(event=event, user_id=user_id, action=EventLog.Action.REJECTED, changes={'Status': {'from': old_status, 'to': Event.Status.REJECTED}}, details={'reason': reason})
+
+        from db.mentor import SystemActionLog
+        SystemActionLog.objects.create(
+            action_type=SystemActionLog.ActionType.COMPANY_EVENT_REJECT,
+            actor_user_id=user_id,
+            subject_user_id=event.created_by_id,
+            entity_name='events',
+            entity_id=event.id,
+            old_data={'status': old_status},
+            new_data={'status': Event.Status.REJECTED},
+            remarks=reason,
+        )
+
+        if event.created_by_id:
+            NotificationService.dispatch(
+                notif_type = NotificationType.EVENT_REJECTED,
+                audience   = Audience.user(str(event.created_by_id)),
+                context    = {"event_title": event.title, "approver_role": "company owner", "reason": reason},
+                entity_id  = str(event.id),
+                occurrence = f"{event.id}:{event.updated_at.isoformat()}",
+                actor_id   = user_id,
             )
 
         return CustomResponse(general_message='Event rejected successfully.').get_success_response()
@@ -1689,49 +1946,45 @@ class CampusEventApproveAPI(APIView):
 
         log_event_action(event=event, user_id=user_id, action=EventLog.Action.APPROVED, changes={'Status': {'from': Event.Status.PENDING_CAMPUS_APPROVAL, 'to': new_status}})
 
-        # Notify the event creator
-        actor = User.objects.filter(id=user_id).first()
-        creator = event.created_by
-        if creator and actor:
-            if new_status == Event.Status.COMPLETED:
-                NotificationUtils.insert_notification(
-                    user=creator,
-                    title='Event Recorded',
-                    description=f'Your past event "{event.title}" was approved by the campus and is now on record.',
-                    button='View',
-                    url=f'/events/{event.id}/',
-                    created_by=actor,
+        from db.mentor import SystemActionLog
+        SystemActionLog.objects.create(
+            action_type=SystemActionLog.ActionType.CAMPUS_EVENT_APPROVE,
+            actor_user_id=user_id,
+            subject_user_id=event.created_by_id,
+            entity_name='events',
+            entity_id=event.id,
+            old_data={'status': Event.Status.PENDING_CAMPUS_APPROVAL},
+            new_data={'status': new_status},
+        )
+
+        # Notify the event creator + fan out to scope audience
+        # resolve_terminal_status() above may have settled the event as ONGOING
+        # (announced like PUBLISHED) or COMPLETED (a backdated event recorded
+        # after the fact — not announced, and not "progressing through review").
+        if event.created_by_id:
+            if should_announce(new_status):
+                # Fan out EVENT_PUBLISHED to all users in the event's scope
+                # (campus members in this case). Actor auto-excluded by dispatch().
+                # Timestamp-based occurrence — see AdminEventApproveAPI for why.
+                NotificationService.dispatch(
+                    notif_type = NotificationType.EVENT_PUBLISHED,
+                    audience   = Audience.event_scope(str(event.id)),
+                    context    = {"event_title": event.title},
+                    entity_id  = str(event.id),
+                    occurrence = f"{event.id}:{event.updated_at.isoformat()}",
+                    actor_id   = user_id,
                 )
-            elif new_status in (Event.Status.PUBLISHED, Event.Status.ONGOING):
-                NotificationUtils.insert_notification(
-                    user=creator,
-                    title='Event Published',
-                    description=f'Your event "{event.title}" was approved by the campus and is now live!',
-                    button='View',
-                    url=f'/events/{event.id}/',
-                    created_by=actor,
-                )
-            else:
-                NotificationUtils.insert_notification(
-                    user=creator,
-                    title='Event Approved by Campus',
-                    description=f'Your event "{event.title}" has been approved by the campus lead.',
-                    button=None,
-                    url=None,
-                    created_by=actor,
+            elif new_status != Event.Status.COMPLETED:
+                NotificationService.dispatch(
+                    notif_type = NotificationType.EVENT_APPROVAL_STAGE,
+                    audience   = Audience.user(str(event.created_by_id)),
+                    context    = {"event_title": event.title, "approver_role": "campus lead"},
+                    entity_id  = str(event.id),
+                    occurrence = f"{event.id}:{event.updated_at.isoformat()}",
+                    actor_id   = user_id,
                 )
 
-        # Announce only events an audience can still attend
-        if should_announce(new_status) and actor:
-            BroadcastUtils.create_broadcast(
-                title='New Event Published',
-                description=f'A new Campus event "{event.title}" is now live!',
-                target_type='campus',
-                target_id=event.scope_org_id,
-                created_by=actor,
-                expiry_key='event_published',
-                url=f'/events/{event.id}/',
-            )
+        _notify_next_approver(event, user_id)
 
         return CustomResponse(general_message='Event approved successfully.').get_success_response()
 
@@ -1770,17 +2023,27 @@ class CampusEventRejectAPI(APIView):
 
         log_event_action(event=event, user_id=user_id, action=EventLog.Action.REJECTED, changes={'Status': {'from': old_status, 'to': Event.Status.REJECTED}}, details={'reason': reason})
 
+        from db.mentor import SystemActionLog
+        SystemActionLog.objects.create(
+            action_type=SystemActionLog.ActionType.CAMPUS_EVENT_REJECT,
+            actor_user_id=user_id,
+            subject_user_id=event.created_by_id,
+            entity_name='events',
+            entity_id=event.id,
+            old_data={'status': old_status},
+            new_data={'status': Event.Status.REJECTED},
+            remarks=reason,
+        )
+
         # Notify the event creator
-        actor = User.objects.filter(id=user_id).first()
-        creator = event.created_by
-        if creator and actor:
-            NotificationUtils.insert_notification(
-                user=creator,
-                title='Event Rejected by Campus',
-                description=f'Your event "{event.title}" was rejected by the campus lead. Reason: {reason}',
-                button=None,
-                url=None,
-                created_by=actor,
+        if event.created_by_id:
+            NotificationService.dispatch(
+                notif_type = NotificationType.EVENT_REJECTED,
+                audience   = Audience.user(str(event.created_by_id)),
+                context    = {"event_title": event.title, "approver_role": "campus lead", "reason": reason},
+                entity_id  = str(event.id),
+                occurrence = f"{event.id}:{event.updated_at.isoformat()}",
+                actor_id   = user_id,
             )
 
         return CustomResponse(general_message='Event rejected successfully.').get_success_response()

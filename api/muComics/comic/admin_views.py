@@ -17,7 +17,7 @@ from rest_framework import serializers as s
 from rest_framework.views import APIView
 
 from db.comic import Genre
-from utils.permission import CustomizePermission, JWTUtils, RoleRequired
+from utils.permission import CustomizePermission, OptionalAuthentication, JWTUtils, RoleRequired
 from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
@@ -31,6 +31,8 @@ from .serializers import GenreReadSerializer, GenreWriteSerializer
 
 def _is_admin(request):
     """Return True if the JWT carries the Admins role."""
+    if not JWTUtils.is_logged_in(request):
+        return False
     return RoleType.ADMIN.value in JWTUtils.fetch_role(request)
 
 
@@ -41,13 +43,13 @@ def _is_admin(request):
 class GenreListCreateView(APIView):
     """
     GET  /muComics/comics/genres/
-         Non-admins → only is_active=True genres.
-         Admins     → all genres; optionally filter with ?is_active=true|false.
+         Non-admins (and unauthenticated users) → only is_active=True genres.
+         Admins                                 → all genres; optionally filter with ?is_active=true|false.
 
     POST /muComics/comics/genres/  [Admin only]
          Create a new genre (is_active defaults to True).
     """
-    authentication_classes = [CustomizePermission]
+    authentication_classes = [OptionalAuthentication]
 
     @extend_schema(
         tags=['muComics - Genre'],
@@ -99,8 +101,12 @@ class GenreListCreateView(APIView):
         request=GenreWriteSerializer,
         responses={200: GenreReadSerializer},
     )
-    @RoleRequired([RoleType.ADMIN])
     def post(self, request):
+        if not _is_admin(request):
+            return CustomResponse(
+                general_message='Only admins can create genres.'
+            ).get_unauthorized_response()
+
         user_id = JWTUtils.fetch_user_id(request)
 
         serializer = GenreWriteSerializer(
@@ -126,11 +132,11 @@ class GenreListCreateView(APIView):
 
 class GenreDetailView(APIView):
     """
-    GET    → active genres only for non-admins; any genre for admins.
+    GET    → active genres only for non-admins (and unauthenticated users); any genre for admins.
     PATCH  → update name (Admin only).
     DELETE → soft deactivate: is_active = False (Admin only).
     """
-    authentication_classes = [CustomizePermission]
+    authentication_classes = [OptionalAuthentication]
 
     def _get_genre(self, genre_id, admin):
         """
@@ -170,8 +176,12 @@ class GenreDetailView(APIView):
         request=GenreWriteSerializer,
         responses={200: GenreReadSerializer},
     )
-    @RoleRequired([RoleType.ADMIN])
     def patch(self, request, genre_id):
+        if not _is_admin(request):
+            return CustomResponse(
+                general_message='Only admins can update genres.'
+            ).get_unauthorized_response()
+
         user_id = JWTUtils.fetch_user_id(request)
         # Admin context — can edit active or inactive genre
         genre, error = self._get_genre(genre_id, admin=True)
@@ -211,8 +221,12 @@ class GenreDetailView(APIView):
             },
         )},
     )
-    @RoleRequired([RoleType.ADMIN])
     def delete(self, request, genre_id):
+        if not _is_admin(request):
+            return CustomResponse(
+                general_message='Only admins can deactivate genres.'
+            ).get_unauthorized_response()
+
         user_id = JWTUtils.fetch_user_id(request)
         genre, error = self._get_genre(genre_id, admin=True)
         if error:

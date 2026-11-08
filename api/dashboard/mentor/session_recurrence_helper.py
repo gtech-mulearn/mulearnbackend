@@ -10,20 +10,23 @@ def generate_recurring_sessions(parent_session: MentorshipSession):
     """
     Generate future MentorshipSession instances based on the recurrence rules
     of the given parent_session.
-    
-    Returns a list of created child sessions.
+
+    Returns (child_sessions, was_truncated). was_truncated is True when the
+    MAX_RECURRENCE_COUNT cap was hit before recurrence_end_date was reached —
+    i.e. the series was cut short and further occurrences were silently
+    dropped rather than generated.
     """
     if not parent_session.is_recurring:
-        return []
+        return [], False
 
     if not parent_session.recurrence_type or not parent_session.recurrence_interval or not parent_session.recurrence_end_date:
-        return []
+        return [], False
 
     child_sessions = []
-    
+
     # Calculate duration of the session
     duration = parent_session.ends_at - parent_session.starts_at
-    
+
     current_start = parent_session.starts_at
     end_date = parent_session.recurrence_end_date
     interval = parent_session.recurrence_interval
@@ -31,6 +34,7 @@ def generate_recurring_sessions(parent_session: MentorshipSession):
 
     # Start loop
     count = 0
+    was_truncated = False
     while count < MAX_RECURRENCE_COUNT:
         if r_type == MentorshipSession.RecurrenceType.DAILY:
             current_start += timedelta(days=interval)
@@ -78,8 +82,13 @@ def generate_recurring_sessions(parent_session: MentorshipSession):
         )
         child_sessions.append(child_session)
         count += 1
+    else:
+        # Loop only exits via the `while` condition (count reached the cap)
+        # when there was no `break` above — i.e. the next occurrence would
+        # still have been on/before end_date, so real occurrences were cut off.
+        was_truncated = True
 
     if child_sessions:
         MentorshipSession.objects.bulk_create(child_sessions)
 
-    return child_sessions
+    return child_sessions, was_truncated

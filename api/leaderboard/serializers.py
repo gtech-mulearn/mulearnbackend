@@ -123,7 +123,7 @@ class IGMentorLeaderboardSerializer(serializers.Serializer):
         return ig.name if ig else None
 
     def get_rank(self, obj):
-        return self.context.get('rankings', {}).get(obj.id, None)
+        return self.context.get('rankings', {}).get(obj.user_id, None)
 
 
 class CampusMentorLeaderboardSerializer(serializers.Serializer):
@@ -139,7 +139,28 @@ class CampusMentorLeaderboardSerializer(serializers.Serializer):
         return str(obj.user.profile_pic) if obj.user.profile_pic else None
 
     def get_campus_name(self, obj):
-        return obj.org.title if obj.org else None
+        campus = self.context.get('campus')
+        return campus.title if campus else None
 
     def get_rank(self, obj):
-        return self.context.get('rankings', {}).get(obj.id, None)
+        return self.context.get('rankings', {}).get(obj.user_id, None)
+
+
+class CompanyMentorLeaderboardSerializer(serializers.Serializer):
+    mentor_id = serializers.CharField(source='user.id')
+    mentor_name = serializers.CharField(source='user.full_name')
+    profile_pic = serializers.SerializerMethodField()
+    company_name = serializers.SerializerMethodField()
+    total_karma = serializers.IntegerField()
+    completed_sessions = serializers.IntegerField()
+    rank = serializers.SerializerMethodField()
+
+    def get_profile_pic(self, obj):
+        return str(obj.user.profile_pic) if obj.user.profile_pic else None
+
+    def get_company_name(self, obj):
+        company = self.context.get('company')
+        return company.name if company else None
+
+    def get_rank(self, obj):
+        return self.context.get('rankings', {}).get(obj.user_id, None)

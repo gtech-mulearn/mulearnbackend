@@ -3,12 +3,13 @@ Comic CRUD views.
 
 Endpoints:
   GET    /muComics/comics/                      → list (paginated, search, filter, sort)
-  POST   /muComics/comics/                      → create
+  POST   /muComics/comics/                      → create (admin only)
   GET    /muComics/comics/<comic_id>/            → detail
   PATCH  /muComics/comics/<comic_id>/            → partial update (creator or editor)
   DELETE /muComics/comics/<comic_id>/            → soft delete (creator only)
   POST   /muComics/comics/<comic_id>/publish/    → draft → published (creator only)
   POST   /muComics/comics/<comic_id>/archive/    → published/draft → archived (creator only)
+  POST   /muComics/comics/<comic_id>/unarchive/  → archived → draft (creator only)
 """
 
 from django.utils import timezone
@@ -20,7 +21,7 @@ from rest_framework import serializers as s
 from rest_framework.views import APIView
 
 from db.comic import Comic, ComicContributorLink, ComicGenreLink, Genre
-from utils.permission import CustomizePermission, JWTUtils
+from utils.permission import CustomizePermission, OptionalAuthentication, JWTUtils
 from utils.response import CustomResponse
 from utils.utils import CommonUtils
 from utils.types import RoleType
@@ -50,6 +51,8 @@ def _is_creator_or_admin(user_id, comic, request):
     True if the user is the comic's original creator
     OR holds the platform Admin role in their JWT.
     """
+    if not user_id:
+        return False
     if comic.created_by_id == user_id:
         return True
     return RoleType.ADMIN.value in JWTUtils.fetch_role(request)
@@ -60,6 +63,8 @@ def can_edit_comic(user_id, comic):
     True if the user is the comic's creator OR has been explicitly assigned
     as an 'editor' contributor on that comic by the creator.
     """
+    if not user_id:
+        return False
     if comic.created_by_id == user_id:
         return True
     return ComicContributorLink.objects.filter(
@@ -75,10 +80,10 @@ def can_edit_comic(user_id, comic):
 
 class ComicListCreateView(APIView):
     """
-    GET  /muComics/comics/  → paginated list with search, status filter, sort
-    POST /muComics/comics/  → create a new comic (any authenticated user)
+    GET  /muComics/comics/  → paginated list with search, status filter, sort (Public for published comics)
+    POST /muComics/comics/  → create a new comic (admin only)
     """
-    authentication_classes = [CustomizePermission]
+    authentication_classes = [OptionalAuthentication]
 
     @extend_schema(
         tags=['muComics'],
@@ -86,16 +91,21 @@ class ComicListCreateView(APIView):
         responses={200: ComicListItemSerializer(many=True)},
     )
     def get(self, request):
-        user_id = JWTUtils.fetch_user_id(request)
+        is_authenticated = JWTUtils.is_logged_in(request)
+        user_id = JWTUtils.fetch_user_id(request) if is_authenticated else None
         queryset = _get_active_comics()
 
-        # Optional status filter: ?status=draft|published|archived
-        if status_filter := request.query_params.get('status'):
-            if status_filter not in Comic.Status.values:
-                return CustomResponse(
-                    general_message=f'Invalid status. Allowed: {", ".join(Comic.Status.values)}.'
-                ).get_failure_response()
-            queryset = queryset.filter(status=status_filter)
+        # Unauthenticated users can only see published comics
+        if not is_authenticated:
+            queryset = queryset.filter(status=Comic.Status.PUBLISHED)
+        else:
+            # Optional status filter: ?status=draft|published|archived
+            if status_filter := request.query_params.get('status'):
+                if status_filter not in Comic.Status.values:
+                    return CustomResponse(
+                        general_message=f'Invalid status. Allowed: {", ".join(Comic.Status.values)}.'
+                    ).get_failure_response()
+                queryset = queryset.filter(status=status_filter)
 
         # Optional multi-genre filter: ?genre=action,horror
         # Accepts one or more genre slugs (comma-separated).
@@ -110,7 +120,7 @@ class ComicListCreateView(APIView):
                 ).distinct()
 
         paginated = CommonUtils.get_paginated_queryset(
-            queryset.select_related('created_by').prefetch_related('genre_links__genre'),
+            queryset.select_related('created_by').prefetch_related('genre_links__genre', 'contributor_links__user'),
             request,
             search_fields=['title'],
             sort_fields={
@@ -130,12 +140,23 @@ class ComicListCreateView(APIView):
 
     @extend_schema(
         tags=['muComics'],
-        description="Create a new comic. Any authenticated user may create a comic. Returns the full comic detail on success.",
+        description="Create a new comic. Only admins may create. The creator is specified via creator_muid. Returns the full comic detail on success.",
         request=ComicWriteSerializer,
         responses={200: ComicDetailSerializer},
     )
     def post(self, request):
+        if not JWTUtils.is_logged_in(request):
+            return CustomResponse(
+                general_message='Authentication credentials were not provided.'
+            ).get_unauthorized_response()
+
         user_id = JWTUtils.fetch_user_id(request)
+
+        # Only admins can create comics
+        if RoleType.ADMIN.value not in JWTUtils.fetch_role(request):
+            return CustomResponse(
+                general_message='Only admins can create comics.'
+            ).get_unauthorized_response()
 
         serializer = ComicWriteSerializer(
             data=request.data,
@@ -162,11 +183,11 @@ class ComicListCreateView(APIView):
 
 class ComicDetailView(APIView):
     """
-    GET    /muComics/comics/<comic_id>/   → full detail
+    GET    /muComics/comics/<comic_id>/   → full detail (public for published comics)
     PATCH  /muComics/comics/<comic_id>/   → partial update (creator or assigned editor)
     DELETE /muComics/comics/<comic_id>/   → soft delete (creator only)
     """
-    authentication_classes = [CustomizePermission]
+    authentication_classes = [OptionalAuthentication]
 
     def _get_comic_or_error(self, comic_id):
         """Fetch an active comic or return an error string."""
@@ -181,10 +202,15 @@ class ComicDetailView(APIView):
         responses={200: ComicDetailSerializer},
     )
     def get(self, request, comic_id):
-        user_id = JWTUtils.fetch_user_id(request)
+        is_authenticated = JWTUtils.is_logged_in(request)
+        user_id = JWTUtils.fetch_user_id(request) if is_authenticated else None
         comic, error = self._get_comic_or_error(comic_id)
         if error:
             return CustomResponse(general_message=error).get_failure_response()
+
+        # Unauthenticated users can only view published comics
+        if not is_authenticated and comic.status != Comic.Status.PUBLISHED:
+            return CustomResponse(general_message='Comic not found.').get_failure_response()
 
         return CustomResponse(
             general_message=f'Comic "{comic.title}" retrieved successfully.',
@@ -200,6 +226,11 @@ class ComicDetailView(APIView):
         responses={200: ComicDetailSerializer},
     )
     def patch(self, request, comic_id):
+        if not JWTUtils.is_logged_in(request):
+            return CustomResponse(
+                general_message='Authentication credentials were not provided.'
+            ).get_unauthorized_response()
+
         user_id = JWTUtils.fetch_user_id(request)
         comic, error = self._get_comic_or_error(comic_id)
         if error:
@@ -245,6 +276,11 @@ class ComicDetailView(APIView):
         )},
     )
     def delete(self, request, comic_id):
+        if not JWTUtils.is_logged_in(request):
+            return CustomResponse(
+                general_message='Authentication credentials were not provided.'
+            ).get_unauthorized_response()
+
         user_id = JWTUtils.fetch_user_id(request)
         comic, error = self._get_comic_or_error(comic_id)
         if error:
@@ -399,19 +435,76 @@ class ComicArchiveView(APIView):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# UNARCHIVE
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ComicUnarchiveView(APIView):
+    """
+    POST /muComics/comics/<comic_id>/unarchive/
+    Transitions an archived comic back to draft (creator only).
+
+    Workflow:
+        archived  → draft  ✅
+        draft     → ❌  (not archived)
+        published → ❌  (not archived)
+    """
+    authentication_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['muComics'],
+        description="Unarchive an archived comic (archived → draft). Only the creator may unarchive. Non-archived comics are rejected.",
+        responses={200: inline_serializer(
+            name='ComicUnarchiveResponse',
+            fields={
+                'id':     s.CharField(),
+                'status': s.CharField(),
+            },
+        )},
+    )
+    def post(self, request, comic_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        comic   = _get_active_comics().filter(id=comic_id).first()
+
+        if not comic:
+            return CustomResponse(general_message='Comic not found.').get_failure_response()
+
+        # Only creator can unarchive
+        if comic.created_by_id != user_id:
+            return CustomResponse(
+                general_message='Only the comic creator can unarchive this comic.'
+            ).get_unauthorized_response()
+
+        if comic.status != Comic.Status.ARCHIVED:
+            return CustomResponse(
+                general_message='Only archived comics can be unarchived.'
+            ).get_failure_response()
+
+        now = timezone.now()
+        comic.status        = Comic.Status.DRAFT
+        comic.updated_by_id = user_id
+        comic.updated_at    = now
+        comic.save(update_fields=['status', 'updated_by', 'updated_at'])
+
+        return CustomResponse(
+            general_message=f'Comic "{comic.title}" unarchived successfully.',
+            response={'id': comic.id, 'status': Comic.Status.DRAFT},
+        ).get_success_response()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # CONTRIBUTORS
 # ─────────────────────────────────────────────────────────────────────────────
 
 class ComicContributorListView(APIView):
     """
     GET  /muComics/comics/<comic_id>/contributors/
-         → list all contributors for the comic (any authenticated user)
+         → list all contributors for the comic (public)
 
     POST /muComics/comics/<comic_id>/contributors/
          → add a contributor (comic creator or Admin only)
          Request body: { "muid": "...", "role": "ARTIST" }
     """
-    authentication_classes = [CustomizePermission]
+    authentication_classes = [OptionalAuthentication]
 
     @extend_schema(
         tags=['muComics'],
@@ -439,8 +532,13 @@ class ComicContributorListView(APIView):
     #     serializer = ContributorListSerializer(links, many=True)
     #     return CustomResponse(response=serializer.data).get_success_response()
     def get(self, request, comic_id):
+        is_authenticated = JWTUtils.is_logged_in(request)
         comic = _get_active_comics().filter(id=comic_id).first()
         if not comic:
+            return CustomResponse(general_message='Comic not found.').get_failure_response()
+
+        # Unauthenticated users can only view contributors for published comics
+        if not is_authenticated and comic.status != Comic.Status.PUBLISHED:
             return CustomResponse(general_message='Comic not found.').get_failure_response()
 
         links = ComicContributorLink.objects.filter(comic=comic).select_related('user', 'comic')
@@ -472,6 +570,11 @@ class ComicContributorListView(APIView):
         )},
     )
     def post(self, request, comic_id):
+        if not JWTUtils.is_logged_in(request):
+            return CustomResponse(
+                general_message='Authentication credentials were not provided.'
+            ).get_unauthorized_response()
+
         user_id = JWTUtils.fetch_user_id(request)
         comic   = _get_active_comics().filter(id=comic_id).first()
         if not comic:

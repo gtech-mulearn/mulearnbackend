@@ -1,22 +1,33 @@
 from django.urls import path
-from . import mentor_views, session_views, availability_views, participant_views, task_views, student_requests_views
+from . import admin_views, mentor_views, session_views, availability_views, participant_views, task_views, student_requests_views, persona_views, opportunity_views, analytics_views
 
 
 urlpatterns = [
+    path('opportunities/', opportunity_views.IgOpportunityListCreateAPI.as_view(), name='mentor-opportunity-list-create'),
+    path('opportunities/public/', opportunity_views.PublicIgOpportunityListAPI.as_view(), name='mentor-opportunity-public-list'),
+    path('opportunities/<str:opportunity_id>/', opportunity_views.IgOpportunityDetailAPI.as_view(), name='mentor-opportunity-detail'),
+    path('opportunities/<str:opportunity_id>/publish/', opportunity_views.IgOpportunityPublishAPI.as_view(), name='mentor-opportunity-publish'),
+    path('opportunities/<str:opportunity_id>/close/', opportunity_views.IgOpportunityCloseAPI.as_view(), name='mentor-opportunity-close'),
     path('public/profile/<str:mentor_id>/', mentor_views.MentorPublicProfileAPI.as_view(), name='mentor-public-profile'),
     path('public/availability/<str:mentor_id>/', availability_views.MentorPublicAvailabilityAPI.as_view(), name='mentor-public-availability'),
     path('overview/', mentor_views.MentorOverviewAPI.as_view(), name='mentor-overview'),
+    path('persona/current/', mentor_views.PersonaCurrentAPI.as_view(), name='mentor-persona-current'),
     path('register/', mentor_views.MentorRegistrationAPI.as_view(), name='mentor-register'),
     path('status/', mentor_views.MentorStatusAPI.as_view(), name='mentor-status'),
     path('profile/', mentor_views.MentorProfileAPI.as_view(), name='mentor-profile'),
     path('activity/', mentor_views.MentorActivityListAPI.as_view(), name='mentor-activity'),
+    path('analytics/personal/', analytics_views.MentorPersonalAnalyticsAPI.as_view(), name='mentor-personal-analytics'),
+    path('profile/completion/', analytics_views.MentorProfileCompletionAPI.as_view(), name='mentor-profile-completion'),
     path('list/', mentor_views.MentorListAPI.as_view(), name='mentor-list'),
+    path('roster/', mentor_views.MentorRosterAPI.as_view(), name='mentor-roster'),
+    path('change-requests/', mentor_views.MentorChangeRequestListAPI.as_view(), name='mentor-change-request-list'),
     path('verify/<str:mentor_id>/', mentor_views.MentorVerifyAPI.as_view(), name='mentor-verify'),
     path('detail/<str:mentor_id>/', mentor_views.MentorDetailAPI.as_view(), name='mentor-detail'),
     path('session/create/', session_views.MentorSessionCreateAPI.as_view(), name='mentor-session-create'),
     path('session/list/', session_views.MentorSessionListAPI.as_view(), name='mentor-session-list'),
     path('session/list/<str:session_id>/', session_views.MentorSessionListAPI.as_view(), name='mentor-session-detail'),
     path('session/update/<str:session_id>/', session_views.MentorSessionUpdateAPI.as_view(), name='mentor-session-update'),
+    path('session/complete/<str:session_id>/', session_views.MentorSessionCompleteAPI.as_view(), name='mentor-session-complete'),
     path('session/available/', session_views.AvailableSessionListAPI.as_view(), name='available-session-list'),
     path('session/admin/list/', session_views.AdminSessionListAPI.as_view(), name='admin-session-list'),
     path('session/admin/verify/<str:session_id>/', session_views.AdminSessionVerifyAPI.as_view(), name='admin-session-verify'),
@@ -33,6 +44,9 @@ urlpatterns = [
     path('tasks/<str:task_id>/', task_views.MentorTaskDetailAPI.as_view(),        name='mentor-task-detail'),
     path('admin/assign/',                       mentor_views.AdminAssignMentorAPI.as_view(), name='admin-assign-mentor'),
     path('admin/assign/<str:user_muid>/',       mentor_views.AdminAssignMentorAPI.as_view(), name='admin-revoke-mentor'),
+    path('admin/deactivate/<str:user_mentor_id>/', admin_views.MentorDeactivationAPI.as_view(), name='mentor-deactivate'),
+    path('admin/reactivate/<str:user_mentor_id>/', admin_views.MentorReactivationAPI.as_view(), name='mentor-reactivate'),
+    path('<str:mentor_id>/preferred-igs/',        mentor_views.MentorPreferredIgAPI.as_view(), name='mentor-preferred-igs'),
     path('<str:mentor_id>/grants/',              mentor_views.MentorScopeGrantListAPI.as_view(), name='mentor-grant-list'),
     path('<str:mentor_id>/grants/<str:grant_id>/', mentor_views.MentorScopeGrantRevokeAPI.as_view(), name='mentor-grant-revoke'),
     path('change-company/', mentor_views.MentorChangeCompanyAPI.as_view(), name='mentor-change-company'),
@@ -42,4 +56,8 @@ urlpatterns = [
     path('session/student/my-requests/',                             student_requests_views.StudentSessionRequestListAPI.as_view(), name='student-session-request-list'),
     path('session/student-requests/',                                student_requests_views.MentorStudentRequestListAPI.as_view(),  name='mentor-student-request-list'),
     path('session/student-requests/<str:session_id>/verify/',        student_requests_views.MentorStudentRequestVerifyAPI.as_view(), name='mentor-student-request-verify'),
+
+    # Persona Switching
+    path('persona/status/', persona_views.PersonaStatusAPI.as_view(), name='mentor-persona-status'),
+    path('persona/switch/', persona_views.PersonaSwitchAPI.as_view(), name='mentor-persona-switch'),
 ]

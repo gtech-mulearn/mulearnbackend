@@ -1,5 +1,5 @@
 from rest_framework.views import APIView
-from utils.permission import CustomizePermission, JWTUtils, role_required
+from utils.permission import CustomizePermission, JWTUtils, role_required, mentor_active_required
 from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
@@ -43,9 +43,10 @@ class MentorAddParticipantAPI(APIView):
         responses={200: serializers.ParticipantListSerializer},
     )
     @role_required([RoleType.MENTOR.value])
+    @mentor_active_required
     def post(self, request, session_id):
         user_id = JWTUtils.fetch_user_id(request)
-        
+
         serializer = serializers.MentorAddParticipantSerializer(
             data=request.data, context={"user_id": user_id, "session_id": session_id}
         )
@@ -141,9 +142,10 @@ class MentorParticipantUpdateAPI(APIView):
         responses={200: serializers.ParticipantUpdateSerializer},
     )
     @role_required([RoleType.MENTOR.value])
+    @mentor_active_required
     def patch(self, request, link_id):
         user_id = JWTUtils.fetch_user_id(request)
-        
+
         link = MentorshipSessionUserLink.objects.filter(id=link_id).select_related('session').first()
         if not link:
             return CustomResponse(

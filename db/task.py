@@ -58,6 +58,18 @@ class InterestGroup(models.Model):
         blank=False,
         null=False
     )
+    # PRD §7.3 — company-sponsored IG branding/framing: a company can request
+    # to be the recognised sponsor of an IG, subject to platform-admin
+    # approval. sponsor_status is independent of `status` above (which
+    # governs the IG's own existence, not its sponsorship).
+    sponsor_company = models.ForeignKey(
+        'db.Company', on_delete=models.SET_NULL, null=True, blank=True,
+        db_column='sponsor_company_id', related_name='sponsored_igs'
+    )
+    sponsor_status = models.CharField(
+        max_length=10, null=True, blank=True,
+        choices=[('pending', 'Pending'), ('approved', 'Approved'), ('rejected', 'Rejected')],
+    )
     about = models.TextField(blank=True, null=True)
     prerequisites = models.TextField(blank=True, null=True)
     career_opportunities = models.TextField(blank=True, null=True)
@@ -174,6 +186,9 @@ class TaskList(models.Model):
         ('approved', 'Approved'),
         ('pending',  'Pending'),
         ('rejected', 'Rejected'),
+        # PRD §6.3 — lightweight "request changes" state distinct from
+        # outright rejection; the submitter can amend and resubmit.
+        ('changes_requested', 'Changes Requested'),
     ]
     approval_status = models.CharField(
         max_length=20, choices=APPROVAL_STATUS_CHOICES, default='approved'
@@ -212,6 +227,10 @@ class TaskList(models.Model):
         indexes = [
             models.Index(fields=['event_fk'], name='idx_task_list_event_id'),
             models.Index(fields=['is_deleted'], name='idx_task_list_is_deleted'),
+            # Added in alter-scripts/alter-1.97.sql — this entry documents the
+            # schema for the managed=False model, it doesn't create the index
+            # itself.
+            models.Index(fields=['hashtag'], name='idx_task_list_hashtag'),
         ]
 
 
