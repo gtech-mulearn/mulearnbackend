@@ -446,21 +446,23 @@ class MentorUpdateSerializer(serializers.ModelSerializer):
             "hours": validated_data.pop("hours", None),
         }
         
-        mentor_profile = UserMentor.objects.filter(user=instance.user).first()
-        if mentor_profile:
-            for attr, value in profile_data.items():
-                if value is not None:
-                    setattr(mentor_profile, attr, value)
-            mentor_profile.save()
-
         # Application-specific fields cannot be changed on an approved application
         if instance.status == MentorApplication.Status.APPROVED:
             validated_data.pop('org', None)
             validated_data.pop('mentor_tier', None)
 
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
+        # Profile + application are two tables: save both or neither.
+        with transaction.atomic():
+            mentor_profile = UserMentor.objects.filter(user=instance.user).first()
+            if mentor_profile:
+                for attr, value in profile_data.items():
+                    if value is not None:
+                        setattr(mentor_profile, attr, value)
+                mentor_profile.save()
+
+            for attr, value in validated_data.items():
+                setattr(instance, attr, value)
+            instance.save()
 
         return instance
 

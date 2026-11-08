@@ -7,7 +7,8 @@ from utils.utils import CommonUtils, DateTimeUtils
 from db.job import CompanyJob, UserJobApplication
 from db.company import Company, CompanyAdminLink
 from db.user import User
-from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiParameter, OpenApiTypes
+from rest_framework import serializers as drf_serializers
 from api.notification.service import NotificationService
 from api.notification.types import NotificationType
 from api.notification.audience import Audience
@@ -339,6 +340,18 @@ class CompanyJobRequestChangesAPI(APIView):
     """Owner or accepted delegate: send a job back to the mentor for revision."""
     permission_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Company Jobs'],
+        description=(
+            "Send a job that is waiting for approval back to its author for changes. "
+            "Only the company owner or an accepted delegate can do this. Body: {\"note\": \"<what to change>\"} "
+            "(required). The job moves to 'Needs Revision' and the author is notified with the note."
+        ),
+        request=inline_serializer(
+            name="CompanyJobRequestChangesRequest",
+            fields={"note": drf_serializers.CharField(help_text="What the author should change.")},
+        ),
+    )
     def post(self, request, job_id):
         from django.db import transaction
 

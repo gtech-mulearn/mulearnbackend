@@ -64,10 +64,18 @@ def enforce_max_length(value: str, max_len: int) -> None:
 
 
 def validate_safe_text(value: str) -> None:
+    """
+    Reject script/HTML injection and control characters in free text.
+
+    There is deliberately no SQL keyword/punctuation filter here: every write
+    goes through the Django ORM (parameterised queries), so SQL injection is not
+    possible through these values, and such a filter rejects ordinary input -
+    "C#", a sentence with a semicolon, "a -- b", "select a topic from the list",
+    or a link with a #fragment. contains_sql_injection() is kept for callers
+    that build raw SQL by hand (there should be none).
+    """
     if contains_script_injection(value):
         raise SecurityValidationError("Value contains disallowed HTML/script content.")
-    if contains_sql_injection(value):
-        raise SecurityValidationError("Value contains disallowed characters or patterns.")
     if _CONTROL_CHAR_PATTERN.search(value or ""):
         raise SecurityValidationError("Value contains disallowed control characters.")
 
