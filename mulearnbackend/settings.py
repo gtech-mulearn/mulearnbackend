@@ -386,18 +386,4 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'mu_celery.leaderboard_cron.refresh_leaderboards',
         'schedule': crontab(hour='0,12', minute=0),  # 00:00 and 12:00 UTC
     },
-    # Deletes expired OAuth tokens/codes in authserver via its internal API, so
-    # the oauth2_provider_* tables stay bounded. Minute 50 keeps it clear of
-    # the */15 aggregate jobs.
-    'clear-expired-auth-tokens-cron': {
-        'task': 'mu_celery.auth_token_cleanup_cron.clear_expired_auth_tokens',
-        'schedule': crontab(minute=50),
-    },
-    # Retries "sign out everywhere" for members whose password was reset while
-    # authserver could not revoke every session. Never gives up; see
-    # mu_celery/auth_session_tasks.py.
-    'retry-pending-session-revocations-cron': {
-        'task': 'mu_celery.auth_session_tasks.retry_pending_session_revocations',
-        'schedule': crontab(minute='7,22,37,52'),
-    },
 }

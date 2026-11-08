@@ -28,6 +28,19 @@ class MentorshipSession(models.Model):
         WEEKLY  = 'WEEKLY',  'Weekly'
         MONTHLY = 'MONTHLY', 'Monthly'
 
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        # Sessions created before 1.91 store 'ig_session' / 'campus_session' /
+        # 'company_session'. db-scripts alter-1.91.sql upper-cases them, but read
+        # them as the new values anyway so Python comparisons such as
+        # session.session_type == SessionType.IG_SESSION never depend on that
+        # backfill. (DB filters already match: the column is case-insensitive.)
+        instance = super().from_db(db, field_names, values)
+        session_type = instance.__dict__.get('session_type')
+        if isinstance(session_type, str) and not session_type.isupper():
+            instance.session_type = session_type.upper()
+        return instance
+
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     session_type = models.CharField(max_length=20, choices=SessionType.choices, default=SessionType.IG_SESSION)
     entity_id = models.CharField(max_length=36, blank=True, null=True)

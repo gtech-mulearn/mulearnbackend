@@ -241,6 +241,12 @@ class CompanyCollaborationRespondAPI(APIView):
                 return CustomResponse(general_message="You are not authorized to respond on behalf of this campus/IG.").get_failure_response(status_code=403)
 
             accept = bool(request.data.get("accept", True))
+            if not accept and collaboration.status == Collaboration.Status.OPEN:
+                # An open post is shared by every campus/IG. Declining it would
+                # close it for all of them, so only a direct invite can be declined.
+                return CustomResponse(
+                    general_message="Open collaboration posts cannot be declined. Simply do not claim it."
+                ).get_failure_response()
             now = DateTimeUtils.get_current_utc_time()
             collaboration.target_type = target_type
             collaboration.target_org_id = target_org_id

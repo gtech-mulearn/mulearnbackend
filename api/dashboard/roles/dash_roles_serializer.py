@@ -284,7 +284,7 @@ class UserRoleCreateSerializer(serializers.ModelSerializer):
                 # 2. Create an approved MentorApplication record
                 application, app_created = MentorApplication.objects.get_or_create(
                     user_id=target_user_id,
-                    tier=mentor_tier,
+                    mentor_tier=mentor_tier,
                     org=org,
                     defaults={
                         "status": MentorApplication.Status.APPROVED,

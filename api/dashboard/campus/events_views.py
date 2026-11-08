@@ -381,6 +381,15 @@ class CampusExecomAPI(APIView):
                         org=org, ig__code=ig_code_for_chapter_field, is_active=True
                     ).first()
                     if chapter:
+                        # The chapter has one lead and one co-lead. Replacing the
+                        # holder must also take the role away from the previous
+                        # one (same as assign_ig_campus_lead / transfer), or the
+                        # roster ends up with two leads.
+                        previous_holder_id = getattr(chapter, f"{chapter_field}_id")
+                        if previous_holder_id and previous_holder_id != new_user.id:
+                            UserRoleLink.objects.filter(
+                                user_id=previous_holder_id, role=role
+                            ).delete()
                         setattr(chapter, chapter_field, new_user)
                         chapter.updated_by_id = user_id
                         chapter.save()

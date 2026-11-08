@@ -9,7 +9,7 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 from . import serializers
 
 class MentorAvailabilitySlotAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor Availability'],
@@ -148,7 +148,7 @@ class MentorAvailabilitySlotAPI(APIView):
         ).get_success_response()
 
 class MentorPublicAvailabilityAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor Public'],

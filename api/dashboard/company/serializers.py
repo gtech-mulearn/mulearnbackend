@@ -319,7 +319,42 @@ class CompanyDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Company
-        fields = "__all__"
+        fields = [
+            "id",
+            "company_user_id",
+            "company_user_name",
+            "company_user_email",
+            "name",
+            "logo",
+            "description",
+            "short_pitch",
+            "industry_sector",
+            "website_link",
+            "email",
+            "slug",
+            "status",
+            "location",
+            "district",
+            "district_name",
+            "state",
+            "country",
+            "company_size",
+            "linkedin_url",
+            "founded_year",
+            "remote_policy",
+            "culture_text",
+            "tech_stack",
+            "perks",
+            "testimonials",
+            "gallery",
+            "rejection_reason",
+            "verification_requested_at",
+            "verified_at",
+            "created_at",
+            "updated_at",
+            "profile_completeness",
+            "verification_sla_message",
+        ]
 
     def get_perks(self, obj):
         return normalize_json_array(obj.perks)

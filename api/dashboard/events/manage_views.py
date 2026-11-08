@@ -432,21 +432,6 @@ class ManageEventListCreateAPI(APIView):
                     if str(payload_organiser_org) not in [str(o) for o in valid_org_ids]:
                         return CustomResponse(general_message='You are not authorized to create events for this company.').get_failure_response()
 
-                # PRD §15 — rate/abuse limit: cap how many not-yet-published
-                # company events can be open at once, mirroring
-                # job_views.MAX_PENDING_JOBS_PER_MENTOR.
-                open_count = _get_manageable_events().filter(
-                    organiser_type=Event.OrganiserType.COMPANY,
-                    organiser_org_id=payload_organiser_org,
-                    status__in=[
-                        Event.Status.DRAFT, Event.Status.PENDING_MENTOR_APPROVAL, Event.Status.PENDING_APPROVAL,
-                    ],
-                ).count()
-                if open_count >= MAX_OPEN_COMPANY_EVENTS:
-                    return CustomResponse(
-                        general_message=f'This company already has {MAX_OPEN_COMPANY_EVENTS} draft/pending-approval events. Resolve those before creating more.'
-                    ).get_failure_response(status_code=429)
-
             # Enforce campus tenancy for Campus events
             ownership_error = _validate_campus_event_ownership(
                 user_id, roles,
@@ -1973,8 +1958,11 @@ class CampusEventApproveAPI(APIView):
         )
 
         # Notify the event creator + fan out to scope audience
+        # resolve_terminal_status() above may have settled the event as ONGOING
+        # (announced like PUBLISHED) or COMPLETED (a backdated event recorded
+        # after the fact — not announced, and not "progressing through review").
         if event.created_by_id:
-            if new_status == Event.Status.PUBLISHED:
+            if should_announce(new_status):
                 # Fan out EVENT_PUBLISHED to all users in the event's scope
                 # (campus members in this case). Actor auto-excluded by dispatch().
                 # Timestamp-based occurrence — see AdminEventApproveAPI for why.
@@ -1986,7 +1974,7 @@ class CampusEventApproveAPI(APIView):
                     occurrence = f"{event.id}:{event.updated_at.isoformat()}",
                     actor_id   = user_id,
                 )
-            else:
+            elif new_status != Event.Status.COMPLETED:
                 NotificationService.dispatch(
                     notif_type = NotificationType.EVENT_APPROVAL_STAGE,
                     audience   = Audience.user(str(event.created_by_id)),

@@ -2,10 +2,12 @@
 -- MuLearn DEV database: full schema (reconstructed)
 -- Part A: latest.sql (production schema, unchanged)
 -- Part B: dev delta (what pranav-dev models need on top of prod)
--- Part C: company problem statements (db-scripts/alter/alter-1.91.sql)
--- Verified (Parts A+B): loads with no errors on MySQL 8.0 and every Django model SELECTs OK.
--- Part C is the same SQL as alter-1.91, already applied on mu_dev; the full file
--- has not yet been re-loaded end to end with Part C included.
+-- Part C: problem statements (db-scripts alter-1.91.sql)
+-- Part D: other alter-1.91.sql schema changes the 1.91 code relies on
+-- Verified (Parts A-D): the whole file loads on MySQL 8.0 (2026-11-08). Parts C and D
+-- are the schema side of db-scripts alter-1.91.sql, which is what production runs.
+-- Note: Part A uses DEFAULT (UUID()), which MySQL rejects (error 1674) when binary
+-- logging is on in statement mode - load it on a server with binlog off.
 -- ============================================================
 
 
@@ -3523,17 +3525,20 @@ ALTER TABLE `mentor_scope_grant` MODIFY COLUMN `mentor_id` varchar(36) NULL DEFA
 ALTER TABLE `voucher_log` MODIFY COLUMN `mail` varchar(200) NULL DEFAULT NULL;
 
 
--- ---------- PART C: company problem statements (alter-1.91) ----------
+-- ---------- PART C: problem statements (db-scripts alter-1.91.sql) ----------
+-- Company- and muLearn-authored problem statements (company_id NULL + source
+-- 'mulearn' for admin-authored ones) and learner solution submissions.
 
 CREATE TABLE IF NOT EXISTS `problem_statement` (
   `id` char(36) NOT NULL,
-  `company_id` char(36) NOT NULL,
+  `company_id` char(36) DEFAULT NULL,
   `title` varchar(150) NOT NULL,
   `description` text NOT NULL,
   `category` varchar(100) NOT NULL,
   `skills` json NOT NULL,
   `deadline` datetime(6) DEFAULT NULL,
   `status` enum('Draft','Published','Unpublished') NOT NULL DEFAULT 'Draft',
+  `source` enum('company','mulearn') NOT NULL DEFAULT 'company',
   `created_by` char(36) NOT NULL,
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_by` char(36) NOT NULL,
@@ -3543,6 +3548,7 @@ CREATE TABLE IF NOT EXISTS `problem_statement` (
   PRIMARY KEY (`id`),
   KEY `idx_problem_statement_company_status_updated` (`company_id`,`status`,`updated_at`),
   KEY `idx_problem_statement_status_published` (`status`,`published_at`),
+  KEY `idx_problem_statement_source_status_updated` (`source`,`status`,`updated_at`),
   KEY `idx_problem_statement_created_by` (`created_by`),
   KEY `idx_problem_statement_updated_by` (`updated_by`),
   KEY `idx_problem_statement_published_by` (`published_by`),
@@ -3557,7 +3563,9 @@ CREATE TABLE IF NOT EXISTS `problem_statement_interaction` (
   `id` char(36) NOT NULL,
   `problem_statement_id` char(36) NOT NULL,
   `user_id` char(36) NOT NULL,
-  `status` enum('Trying') NOT NULL DEFAULT 'Trying',
+  `status` enum('Trying','Submitted') NOT NULL DEFAULT 'Trying',
+  `submission_url` varchar(500) DEFAULT NULL,
+  `submitted_at` datetime(6) DEFAULT NULL,
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   PRIMARY KEY (`id`),
@@ -3565,5 +3573,37 @@ CREATE TABLE IF NOT EXISTS `problem_statement_interaction` (
   KEY `idx_problem_statement_interaction_statement_status` (`problem_statement_id`,`status`),
   KEY `idx_problem_statement_interaction_user` (`user_id`),
   CONSTRAINT `fk_problem_statement_interaction_ref_statement` FOREIGN KEY (`problem_statement_id`) REFERENCES `problem_statement` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_problem_statement_interaction_ref_user` FOREIGN KEY (`user_id`) REFERENCES `user` (`id`) ON DELETE CASCADE
+  CONSTRAINT `fk_problem_statement_interaction_ref_user` FOREIGN KEY (`user_id`) REFERENCES `user` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `chk_ps_interaction_submission` CHECK ((`status` <> 'Submitted') OR (`submission_url` IS NOT NULL AND `submitted_at` IS NOT NULL))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+-- ---------- PART D: other alter-1.91.sql changes the 1.91 code relies on ----------
+
+-- Company deactivation saves status = 'deactivated'.
+ALTER TABLE `company`
+  MODIFY COLUMN `status` enum('pending','verified','rejected','deactivated') DEFAULT 'pending';
+
+-- Job application withdrawal keeps the row with status 'Withdrawn'.
+ALTER TABLE `user_job_application`
+  MODIFY COLUMN `status` enum('Pending','In-Review','Shortlisted','Interview','Rejected','Selected','Withdrawn')
+  NOT NULL DEFAULT 'Pending';
+
+-- Session types are upper case in the code; alter-1.91 converts old rows
+-- ('ig_session' -> 'IG_SESSION', ...) and changes the default.
+ALTER TABLE `mentorship_session` ALTER COLUMN `session_type` SET DEFAULT 'IG_SESSION';
+
+-- Notification de-duplication: the code inserts with ignore_conflicts=True
+-- and relies on these keys to drop repeats.
+ALTER TABLE `notification`
+  ADD UNIQUE KEY `uq_notification_user_dedupe_key` (`user_id`, `dedupe_key`);
+ALTER TABLE `broadcast_notification`
+  ADD UNIQUE KEY `uq_broadcast_notification_dedupe_key` (`dedupe_key`);
+ALTER TABLE `broadcast_notification_read`
+  ADD UNIQUE KEY `uq_broadcast_notification_read_broadcast_user` (`broadcast_id`, `user_id`);
+
+-- Data steps (in alter-1.91.sql PART 2, not repeated here because this file
+-- builds an empty schema): "{code} CampusLead" roles are renamed to
+-- "{code} CampusIGLead" with is_execom_role = 1 and their holders kept;
+-- old session_type / media_content.zone values are upper-cased; upcoming
+-- sessions get their MENTOR participant row.

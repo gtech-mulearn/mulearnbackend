@@ -6,6 +6,7 @@ from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
 from db.company import Company, CompanyAdminLink
+from db.user import User
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 from api.notification.service import NotificationService
 from api.notification.types import NotificationType
@@ -239,7 +240,7 @@ class CompanyAdminLinkLeaveAPI(APIView):
 
 
 class CompanyRegistrationAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company'],
@@ -326,7 +327,7 @@ class CompanyRegistrationAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
 class CompanyStatusAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company'],
@@ -350,7 +351,7 @@ class CompanyStatusAPI(APIView):
         ).get_success_response()
 
 class CompanyProfileAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company'],
@@ -398,7 +399,7 @@ class CompanyProfileAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
 class CompanyListAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company'],
@@ -462,7 +463,7 @@ class CompanyListAPI(APIView):
         ).get_success_response()
 
 class CompanyDetailAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company'],
@@ -481,7 +482,7 @@ class CompanyDetailAPI(APIView):
         return CustomResponse(response=serializer.data).get_success_response()
 
 class CompanyVerifyAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company'],
@@ -752,7 +753,7 @@ class PublicCompanyProfileAPI(APIView):
 
 
 class CompanyAdminSummaryAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company'],
@@ -805,7 +806,7 @@ def _get_company_for_user(user_id):
 # ---------------------------------------------------------------------------
 
 class CompanyMentorNominateAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=["Dashboard - Company Mentor"],
@@ -919,7 +920,7 @@ class CompanyMentorApplyAPI(APIView):
 
 
 class CompanyMentorListAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=["Dashboard - Company Mentor"],
