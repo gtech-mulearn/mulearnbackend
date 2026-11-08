@@ -548,9 +548,10 @@ def _is_company_owner_of(actor_id, mentor):
 
 def _is_ig_lead_of(actor_id, application):
     """
-    True if `actor_id` holds the IGLead role for at least one of `application`'s
-    preferred IGs. Lets an IG's own lead verify an IG_MENTOR application for
-    that IG, alongside (not instead of) platform admins.
+    True if `actor_id` holds the IGLead role for EVERY one of `application`'s
+    preferred IGs. Approval grants mentor access to all of those IGs, so leading
+    only one of them is not enough - otherwise IG A's lead could approve a
+    mentor for IG B. Works alongside (not instead of) platform admins.
     """
     if application.mentor_tier != MentorApplication.MentorTier.IG_MENTOR:
         return False
@@ -561,14 +562,18 @@ def _is_ig_lead_of(actor_id, application):
 
     from db.task import InterestGroup
     from db.user import UserRoleLink
-    lead_role_titles = InterestGroup.objects.filter(id__in=ig_ids).values_list('code', flat=True)
-    lead_role_titles = [RoleType.IG_LEAD_ROLE(code) for code in lead_role_titles]
-    if not lead_role_titles:
+    ig_ids = set(ig_ids)
+    ig_codes = list(InterestGroup.objects.filter(id__in=ig_ids).values_list('code', flat=True))
+    if len(ig_codes) != len(ig_ids):
+        # Unknown IG ids in the application - leave it to a platform admin.
         return False
+    lead_role_titles = {RoleType.IG_LEAD_ROLE(code) for code in ig_codes}
 
-    return UserRoleLink.objects.filter(
+    # MySQL matches titles case-insensitively, so compare the same way here.
+    held = {t.lower() for t in UserRoleLink.objects.filter(
         user_id=actor_id, role__title__in=lead_role_titles,
-    ).exists()
+    ).values_list('role__title', flat=True)}
+    return held == {t.lower() for t in lead_role_titles}
 
 
 class MentorVerifyAPI(APIView):
@@ -704,7 +709,7 @@ class MentorPublicProfileAPI(APIView):
     @extend_schema(
         tags=['Dashboard - Mentor Public'],
         description="View a mentor's profile publicly.",
-        responses={200: serializers.MentorDetailSerializer},
+        responses={200: serializers.MentorPublicDetailSerializer},
     )
     def get(self, request, mentor_id):
         # The public profile is identified by the UserMentor profile ID
@@ -719,7 +724,7 @@ class MentorPublicProfileAPI(APIView):
         if not MentorApplication.objects.filter(user=mentor.user, status=MentorApplication.Status.APPROVED).exists():
             return CustomResponse(general_message="This user is not an approved mentor.").get_failure_response(status_code=403)
             
-        serializer = serializers.MentorDetailSerializer(mentor, context={'request': request})
+        serializer = serializers.MentorPublicDetailSerializer(mentor, context={'request': request})
         return CustomResponse(response=serializer.data).get_success_response()
 
 class MentorChangeCompanyAPI(APIView):

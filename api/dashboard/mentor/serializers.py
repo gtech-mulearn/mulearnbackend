@@ -611,6 +611,27 @@ class MentorDetailSerializer(serializers.ModelSerializer):
     def get_rating_count(self, obj):
         return self._rating_aggregate(obj)['rating_count']
 
+class MentorApplicationPublicSerializer(MentorApplicationProfileSerializer):
+    """Application fields safe for the public profile: no admin review note."""
+    class Meta(MentorApplicationProfileSerializer.Meta):
+        fields = [f for f in MentorApplicationProfileSerializer.Meta.fields if f != "verification_note"]
+
+
+class MentorPublicDetailSerializer(MentorDetailSerializer):
+    """
+    MentorDetailSerializer for /mentor/public/profile/<id>/, which any logged-in
+    user can open: lists only APPROVED applications (no pending / rejected
+    history) and never the admin verification_note.
+    """
+    applications = serializers.SerializerMethodField()
+
+    def get_applications(self, obj):
+        apps = obj.user.mentor_applications.filter(
+            status=MentorApplication.Status.APPROVED
+        ).select_related("org", "user")
+        return MentorApplicationPublicSerializer(apps, many=True).data
+
+
 class MentorProfileUpdateSerializer(serializers.ModelSerializer):
     linkedin = serializers.CharField(required=False, allow_blank=True, write_only=True, max_length=255)
 
@@ -1082,6 +1103,16 @@ class SessionCreateSerializer(serializers.ModelSerializer):
 
             if session.is_recurring:
                 child_sessions, was_truncated = generate_recurring_sessions(session)
+                # Each occurrence needs its own MENTOR row too: completion records
+                # the mentor's minutes on it, and mentor counts key off it.
+                MentorshipSessionUserLink.objects.bulk_create([
+                    MentorshipSessionUserLink(
+                        session_id=child.id,
+                        user_id=user_id,
+                        participant_role=MentorshipSessionUserLink.ParticipantRole.MENTOR,
+                    )
+                    for child in child_sessions
+                ])
                 session._child_session_ids = [c.id for c in child_sessions]
                 session._recurrence_truncated = was_truncated
             else:
@@ -1430,7 +1461,11 @@ class ParticipantJoinSerializer(serializers.Serializer):
                 raise serializers.ValidationError("You are not eligible to join this session.")
 
             if session.max_participants:
-                current_count = MentorshipSessionUserLink.objects.filter(session_id=session_id).count()
+                # Only learners use up places — the session's own mentor row doesn't.
+                current_count = MentorshipSessionUserLink.objects.filter(
+                    session_id=session_id,
+                    participant_role=MentorshipSessionUserLink.ParticipantRole.MENTEE,
+                ).count()
                 if current_count >= session.max_participants:
                     raise serializers.ValidationError("Session has reached its maximum participant limit.")
 
@@ -1475,7 +1510,11 @@ class MentorAddParticipantSerializer(serializers.Serializer):
                 raise serializers.ValidationError("Only scheduled sessions can accept participants.")
 
             if session.max_participants:
-                current_count = MentorshipSessionUserLink.objects.filter(session_id=session_id).count()
+                # Only learners use up places — the session's own mentor row doesn't.
+                current_count = MentorshipSessionUserLink.objects.filter(
+                    session_id=session_id,
+                    participant_role=MentorshipSessionUserLink.ParticipantRole.MENTEE,
+                ).count()
                 if current_count >= session.max_participants:
                     raise serializers.ValidationError("Session has reached its maximum participant limit.")
 

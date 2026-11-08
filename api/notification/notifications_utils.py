@@ -2,6 +2,7 @@ import logging
 
 from django.conf import settings
 from django.core.cache import cache
+from django.db import transaction
 
 from db.notification import Notification
 from utils.utils import DateTimeUtils
@@ -68,7 +69,7 @@ class NotificationUtils:
     """
 
     @staticmethod
-    def insert_notification(user, title, description, button, url, created_by):
+    def insert_notification(user, title, description, button, url, created_by=None, created_by_id=None):
         """
         Insert notification
 
@@ -78,12 +79,16 @@ class NotificationUtils:
             description:
             button:
             url:
-            created_by:
+            created_by: the acting User (or pass created_by_id instead).
 
         Returns:
             True if the notification is inserted successfully, False otherwise.
         """
-
+        actor = {"created_by": created_by} if created_by is not None else {"created_by_id": created_by_id}
+        # The v2 feed reads redirect_url (url is kept for older clients).
         Notification.objects.create(user=user, title=title, description=description, button=button, url=url,
-                                    created_at=DateTimeUtils.get_current_utc_time(), created_by=created_by)
+                                    redirect_url=url, created_at=DateTimeUtils.get_current_utc_time(), **actor)
+        # A new unread row landed: drop the cached badge count once it is visible.
+        user_id = getattr(user, "pk", user)
+        transaction.on_commit(lambda: invalidate_unread_count(user_id))
         return True

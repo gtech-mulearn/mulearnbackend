@@ -125,7 +125,11 @@ class CompanyTalentShortlistAPI(APIView):
                 general_message="Access denied. Verified company profile required."
             ).get_failure_response(status_code=403)
 
-        shortlist_links = CompanyTalentShortlist.objects.filter(company=company).select_related(
+        # Re-check privacy on every read: a learner who made their profile
+        # private after being shortlisted must drop out of the list.
+        shortlist_links = CompanyTalentShortlist.objects.filter(
+            company=company, user__user_settings_user__is_public=True,
+        ).select_related(
             "user__wallet_user", "user__user_lvl_link_user__level"
         ).order_by("-created_at")
 
