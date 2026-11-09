@@ -3570,7 +3570,6 @@ CREATE TABLE IF NOT EXISTS `problem_statement_interaction` (
   CONSTRAINT `fk_problem_statement_interaction_ref_user` FOREIGN KEY (`user_id`) REFERENCES `user` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- Partner SSO (alter-1.92)
 CREATE TABLE IF NOT EXISTS `integration_account_link`
 (
     `id`                VARCHAR(36) NOT NULL,

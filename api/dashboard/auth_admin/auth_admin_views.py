@@ -27,7 +27,7 @@ from rest_framework.views import APIView
 from db.mentor import SystemActionLog
 from db.user import User
 from utils.authserver_client import AuthServerUnavailable, call, error_message
-from utils.permission import CustomizePermission, JWTUtils, role_required
+from utils.permission import CustomizePermission, JWTUtils, verified_role_required
 from utils.response import CustomResponse
 from utils.types import RoleType
 
@@ -98,7 +98,7 @@ class LoginAttemptsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @extend_schema(tags=TAGS, description="Recent sign-in attempts. Filters: identifier, result=success|failure, before (ISO time), limit (max 200).")
-    @role_required(AUTH_ADMIN_ROLES)
+    @verified_role_required(AUTH_ADMIN_ROLES)
     def get(self, request):
         params = {k: request.query_params.get(k) for k in ("identifier", "result", "before", "limit")
                   if request.query_params.get(k)}
@@ -110,7 +110,7 @@ class SecurityPostureAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @extend_schema(tags=TAGS, description="Read-only identity-provider security settings.")
-    @role_required(AUTH_ADMIN_ROLES)
+    @verified_role_required(AUTH_ADMIN_ROLES)
     def get(self, request):
         body, failure = _proxy("GET", "admin/security-posture/")
         return failure or CustomResponse(response=body).get_success_response()
@@ -120,13 +120,13 @@ class SigninPolicyAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @extend_schema(tags=TAGS, description="Current sign-in lockout policy and its bounds.")
-    @role_required(AUTH_ADMIN_ROLES)
+    @verified_role_required(AUTH_ADMIN_ROLES)
     def get(self, request):
         body, failure = _proxy("GET", "admin/signin-policy/")
         return failure or CustomResponse(response=body).get_success_response()
 
     @extend_schema(tags=TAGS, description="Update attempts_limit (3-20) and/or block_minutes (1-1440).")
-    @role_required(AUTH_ADMIN_ROLES)
+    @verified_role_required(AUTH_ADMIN_ROLES)
     def put(self, request):
         body, failure = _proxy("PUT", "admin/signin-policy/", json=request.data)
         if failure:
@@ -142,7 +142,7 @@ class ClientListAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @extend_schema(tags=TAGS, description="Every registered OAuth client, including disabled ones.")
-    @role_required(AUTH_ADMIN_ROLES)
+    @verified_role_required(AUTH_ADMIN_ROLES)
     def get(self, request):
         body, failure = _proxy("GET", "admin/clients/")
         return failure or CustomResponse(response=body).get_success_response()
@@ -152,7 +152,7 @@ class ClientListAPI(APIView):
         "post_logout_redirect_uris, skip_authorization. A confidential client's secret is "
         "returned ONCE in this response and cannot be recovered."
     ))
-    @role_required(AUTH_ADMIN_ROLES)
+    @verified_role_required(AUTH_ADMIN_ROLES)
     def post(self, request):
         body, failure = _proxy("POST", "admin/clients/", json=request.data)
         if failure:
@@ -173,13 +173,13 @@ class ClientDetailAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @extend_schema(tags=TAGS, description="One OAuth client.")
-    @role_required(AUTH_ADMIN_ROLES)
+    @verified_role_required(AUTH_ADMIN_ROLES)
     def get(self, request, client_id):
         body, failure = _proxy("GET", f"admin/clients/{quote(client_id, safe='')}/")
         return failure or CustomResponse(response=body).get_success_response()
 
     @extend_schema(tags=TAGS, description="Edit name, redirect_uris, post_logout_redirect_uris or skip_authorization. client_id and client_type never change.")
-    @role_required(AUTH_ADMIN_ROLES)
+    @verified_role_required(AUTH_ADMIN_ROLES)
     def patch(self, request, client_id):
         body, failure = _proxy("PATCH", f"admin/clients/{quote(client_id, safe='')}/", json=request.data)
         if failure:
@@ -195,7 +195,7 @@ class ClientDisableAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @extend_schema(tags=TAGS, description="Disable a client and revoke every token it holds. Clients are never deleted.")
-    @role_required(AUTH_ADMIN_ROLES)
+    @verified_role_required(AUTH_ADMIN_ROLES)
     def post(self, request, client_id):
         body, failure = _proxy("POST", f"admin/clients/{quote(client_id, safe='')}/disable/")
         if failure:
@@ -212,7 +212,7 @@ class ClientEnableAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @extend_schema(tags=TAGS, description="Re-enable a disabled client. Its old tokens stay revoked.")
-    @role_required(AUTH_ADMIN_ROLES)
+    @verified_role_required(AUTH_ADMIN_ROLES)
     def post(self, request, client_id):
         body, failure = _proxy("POST", f"admin/clients/{quote(client_id, safe='')}/enable/")
         if failure:
@@ -229,7 +229,7 @@ class SessionRevokeAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @extend_schema(tags=TAGS, description="Sign one member out of every device and app. Body: user_id or muid, optional reason.")
-    @role_required(AUTH_ADMIN_ROLES)
+    @verified_role_required(AUTH_ADMIN_ROLES)
     def post(self, request):
         user_id = request.data.get("user_id")
         muid = request.data.get("muid")

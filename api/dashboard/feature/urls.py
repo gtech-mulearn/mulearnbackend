@@ -1,6 +1,8 @@
 from django.urls import path
-from .feature_views import GritMeterToggleAPI
+
+from .feature_views import FeatureFlagAPI
 
 urlpatterns = [
-    path("grit-meter/", GritMeterToggleAPI.as_view()),
+    # grit-meter/ keeps its URL; every flag in flags.FLAGS lives here.
+    path("<slug:slug>/", FeatureFlagAPI.as_view()),
 ]

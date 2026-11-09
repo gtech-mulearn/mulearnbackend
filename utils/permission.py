@@ -1,5 +1,5 @@
 from functools import wraps
-from db.user import UserMentor
+from db.user import UserMentor, UserRoleLink
 from utils.response import CustomResponse
 import datetime
 from datetime import datetime
@@ -291,6 +291,39 @@ def role_required(roles):
                 general_message="You do not have the required role to access this page."
             ).get_failure_response()
             return res
+
+        return wrapped_view_func
+
+    return decorator
+
+
+def holds_verified_role(user_id, titles):
+    """
+    True when the database holds a verified, active, unrevoked, global (not
+    IG-scoped) link from this user to one of these roles.
+    """
+    return UserRoleLink.objects.filter(
+        user_id=user_id, role__title__in=list(titles), ig__isnull=True,
+        verified=True, is_active=True, revoked_at__isnull=True,
+    ).exists()
+
+
+def verified_role_required(roles):
+    """
+    role_required, then the same check against the database.
+
+    Signup accepts any role and tokens carry unverified ones, so a role in the
+    token alone is not proof. Use this wherever a role grants real power.
+    """
+    def decorator(view_func):
+        @wraps(view_func)
+        @role_required(roles)
+        def wrapped_view_func(obj, request, *args, **kwargs):
+            if not holds_verified_role(JWTUtils.fetch_user_id(request), roles):
+                return CustomResponse(
+                    general_message="You do not have the required role to access this page."
+                ).get_failure_response()
+            return view_func(obj, request, *args, **kwargs)
 
         return wrapped_view_func
 

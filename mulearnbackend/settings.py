@@ -370,9 +370,9 @@ QSEVERSE_API_KEY = decouple_config("QSEVERSE_API_KEY")
 EMAIL_CODE_IP_RATE = decouple_config("EMAIL_CODE_IP_RATE", default="60/hour")
 
 # ── Futuremug SSO (spec 2026-10-12, sub-project B) ──────────────────────────
-# Every key has a default: a missing env var disables the feature instead of
-# crashing startup. FUTUREMUG_API_KEY is env-only; never commit it.
-FUTUREMUG_ENABLED = decouple_config("FUTUREMUG_ENABLED", default=False, cast=bool)
+# Every key has a default: a missing env var leaves the feature unconfigured
+# instead of crashing startup. FUTUREMUG_API_KEY is env-only; never commit it.
+# Admins switch it on from System → Features (the futuremug_enabled flag).
 FUTUREMUG_BASE_URL = decouple_config("FUTUREMUG_BASE_URL", default="")
 FUTUREMUG_API_KEY = decouple_config("FUTUREMUG_API_KEY", default="")
 FUTUREMUG_TERMS_URL = decouple_config("FUTUREMUG_TERMS_URL", default="")

@@ -4,6 +4,7 @@ import re
 
 from django.conf import settings
 
+from api.dashboard.feature.flags import is_flag_on
 from api.integrations.partner_sso.adapter import ContactSnapshot, SessionResult
 from api.integrations.partner_sso.subjects import SubjectKind
 
@@ -31,18 +32,22 @@ class FuturemugAdapter:
         "college": SubjectKind.COLLEGE,
     }
 
-    def is_enabled(self):
+    def is_configured(self):
+        """The server has what Futuremug needs: a usable key, an https base URL and the legal links."""
         key = _api_key()
         if key and not _KEY_SHAPE.fullmatch(key):
             logger.error("FUTUREMUG_API_KEY is malformed (spaces, line breaks or non-ASCII); Futuremug stays disabled")
             return False
         return bool(
-            settings.FUTUREMUG_ENABLED
-            and key
+            key
             and settings.FUTUREMUG_BASE_URL.startswith("https://")
             and settings.FUTUREMUG_TERMS_URL
             and settings.FUTUREMUG_PRIVACY_URL
         )
+
+    def is_enabled(self):
+        # Configured first: it needs no cache or database round trip.
+        return self.is_configured() and is_flag_on("futuremug_enabled", default=False)
 
     def rate_per_minute(self):
         return settings.FUTUREMUG_RATE_PER_MIN

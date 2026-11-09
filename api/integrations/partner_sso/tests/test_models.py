@@ -1,4 +1,4 @@
-"""The models must mirror db-scripts alter-1.92 column for column."""
+"""The models must mirror db-scripts alter-1.93 column for column."""
 import pathlib
 import re
 
@@ -6,7 +6,7 @@ import pytest
 
 from db.integrations import IntegrationAccountEvent, IntegrationAccountLink
 
-ALTER = pathlib.Path(__file__).resolve().parents[5] / "db-scripts" / "alter" / "alter-1.92.sql"
+ALTER = pathlib.Path(__file__).resolve().parents[5] / "db-scripts" / "alter" / "alter-1.93.sql"
 
 
 def sql_columns(table):
