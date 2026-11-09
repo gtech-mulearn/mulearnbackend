@@ -4,8 +4,12 @@ from django.core.files.storage import FileSystemStorage
 from django.db import models
 
 from django.conf import settings
+from django.utils import timezone
+
+from utils.emails import normalize_email
 
 from .managers import user_manager
+from .signals import user_email_changed
 
 # from .task import UserIgLink
 from decouple import config as decouple_config
@@ -53,6 +57,10 @@ class User(models.Model):
     deleted_at = models.DateTimeField(blank=True, null=True)
     deleted_by = models.ForeignKey("self", on_delete=models.SET(settings.SYSTEM_ADMIN_ID), blank=True, null=True,
                                    related_name="user_deleted_by_user", db_column="deleted_by", default=None)
+    # Spec A (2026-10-12): when the CURRENT email was last proven, and how.
+    # NULL means not verified. save() resets both whenever the email changes.
+    email_verified_at = models.DateTimeField(blank=True, null=True)
+    email_verified_via = models.CharField(max_length=20, blank=True, null=True)
     objects = user_manager.ActiveUserManager()
     every = models.Manager()
 
@@ -74,6 +82,45 @@ class User(models.Model):
         if fs.exists(path):
             return f"{decouple_config('BE_DOMAIN_NAME')}{fs.url(path)}"
 
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        instance = super().from_db(db, field_names, values)
+        # What was loaded, so save() can tell a real email change from a
+        # re-save. Deferred fields are absent from __dict__.
+        instance._loaded_email = instance.__dict__.get("email")
+        instance._loaded_email_verified = instance.__dict__.get("email_verified_at") is not None
+        return instance
+
+    def refresh_from_db(self, using=None, fields=None, **kwargs):
+        super().refresh_from_db(using=using, fields=fields, **kwargs)
+        # A reload moves the baseline; otherwise the next save would see a
+        # stale _loaded_email and report a change that never happened.
+        if fields is None or "email" in fields:
+            self._loaded_email = self.__dict__.get("email")
+            self._loaded_email_verified = self.__dict__.get("email_verified_at") is not None
+
+    def mark_email_verified_on_save(self, via):
+        """The next save() writes a new email that `via` has just proven."""
+        self._email_verified_by = via
+
+    def _detect_email_change(self, update_fields):
+        """(old_email, old_was_verified) if this save changes the email, else None."""
+        if self._state.adding or "email" not in self.__dict__:
+            return None
+        if update_fields is not None and "email" not in update_fields:
+            return None
+        loaded = getattr(self, "_loaded_email", None)
+        loaded_verified = getattr(self, "_loaded_email_verified", False)
+        if loaded is None:
+            row = User.every.filter(pk=self.pk).values_list("email", "email_verified_at").first()
+            if row is None:
+                return None
+            loaded, verified_at = row
+            loaded_verified = verified_at is not None
+        if normalize_email(loaded) == normalize_email(self.email):
+            return None
+        return loaded, loaded_verified
+
     def save(self, *args, **kwargs):
         if self.muid is None:
             full_name = self.full_name.replace(" ", "-").lower()
@@ -84,7 +131,28 @@ class User(models.Model):
                 counter += 1
                 self.muid = f"{full_name}-{counter}@mulearn"
 
-        return super().save(*args, **kwargs)
+        # Spec A §3.1: a changed email never inherits verified status.
+        update_fields = kwargs.get("update_fields")
+        change = self._detect_email_change(update_fields)
+        via = getattr(self, "_email_verified_by", None) if change else None
+        if change is not None:
+            self.email_verified_at = timezone.now().replace(microsecond=0) if via else None
+            self.email_verified_via = via
+            if update_fields is not None:
+                kwargs["update_fields"] = set(update_fields) | {"email_verified_at", "email_verified_via"}
+
+        result = super().save(*args, **kwargs)
+
+        self._email_verified_by = None
+        if change is not None:
+            old_email, old_was_verified = change
+            self._loaded_email = self.email
+            self._loaded_email_verified = via is not None
+            user_email_changed.send(
+                sender=User, user=self, old_email=old_email, new_email=self.email,
+                old_was_verified=old_was_verified, verified_via=via,
+            )
+        return result
 
 class UserDomains(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=lambda: str(uuid.uuid4()))
@@ -347,6 +415,22 @@ class ForgotPassword(models.Model):
     class Meta:
         managed = False
         db_table = 'forgot_password'
+
+
+class OtpVerification(models.Model):
+    """
+    Login OTPs. The authserver owns this table; it is declared here only so an
+    email change can revoke codes already mailed to the old inbox (spec A §3.7).
+    """
+    id = models.CharField(primary_key=True, max_length=36)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="otp_verification_user")
+    otp = models.IntegerField()
+    expiry = models.DateTimeField()
+    created_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = "otp_verification"
 
 
 class UserSettings(models.Model):

@@ -1,0 +1,13 @@
+{% extends "mails/base_mail.html" %} {% block content %}
+<div style="background: transparent; width: 100%; height: auto">
+  <center>
+    <h1 style="color: black; font-family: 'Poppins'; font-weight: 600; font-size: 26px;">
+      {% if user.purpose == "change" %}Confirm your new email{% elif user.purpose == "account" %}Verify your email{% else %}Confirm your email{% endif %}
+    </h1>
+    <p style="color: black; font-family: 'Poppins'; font-size: 14px;">Enter this code in µLearn:</p>
+    <p style="color: black; font-family: 'Courier New', monospace; font-size: 34px; font-weight: 700; letter-spacing: 8px;">{{ user.code }}</p>
+    <p style="color: black; font-family: 'Poppins'; font-size: 13px;">It expires in {{ user.minutes }} minutes and works once.</p>
+    <p style="color: #555555; font-family: 'Poppins'; font-size: 13px;">Didn't ask for this? Ignore this email. Nothing changes on your account.</p>
+  </center>
+</div>
+{% endblock %}

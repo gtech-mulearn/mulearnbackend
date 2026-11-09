@@ -1,6 +1,7 @@
 from django.urls import path
 
 from . import register_views
+from api.email_verification import views as email_verification_views
 
 urlpatterns = [
     path("", register_views.RegisterDataAPI.as_view()),
@@ -19,6 +20,8 @@ urlpatterns = [
     path("area-of-interest/list/", register_views.AreaOfInterestAPI.as_view()),
     path("lc/user-validation/", register_views.LearningCircleUserViewAPI.as_view()),
     path("email-verification/", register_views.UserEmailVerificationAPI.as_view()),
+    path("email-code/", email_verification_views.SignupEmailCodeAPI.as_view()),
+    path("email-code/verify/", email_verification_views.SignupEmailCodeVerifyAPI.as_view()),
     path("user-country/", register_views.UserCountryAPI.as_view()),
     path("user-state/", register_views.UserStateAPI.as_view()),
     path("user-zone/", register_views.UserZoneAPI.as_view()),

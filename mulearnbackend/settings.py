@@ -362,6 +362,24 @@ RAZORPAY_SECRET = decouple_config("RAZORPAY_SECRET")
 QSEVERSE_BASE_URL = decouple_config("QSEVERSE_BASE_URL")
 QSEVERSE_API_KEY = decouple_config("QSEVERSE_API_KEY")
 
+# ── Email verification (spec 2026-10-12, sub-project A) ────────────────────
+# Unconditional since spec C (2026-10-17): every signup proves its inbox, so
+# there is no enforcement switch.
+# Generous on purpose: a whole classroom signs up from one campus IP. The
+# per-address limits in api/email_verification/codes.py are the real guard.
+EMAIL_CODE_IP_RATE = decouple_config("EMAIL_CODE_IP_RATE", default="60/hour")
+
+# ── Futuremug SSO (spec 2026-10-12, sub-project B) ──────────────────────────
+# Every key has a default: a missing env var disables the feature instead of
+# crashing startup. FUTUREMUG_API_KEY is env-only; never commit it.
+FUTUREMUG_ENABLED = decouple_config("FUTUREMUG_ENABLED", default=False, cast=bool)
+FUTUREMUG_BASE_URL = decouple_config("FUTUREMUG_BASE_URL", default="")
+FUTUREMUG_API_KEY = decouple_config("FUTUREMUG_API_KEY", default="")
+FUTUREMUG_TERMS_URL = decouple_config("FUTUREMUG_TERMS_URL", default="")
+FUTUREMUG_PRIVACY_URL = decouple_config("FUTUREMUG_PRIVACY_URL", default="")
+# Below the partner's 60/min, which is per key and shared by every µLearn user.
+FUTUREMUG_RATE_PER_MIN = decouple_config("FUTUREMUG_RATE_PER_MIN", default=55, cast=int)
+
 BACKEND_API_KEY = decouple_config("BACKEND_API_KEY")
 
 # ── Notification dispatch ──────────────────────────────────────────────────

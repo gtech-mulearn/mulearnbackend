@@ -16,6 +16,7 @@ from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType, WebHookActions, WebHookCategory
 from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks, send_template_mail
 from . import dash_user_serializer
+from api.email_verification.service import mark_email_verified_if_current
 from django.core.cache import cache
 from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
 from rest_framework import serializers as s
@@ -533,6 +534,9 @@ class ResetPasswordConfirmAPI(APIView):
                 general_message=authserver_client.error_message(body)
             ).get_failure_response()
 
+        # The link went to this inbox, and email changes revoke stale links
+        # (spec A §3.7), so a surviving link proves the current email.
+        mark_email_verified_if_current(forget_user.user_id, forget_user.user.email, "password_reset")
         # The password is set, so the link is spent. Keeping it would let
         # whoever holds it set yet another password.
         forget_user.delete()

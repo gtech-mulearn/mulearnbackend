@@ -9,6 +9,9 @@ from utils.response import CustomResponse
 from utils.types import OrganizationType
 from . import serializers
 from .register_helper import get_auth_token, verify_google_temp_token, get_auth_token_by_id
+from api.email_verification.errors import VerificationError, error_response
+from api.email_verification.service import mark_email_verified_if_current, resolve_signup_verification
+from utils.emails import normalize_email
 from django.views.decorators.cache import cache_page
 from django.core.cache import cache
 from mu_celery.task import send_email
@@ -358,7 +361,9 @@ class RegisterDataAPI(APIView):
         data = {key: value for key, value in data.items() if value}
 
         is_google_signup = False
+        google_email_verified = False
         temp_token = data.pop("tempToken", None)
+        email_verification_token = data.pop("email_verification_token", None)
 
         if temp_token:
             # ── Google sign-up path ──────────────────────────────────────────
@@ -366,6 +371,9 @@ class RegisterDataAPI(APIView):
                 google_data = verify_google_temp_token(temp_token)
             except CustomException as e:
                 return CustomResponse(general_message=str(e)).get_failure_response()
+            # Only an authserver that checked Google's email_verified sends
+            # this claim (spec A §3.3); its absence means "unverified".
+            google_email_verified = google_data.get("email_verified") is True
 
             user_data = dict(data.get("user", {}))
 
@@ -403,10 +411,31 @@ class RegisterDataAPI(APIView):
                     res_data = get_auth_token_by_id(existing.id)
                 except CustomException as e:
                     return CustomResponse(general_message=str(e)).get_failure_response()
+                if google_email_verified:
+                    # The address Google proved, not the stored one: the lookup
+                    # above matches under the DB collation (spec A §3.6).
+                    mark_email_verified_if_current(existing.id, user_data["email"], "google")
                 res_data["data"] = serializers.UserDetailSerializer(existing).data
                 _log_legacy_signup(request, "google_retry")
                 return CustomResponse(response=res_data).get_success_response()
             # ── End Google sign-up path ──────────────────────────────────────
+
+        user_field = data.get("user")
+        # A non-object "user" is the serializer's 400 to report, not a crash here.
+        signup_user = dict(user_field) if isinstance(user_field, dict) else {}
+        if not is_google_signup and signup_user.get("email"):
+            # Normalise where the address enters the system (spec A §3.1).
+            signup_user["email"] = normalize_email(signup_user["email"])
+            data["user"] = signup_user
+        try:
+            verified_via = resolve_signup_verification(
+                email=signup_user.get("email"),
+                token=email_verification_token,
+                is_google_signup=is_google_signup,
+                google_email_verified=google_email_verified,
+            )
+        except VerificationError as error:
+            return error_response(error.code)
 
         create_user = serializers.RegisterSerializer(
             data=data, context={"request": request}
@@ -439,6 +468,10 @@ class RegisterDataAPI(APIView):
                 raise
         except CustomException as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
+
+        if verified_via:
+            # Checked against the address that was proven, not just stored.
+            mark_email_verified_if_current(user.id, signup_user.get("email"), verified_via)
 
         response_data = serializers.UserDetailSerializer(user, many=False).data
 

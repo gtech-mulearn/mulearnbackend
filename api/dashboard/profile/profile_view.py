@@ -41,6 +41,8 @@ from utils.types import (
 from utils.utils import DiscordWebhooks
 
 from . import profile_serializer
+from api.email_verification.errors import error_response
+from utils.emails import normalize_email
 from .profile_serializer import LinkSocials, ResetPasswordSerialzier
 from .profile_serializer import UserTermSerializer
 
@@ -97,6 +99,15 @@ class UserProfileEditView(APIView):
             return CustomResponse(
                 general_message="User Not Exists"
             ).get_failure_response()
+
+        requested_email = request.data.get("email")
+        if (
+            requested_email is not None
+            and normalize_email(requested_email) != normalize_email(user.email)
+        ):
+            # A new email must prove its inbox first (spec A §3.5): only the
+            # verified change flow changes it, always (spec C D2b).
+            return error_response("email_change_requires_verification")
 
         serializer = profile_serializer.UserProfileEditSerializer(
             user, data=request.data, partial=True

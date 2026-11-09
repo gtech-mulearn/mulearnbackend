@@ -1,0 +1,13 @@
+{% extends "mails/base_mail.html" %} {% block content %}
+<div style="background: transparent; width: 100%; height: auto">
+  <center>
+    <h1 style="color: black; font-family: 'Poppins'; font-weight: 600; font-size: 26px;">Your email was changed</h1>
+    <p style="color: black; font-family: 'Poppins'; font-size: 14px;">
+      The email on your µLearn account was changed to <strong>{{ user.new_email_masked }}</strong> on {{ user.changed_at }}.
+    </p>
+    <p style="color: black; font-family: 'Poppins'; font-size: 14px;">
+      If this wasn't you, contact <a href="mailto:info@mulearn.org">info@mulearn.org</a> right away.
+    </p>
+  </center>
+</div>
+{% endblock %}

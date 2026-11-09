@@ -18,6 +18,32 @@ from utils.utils import _CustomHTTPHandler
 
 logger = logging.getLogger("django")
 
+# Values never written to error.log (spec A §3.8).
+_SENSITIVE_KEYS = frozenset({
+    "password", "current_password", "new_password", "confirm_password",
+    "code", "otp", "email_verification_token", "tempToken", "temp_token",
+    "accessToken", "refreshToken",
+})
+
+
+def _redact(value):
+    if isinstance(value, dict):
+        return {key: "[REDACTED]" if key in _SENSITIVE_KEYS else _redact(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_redact(item) for item in value]
+    return value
+
+
+def redact_body(raw):
+    """A request body safe to log: secrets replaced, everything else kept."""
+    try:
+        return json.dumps(_redact(json.loads(raw)), indent=4)
+    except (TypeError, ValueError):
+        lowered = raw.lower() if isinstance(raw, str) else ""
+        if any(key.lower() in lowered for key in _SENSITIVE_KEYS):
+            return "[REDACTED: non-JSON body containing sensitive fields]"
+        return raw
+
 
 class IpBindingMiddleware(object):
     def __init__(self, get_response):
@@ -110,9 +136,7 @@ class UniversalErrorHandlerMiddleware:
         body = request._body.decode("utf-8", errors="replace") if hasattr(request, "_body") else "No body"
         auth = request.auth if hasattr(request, "auth") else "No Auth data"
 
-        with suppress(json.JSONDecodeError):
-            body = json.loads(body)
-            body = json.dumps(body, indent=4)
+        body = redact_body(body)
 
         with suppress(json.JSONDecodeError):
             auth = json.dumps(auth, indent=4)

@@ -30,6 +30,8 @@ CREATE TABLE user
     deleted_by     VARCHAR(36),
     suspended_at   DATETIME,
     suspended_by   VARCHAR(36),
+    email_verified_at  DATETIME,
+    email_verified_via VARCHAR(20),
     CONSTRAINT fk_user_ref_deleted_by FOREIGN KEY (deleted_by) REFERENCES user (id) ON DELETE CASCADE,
     CONSTRAINT fk_user_ref_suspended_by FOREIGN KEY (suspended_by) REFERENCES user (id) ON DELETE CASCADE
 );
@@ -3566,4 +3568,54 @@ CREATE TABLE IF NOT EXISTS `problem_statement_interaction` (
   KEY `idx_problem_statement_interaction_user` (`user_id`),
   CONSTRAINT `fk_problem_statement_interaction_ref_statement` FOREIGN KEY (`problem_statement_id`) REFERENCES `problem_statement` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_problem_statement_interaction_ref_user` FOREIGN KEY (`user_id`) REFERENCES `user` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Partner SSO (alter-1.92)
+CREATE TABLE IF NOT EXISTS `integration_account_link`
+(
+    `id`                VARCHAR(36) NOT NULL,
+    `provider`          VARCHAR(30) NOT NULL,
+    `account_type`      VARCHAR(20) NOT NULL,
+    `subject_type`      VARCHAR(20) NOT NULL,
+    `subject_id`        VARCHAR(36) NOT NULL,
+    `contact_user_id`   VARCHAR(36) NULL DEFAULT NULL,
+    `status`            VARCHAR(20) NOT NULL,
+    `external_email`    VARCHAR(60) NULL DEFAULT NULL,
+    `synced_first_name` VARCHAR(25) NULL DEFAULT NULL,
+    `synced_last_name`  VARCHAR(25) NULL DEFAULT NULL,
+    `synced_phone`      VARCHAR(15) NULL DEFAULT NULL,
+    `consent_version`   VARCHAR(30) NULL DEFAULT NULL,
+    `consented_at`      DATETIME    NULL DEFAULT NULL,
+    `consented_by`      VARCHAR(36) NULL DEFAULT NULL,
+    `disconnected_at`   DATETIME    NULL DEFAULT NULL,
+    `disconnected_by`   VARCHAR(36) NULL DEFAULT NULL,
+    `last_login_at`     DATETIME    NULL DEFAULT NULL,
+    `last_synced_at`    DATETIME    NULL DEFAULT NULL,
+    `last_error_code`   VARCHAR(40) NULL DEFAULT NULL,
+    `created_at`        DATETIME    NOT NULL,
+    `updated_at`        DATETIME    NOT NULL,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uq_integration_account_link_subject` (`provider`, `subject_type`, `subject_id`),
+    UNIQUE KEY `uq_integration_account_link_external_email` (`provider`, `external_email`),
+    KEY `idx_integration_account_link_contact_user_id` (`contact_user_id`),
+    CONSTRAINT `fk_integration_account_link_ref_contact_user_id` FOREIGN KEY (`contact_user_id`) REFERENCES `user` (`id`) ON DELETE SET NULL,
+    CONSTRAINT `fk_integration_account_link_ref_consented_by` FOREIGN KEY (`consented_by`) REFERENCES `user` (`id`) ON DELETE SET NULL,
+    CONSTRAINT `fk_integration_account_link_ref_disconnected_by` FOREIGN KEY (`disconnected_by`) REFERENCES `user` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS `integration_account_event`
+(
+    `id`              VARCHAR(36)  NOT NULL,
+    `link_id`         VARCHAR(36)  NOT NULL,
+    `event`           VARCHAR(30)  NOT NULL,
+    `actor_user_id`   VARCHAR(36)  NULL DEFAULT NULL,
+    `consent_version` VARCHAR(30)  NULL DEFAULT NULL,
+    `details`         JSON         NULL,
+    `ip_address`      VARCHAR(45)  NULL DEFAULT NULL,
+    `user_agent`      VARCHAR(255) NULL DEFAULT NULL,
+    `created_at`      DATETIME     NOT NULL,
+    PRIMARY KEY (`id`),
+    KEY `idx_integration_account_event_link_id_created_at` (`link_id`, `created_at`),
+    CONSTRAINT `fk_integration_account_event_ref_link_id` FOREIGN KEY (`link_id`) REFERENCES `integration_account_link` (`id`) ON DELETE CASCADE,
+    CONSTRAINT `fk_integration_account_event_ref_actor_user_id` FOREIGN KEY (`actor_user_id`) REFERENCES `user` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
