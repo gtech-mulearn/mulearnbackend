@@ -97,6 +97,7 @@ class ListCreateBase(ManageBase):
         if error:
             return error
         params = request.query_params
+        qs = ps_utils.filter_source(qs, params)
         if params.get("status"):
             qs = qs.filter(status=params["status"])
         if params.get("category"):
@@ -182,7 +183,12 @@ class DetailBase(ManageBase):
         statement, error = self.find(request, statement_id)
         if error:
             return error
-        statement.delete()  # interactions go with it via the FK cascade
+        with transaction.atomic():
+            # Lock the statement before the cascade touches interaction rows: learner
+            # writes lock statement -> interaction, so the same order here avoids deadlocks.
+            statement = ps_utils.lock_statement(statement.id)
+            if statement:
+                statement.delete()  # interactions go with it via the FK cascade
         return CustomResponse(general_message="Problem statement deleted.").get_success_response()
 
 
@@ -210,9 +216,15 @@ class InteractionsBase(ManageBase):
         interactions = ProblemStatementInteraction.objects.filter(
             problem_statement=statement
         ).select_related("user")
+        status = request.query_params.get("status")
+        if status in ProblemStatementInteraction.Status.values:
+            interactions = interactions.filter(status=status)
         page = CommonUtils.get_paginated_queryset(
             interactions, request, ["user__full_name", "user__muid"],
-            {"created_at": "created_at", "status": "status", "name": "user__full_name"},
+            {
+                "created_at": "created_at", "status": "status", "name": "user__full_name",
+                "submitted_at": "submitted_at",
+            },
         )
         users = [
             {
@@ -220,6 +232,8 @@ class InteractionsBase(ManageBase):
                 "muid": i.user.muid,
                 "full_name": i.user.full_name,
                 "status": i.status,
+                "submission_url": i.submission_url,
+                "submitted_at": i.submitted_at,
                 "created_at": i.created_at,
                 "updated_at": i.updated_at,
             }
@@ -268,7 +282,8 @@ class CompanyProblemStatementUnpublishAPI(StatusActionBase):
     message = "Problem statement unpublished."
 
 
-@extend_schema_view(get=extend_schema(tags=COMPANY, description="Interaction counts and users."))
+@extend_schema_view(get=extend_schema(tags=COMPANY, description="Interaction counts and users, with submission "
+                                                                "links. Filter: status=Trying|Submitted."))
 @role_guarded([RoleType.COMPANY.value])
 class CompanyProblemStatementInteractionsAPI(InteractionsBase):
     scope_fn = staticmethod(company_scope)
@@ -277,7 +292,8 @@ class CompanyProblemStatementInteractionsAPI(InteractionsBase):
 # --------------------------------------------------------------------------- admin
 
 @extend_schema_view(
-    get=extend_schema(tags=ADMIN, description="List problem statements of all companies."),
+    get=extend_schema(tags=ADMIN, description="List problem statements of all companies and muLearn. "
+                                              "Filters: status, category, company_id, source=company|mulearn."),
     post=extend_schema(tags=ADMIN, description="Create a problem statement from muLearn (not attributed to a company).",
                        request=serializers.ProblemStatementWriteSerializer),
 )
@@ -312,7 +328,8 @@ class AdminProblemStatementUnpublishAPI(StatusActionBase):
     message = "Problem statement unpublished."
 
 
-@extend_schema_view(get=extend_schema(tags=ADMIN))
+@extend_schema_view(get=extend_schema(tags=ADMIN, description="Interaction counts and users, with submission "
+                                                              "links. Filter: status=Trying|Submitted."))
 @role_guarded([RoleType.ADMIN.value])
 class AdminProblemStatementInteractionsAPI(InteractionsBase):
     scope_fn = staticmethod(admin_scope)

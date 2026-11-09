@@ -44,12 +44,16 @@ class ProblemStatement(models.Model):
 class ProblemStatementInteraction(models.Model):
     class Status(models.TextChoices):
         TRYING = "Trying"
+        SUBMITTED = "Submitted"
 
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     problem_statement = models.ForeignKey(ProblemStatement, on_delete=models.CASCADE,
                                           related_name='interactions')
     user = models.ForeignKey('User', on_delete=models.CASCADE, related_name='problem_statement_interactions')
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.TRYING)
+    # Set together with status=Submitted (DB check constraint), cleared on withdrawal.
+    submission_url = models.CharField(max_length=500, null=True, blank=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
