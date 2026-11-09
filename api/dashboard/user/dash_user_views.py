@@ -1,8 +1,8 @@
+import logging
 import uuid
 from datetime import timedelta
 
 from decouple import config as decouple_config
-from django.contrib.auth.hashers import make_password
 from django.core.files.storage import FileSystemStorage
 from django.db.models import Prefetch, Q
 from rest_framework.views import APIView
@@ -11,6 +11,7 @@ from db.organization import UserOrganizationLink
 from db.task import UserIgLink
 from db.user import ForgotPassword, User, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
+from utils import authserver_client
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType, WebHookActions, WebHookCategory
 from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks, send_template_mail
@@ -20,6 +21,8 @@ from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiRespo
 from rest_framework import serializers as s
 
 BE_DOMAIN_NAME = decouple_config("BE_DOMAIN_NAME")
+
+logger = logging.getLogger(__name__)
 
 
 class UserInfoAPI(APIView):
@@ -405,11 +408,27 @@ class UserVerificationCSV(APIView):
 
 
 class ForgotPasswordAPI(APIView):
+    # F8: was unthrottled, so this endpoint could be used to flood a victim's
+    # inbox and create unbounded reset rows.
+    throttle_scope = "password_reset"
+
+    # F7: this previously answered "User not exist" for unknown identifiers,
+    # making it an unauthenticated membership oracle. The response is now
+    # identical whether or not the account exists.
+    GENERIC_RESPONSE = (
+        "If an account exists for that ID, a password reset link has been sent."
+    )
+
     @extend_schema(tags=['Dashboard - User'], description="Create Forgot Password.",
         responses={200: OpenApiResponse(description="Forgot-password email sent")},
     )
     def post(self, request):
         email_muid = request.data.get("emailOrMuid")
+
+        if not email_muid:
+            return CustomResponse(
+                general_message="emailOrMuid is required"
+            ).get_failure_response()
 
         if not (
             user := User.objects.filter(
@@ -417,8 +436,8 @@ class ForgotPasswordAPI(APIView):
             ).first()
         ):
             return CustomResponse(
-                general_message="User not exist"
-            ).get_failure_response()
+                general_message=self.GENERIC_RESPONSE
+            ).get_success_response()
 
         created_at = DateTimeUtils.get_current_utc_time()
         expiry = created_at + timedelta(seconds=900)  # 15 minutes
@@ -434,14 +453,19 @@ class ForgotPasswordAPI(APIView):
             "token": forget_user.id,
         }
 
-        send_template_mail(
-            context=context,
-            subject="Password Reset Requested",
-            address=html_address,
-        )
+        # A mail failure must not distinguish this branch from the unknown-user
+        # branch — a 500 here would leak existence just as effectively.
+        try:
+            send_template_mail(
+                context=context,
+                subject="Password Reset Requested",
+                address=html_address,
+            )
+        except Exception:
+            logger.exception("Failed to send password reset mail")
 
         return CustomResponse(
-            general_message="Forgot Password Email Send Successfully"
+            general_message=self.GENERIC_RESPONSE
         ).get_success_response()
 
 
@@ -489,12 +513,62 @@ class ResetPasswordConfirmAPI(APIView):
         return CustomResponse(general_message="Link is expired").get_failure_response()
 
     def save_password(self, request, forget_user):
-        new_password = request.data.get("password")
-        hashed_pwd = make_password(new_password)
+        # Q22: authserver owns user.password. The reset link was verified
+        # above; authserver validates the password, stores the hash and - F3 -
+        # signs the person out everywhere, which is the point of a reset when
+        # an account may be compromised.
+        try:
+            status, body = authserver_client.call("POST", "password/set/", json={
+                "user_id": forget_user.user_id,
+                "new_password": request.data.get("password"),
+            })
+        except authserver_client.AuthServerUnavailable as exc:
+            return CustomResponse(general_message=str(exc)).get_failure_response(
+                status_code=503, http_status_code=503
+            )
 
-        forget_user.user.password = hashed_pwd
-        forget_user.user.save()
+        if status >= 400:
+            # Link kept, so the person can retry with an acceptable password.
+            return CustomResponse(
+                general_message=authserver_client.error_message(body)
+            ).get_failure_response()
+
+        # The password is set, so the link is spent. Keeping it would let
+        # whoever holds it set yet another password.
         forget_user.delete()
+
+        if not body.get("sessions_revoked"):
+            # Some sessions survived. Retry the sign-out in the background
+            # rather than through the link. The pending record is written
+            # first: it is what the 15-minute sweep retries from if the task
+            # itself gives up or is lost.
+            from mu_celery.auth_session_tasks import mark_pending, revoke_all_sessions
+
+            try:
+                mark_pending(forget_user.user_id)
+            except Exception:
+                logger.exception(
+                    "Could not record session revocation for %s; sign them out "
+                    "from the admin console", forget_user.user_id,
+                )
+                return CustomResponse(
+                    general_message=(
+                        "Your password was changed, but we could not sign you "
+                        "out of your other devices. Please sign out of them "
+                        "manually or contact support."
+                    )
+                ).get_failure_response(status_code=503, http_status_code=503)
+            try:
+                revoke_all_sessions.delay(forget_user.user_id)
+            except Exception:
+                # Recorded above, so the sweep still picks it up within 15 min.
+                logger.exception("Could not queue session revocation for %s", forget_user.user_id)
+            return CustomResponse(
+                general_message=(
+                    "New password saved. Signing you out of your other devices "
+                    "may take a few minutes."
+                )
+            ).get_success_response()
 
         return CustomResponse(
             general_message="New Password Saved Successfully"

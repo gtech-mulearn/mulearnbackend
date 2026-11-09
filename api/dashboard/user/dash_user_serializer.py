@@ -9,6 +9,7 @@ from db.company import Company
 from db.organization import Department, Organization, UserOrganizationLink
 from db.task import UserIgLink
 from db.user import Role, User, UserDomains, UserMentor, UserRoleLink
+from utils.onboarding import onboarding_status
 from utils.permission import JWTUtils
 from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils, check_alumni_status
@@ -45,10 +46,12 @@ class UserSerializer(serializers.ModelSerializer):
     user_domains = serializers.SerializerMethodField()
     user_endgoals = serializers.SerializerMethodField()
     company = serializers.SerializerMethodField()
+    onboarding = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = [
+            "onboarding",
             "muid",
             "full_name",
             "email",
@@ -71,6 +74,24 @@ class UserSerializer(serializers.ModelSerializer):
     #     if not UserInterests.objects.filter(user=obj).exists():
     #         return "Please select your interests"
     #     return None
+    def get_onboarding(self, obj):
+        """
+        Whether this member still has onboarding to do, decided HERE rather
+        than in the browser.
+
+        The dashboard previously worked this out itself from user_domains, so
+        the rule existed only in one client. Now that any app can sign someone
+        in — and express signups have no interests by definition — every
+        consumer needs the same answer without reimplementing it.
+
+        The raw `user_domains` field is still returned, so nothing that reads it
+        today breaks. This is additive.
+        """
+        return onboarding_status(
+            roles=self.get_roles(obj),
+            domain_count=obj.user_domains.count(),
+        )
+
     def get_user_domains(self, obj):
         return obj.user_domains.values_list("domain_name", flat=True)
 

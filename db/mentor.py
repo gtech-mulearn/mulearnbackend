@@ -237,6 +237,14 @@ class SystemActionLog(models.Model):
         IG_EVENT_REJECT = 'IG_EVENT_REJECT', 'IG Event Reject'
         IMPACT_PROJECT_PUBLISH = 'IMPACT_PROJECT_PUBLISH', 'Impact Project Publish'
         COMPANY_DEACTIVATED   = 'COMPANY_DEACTIVATED',   'Company Deactivated'
+        # Auth admin console. Must also be in the live ENUM (see the auth-admin
+        # alter script) or MySQL silently stores '' - the alter-1.94 bug.
+        AUTH_CLIENT_CREATE    = 'AUTH_CLIENT_CREATE',    'Auth Client Create'
+        AUTH_CLIENT_UPDATE    = 'AUTH_CLIENT_UPDATE',    'Auth Client Update'
+        AUTH_CLIENT_DISABLE   = 'AUTH_CLIENT_DISABLE',   'Auth Client Disable'
+        AUTH_CLIENT_ENABLE    = 'AUTH_CLIENT_ENABLE',    'Auth Client Enable'
+        AUTH_POLICY_UPDATE    = 'AUTH_POLICY_UPDATE',    'Auth Policy Update'
+        AUTH_SESSION_REVOKE   = 'AUTH_SESSION_REVOKE',   'Auth Session Revoke'
 
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     action_type = models.CharField(max_length=25, choices=ActionType.choices)
