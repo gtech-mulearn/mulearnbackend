@@ -48,6 +48,8 @@ urlpatterns = [
     path("collaborations/<str:collaboration_id>/",         collaboration_views.CompanyCollaborationWithdrawAPI.as_view()),
 
     # Company-sponsored IG (PRD §7.3)
+    # Before ig-sponsorship/<str:ig_id>/ so "pending" isn't taken as an IG id.
+    path("ig-sponsorship/pending/",             ig_sponsorship_views.IgSponsorshipPendingListAPI.as_view()),
     path("ig-sponsorship/<str:ig_id>/",         ig_sponsorship_views.IgSponsorshipRequestAPI.as_view()),
     path("ig-sponsorship/<str:ig_id>/review/",  ig_sponsorship_views.IgSponsorshipReviewAPI.as_view()),
     path("ig-sponsorship/<str:ig_id>/metrics/", ig_sponsorship_views.IgSponsorshipMetricsAPI.as_view()),
