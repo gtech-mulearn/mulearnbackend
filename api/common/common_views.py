@@ -759,7 +759,10 @@ class IGDetailAPI(APIView):
                 general_message="Interest Group Not Found"
             ).get_failure_response()
 
-        serializer = InterestGroupSerializer(ig_data, many=False)
+        # Public endpoint: never expose lead/mentor/think-tank emails.
+        serializer = InterestGroupSerializer(
+            ig_data, many=False, context={"strip_emails": True}
+        )
         return CustomResponse(
             response={"interestGroup": serializer.data}
         ).get_success_response()

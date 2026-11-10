@@ -26,6 +26,25 @@ def test_mentor_detail_lists_newest_application_first():
     assert data == [newer, older]
 
 
+def test_public_ig_detail_hides_member_emails():
+    from api.dashboard.ig.dash_ig_serializer import InterestGroupSerializer
+
+    data = {
+        "leads": [{"muid": "a@mulearn", "email": "a@x.com"}],
+        "mentors": [{"muid": "b@mulearn", "email": "b@x.com"}],
+        "thinktank": [{"muid": "c@mulearn", "email": "c@x.com"}],
+    }
+    public = InterestGroupSerializer(context={"strip_emails": True})
+    stripped = public.apply_privacy(data)
+    for field in ("leads", "mentors", "thinktank"):
+        assert "email" not in stripped[field][0]
+
+    internal = InterestGroupSerializer()
+    assert internal.apply_privacy(
+        {"leads": [{"email": "a@x.com"}]}
+    )["leads"][0]["email"] == "a@x.com"
+
+
 def test_mentor_detail_puts_undated_applications_last():
     import datetime
 
