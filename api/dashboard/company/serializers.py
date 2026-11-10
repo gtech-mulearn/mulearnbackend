@@ -354,6 +354,7 @@ class CompanyDetailSerializer(serializers.ModelSerializer):
             "updated_at",
             "profile_completeness",
             "verification_sla_message",
+            "publish_impact_report",
         ]
 
     def get_perks(self, obj):
