@@ -1556,6 +1556,8 @@ class ParticipantListSerializer(serializers.ModelSerializer):
     session_venue = serializers.CharField(source="session.venue", read_only=True)
     session_status = serializers.CharField(source="session.status", read_only=True)
     session_entity_id = serializers.CharField(source="session.entity_id", read_only=True)
+    # Lets learners' history tell company sessions apart (BE-11).
+    session_type = serializers.CharField(source="session.session_type", read_only=True)
     session_entity_name = serializers.SerializerMethodField()
 
     class Meta:
@@ -1580,6 +1582,7 @@ class ParticipantListSerializer(serializers.ModelSerializer):
             "session_venue",
             "session_status",
             "session_entity_id",
+            "session_type",
             "session_entity_name",
         ]
 

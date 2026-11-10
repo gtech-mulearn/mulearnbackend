@@ -56,6 +56,12 @@ def test_campus_ig_chapter_lists_its_co_lead():
     assert CampusIGChapterListSerializer().get_co_lead_name(chapter) == "Asha Nair"
 
 
+def test_participant_history_says_what_kind_of_session_it_was():
+    from api.dashboard.mentor.serializers import ParticipantListSerializer
+
+    assert "session_type" in ParticipantListSerializer().fields
+
+
 def test_mentor_detail_puts_undated_applications_last():
     import datetime
 
