@@ -59,6 +59,8 @@ urlpatterns = [
     # Company Co-Admin — Delegation (Addon §6.5 / PRD §4.4)
     path("admin-link/",                       company_views.CompanyAdminLinkCreateAPI.as_view()),
     path("admin-link/list/",                  company_views.CompanyAdminLinkListAPI.as_view()),
+    # Before admin-link/<str:link_id>/ so "invitations" isn't taken as a link id.
+    path("admin-link/invitations/",           company_views.CompanyAdminLinkMyInvitationsAPI.as_view()),
     path("admin-link/<str:link_id>/respond/", company_views.CompanyAdminLinkAcceptAPI.as_view()),
     path("admin-link/<str:link_id>/leave/",   company_views.CompanyAdminLinkLeaveAPI.as_view()),
     path("admin-link/<str:link_id>/",         company_views.CompanyAdminLinkRevokeAPI.as_view()),

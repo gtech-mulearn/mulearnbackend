@@ -851,6 +851,26 @@ class CompanyMentorListSerializer(serializers.ModelSerializer):
         ]
 
 
+class CompanyAdminLinkInvitationSerializer(serializers.ModelSerializer):
+    """BE-1 — a pending co-admin invitation, as the invited user sees it."""
+
+    company_id = serializers.CharField(source="company.id", read_only=True)
+    company_name = serializers.CharField(source="company.name", read_only=True)
+    company_logo = serializers.CharField(source="company.logo", read_only=True, default=None)
+    invited_by_name = serializers.CharField(source="invited_by.full_name", read_only=True, default=None)
+
+    class Meta:
+        model = CompanyAdminLink
+        fields = [
+            "id",
+            "company_id",
+            "company_name",
+            "company_logo",
+            "invited_by_name",
+            "invited_at",
+        ]
+
+
 class CompanyAdminLinkSerializer(serializers.ModelSerializer):
     """Addon §6.5 — full history of co-admin invites/acceptances/revocations for a company."""
 
