@@ -106,6 +106,19 @@ def _get_user_company_org_ids(user_id, roles):
     return list(company_org_ids)
 
 
+def _company_events_filter(user_id, roles):
+    """Company events the caller acts for: owner, accepted co-admin or
+    company mentor (BE-10). Not gated on the Company/Mentor role — an accepted
+    co-admin holds neither, yet manages the company's events."""
+    company_org_ids = _get_user_company_org_ids(user_id, roles)
+    if not company_org_ids:
+        return None
+    return Q(
+        organiser_type=Event.OrganiserType.COMPANY.value,
+        organiser_org_id__in=company_org_ids,
+    )
+
+
 def _is_active_campus_member(user_id, org_id):
     """True if user_id has a non-alumni UserOrganizationLink to org_id.
 
@@ -255,14 +268,11 @@ class ManageEventListCreateAPI(APIView):
 
             q_filter = Q(created_by_id=user_id) | Q(id__in=co_owned_event_ids)
             
-            # Allow Company and Company Mentors to see all events for their company
-            if RoleType.COMPANY.value in roles or RoleType.MENTOR.value in roles:
-                company_org_ids = _get_user_company_org_ids(user_id, roles)
-                if company_org_ids:
-                    q_filter |= Q(
-                        organiser_type=Event.OrganiserType.COMPANY.value,
-                        organiser_org_id__in=company_org_ids
-                    )
+            # Owners, accepted co-admins and company mentors see all of
+            # their company's events.
+            company_filter = _company_events_filter(user_id, roles)
+            if company_filter is not None:
+                q_filter |= company_filter
 
             # Use _get_manageable_events() so cancelled events remain visible to their owner
             events = _get_manageable_events().filter(q_filter)

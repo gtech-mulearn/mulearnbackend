@@ -539,7 +539,8 @@ class MentorDetailSerializer(serializers.ModelSerializer):
     """
     user_full_name = serializers.CharField(source='user.full_name', read_only=True)
     muid = serializers.CharField(source='user.muid', read_only=True)
-    applications = MentorApplicationProfileSerializer(many=True, read_only=True, source='user.mentor_applications')
+    # Newest first, so clients don't guess which application is current (BE-6).
+    applications = serializers.SerializerMethodField()
     avg_rating = serializers.SerializerMethodField()
     rating_count = serializers.SerializerMethodField()
 
@@ -612,6 +613,15 @@ class MentorDetailSerializer(serializers.ModelSerializer):
 
     def get_rating_count(self, obj):
         return self._rating_aggregate(obj)['rating_count']
+
+    def get_applications(self, obj):
+        # .all() keeps any prefetch; sort in Python (undated last) instead of order_by().
+        apps = sorted(
+            obj.user.mentor_applications.all(),
+            key=lambda app: (app.updated_at is not None, app.updated_at),
+            reverse=True,
+        )
+        return MentorApplicationProfileSerializer(apps, many=True).data
 
 class MentorApplicationPublicSerializer(MentorApplicationProfileSerializer):
     """Application fields safe for the public profile: no admin review note."""
@@ -1546,6 +1556,8 @@ class ParticipantListSerializer(serializers.ModelSerializer):
     session_venue = serializers.CharField(source="session.venue", read_only=True)
     session_status = serializers.CharField(source="session.status", read_only=True)
     session_entity_id = serializers.CharField(source="session.entity_id", read_only=True)
+    # Lets learners' history tell company sessions apart (BE-11).
+    session_type = serializers.CharField(source="session.session_type", read_only=True)
     session_entity_name = serializers.SerializerMethodField()
 
     class Meta:
@@ -1570,6 +1582,7 @@ class ParticipantListSerializer(serializers.ModelSerializer):
             "session_venue",
             "session_status",
             "session_entity_id",
+            "session_type",
             "session_entity_name",
         ]
 
