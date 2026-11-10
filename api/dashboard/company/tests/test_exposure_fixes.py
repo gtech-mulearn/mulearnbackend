@@ -45,6 +45,17 @@ def test_public_ig_detail_hides_member_emails():
     )["leads"][0]["email"] == "a@x.com"
 
 
+def test_campus_ig_chapter_lists_its_co_lead():
+    from api.dashboard.campus.serializers import CampusIGChapterListSerializer
+
+    fields = CampusIGChapterListSerializer().fields
+    assert "co_lead_id" in fields and "co_lead_name" in fields
+    chapter = mock.Mock(co_lead=None)
+    assert CampusIGChapterListSerializer().get_co_lead_name(chapter) is None
+    chapter.co_lead = mock.Mock(full_name="Asha Nair")
+    assert CampusIGChapterListSerializer().get_co_lead_name(chapter) == "Asha Nair"
+
+
 def test_mentor_detail_puts_undated_applications_last():
     import datetime
 
