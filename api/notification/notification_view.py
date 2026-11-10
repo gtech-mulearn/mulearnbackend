@@ -310,17 +310,43 @@ class ArchiveView(APIView):
             id=notification_id, user_id=user_id
         ).first()
 
-        if not notification:
+        if notification:
+            notification.is_archived = True
+            notification.save(update_fields=['is_archived'])
+            if not notification.is_read:
+                invalidate_unread_count(user_id)
+        elif not _archive_broadcast_for_user(user_id, notification_id):
+            # The merged feed also lists broadcasts, with the same archive
+            # action — archive those via the user's own read receipt.
             return _notification_not_found()
-
-        notification.is_archived = True
-        notification.save(update_fields=['is_archived'])
-        if not notification.is_read:
-            invalidate_unread_count(user_id)
 
         return CustomResponse(
             general_message='Notification archived'
         ).get_success_response()
+
+
+def _archive_broadcast_for_user(user_id, broadcast_id):
+    """
+    Archive a broadcast for one user only, by setting archived_at on their own
+    BroadcastNotificationRead row (the shared broadcast row is never touched).
+    Idempotent. Returns False if the broadcast isn't visible to this user.
+    """
+    broadcast = BroadcastNotification.objects.filter(
+        _broadcast_audience_q(user_id),
+        id=broadcast_id, expires_at__gt=timezone.now(),
+    ).first()
+    if not broadcast:
+        return False
+
+    now = timezone.now()
+    receipt, created = BroadcastNotificationRead.objects.get_or_create(
+        broadcast_id=broadcast.id, user_id=user_id,
+        defaults={'archived_at': now},
+    )
+    if not created and not receipt.archived_at:
+        receipt.archived_at = now
+        receipt.save(update_fields=['archived_at'])
+    return True
 
 
 class DeleteOneView(APIView):
@@ -368,22 +394,8 @@ class DeleteOneView(APIView):
                 general_message='Notification deleted'
             ).get_success_response()
 
-        broadcast = BroadcastNotification.objects.filter(
-            _broadcast_audience_q(user_id),
-            id=notification_id, expires_at__gt=timezone.now(),
-        ).first()
-
-        if not broadcast:
+        if not _archive_broadcast_for_user(user_id, notification_id):
             return _notification_not_found()
-
-        now = timezone.now()
-        receipt, created = BroadcastNotificationRead.objects.get_or_create(
-            broadcast_id=broadcast.id, user_id=user_id,
-            defaults={'archived_at': now},
-        )
-        if not created and not receipt.archived_at:
-            receipt.archived_at = now
-            receipt.save(update_fields=['archived_at'])
 
         return CustomResponse(
             general_message='Notification deleted'

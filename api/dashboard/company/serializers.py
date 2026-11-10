@@ -319,7 +319,43 @@ class CompanyDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Company
-        fields = "__all__"
+        fields = [
+            "id",
+            "company_user_id",
+            "company_user_name",
+            "company_user_email",
+            "name",
+            "logo",
+            "description",
+            "short_pitch",
+            "industry_sector",
+            "website_link",
+            "email",
+            "slug",
+            "status",
+            "location",
+            "district",
+            "district_name",
+            "state",
+            "country",
+            "company_size",
+            "linkedin_url",
+            "founded_year",
+            "remote_policy",
+            "culture_text",
+            "tech_stack",
+            "perks",
+            "testimonials",
+            "gallery",
+            "rejection_reason",
+            "verification_requested_at",
+            "verified_at",
+            "created_at",
+            "updated_at",
+            "profile_completeness",
+            "verification_sla_message",
+            "publish_impact_report",
+        ]
 
     def get_perks(self, obj):
         return normalize_json_array(obj.perks)
@@ -813,6 +849,26 @@ class CompanyMentorListSerializer(serializers.ModelSerializer):
             "reason",
             "verification_note",
             "verified_at",
+        ]
+
+
+class CompanyAdminLinkInvitationSerializer(serializers.ModelSerializer):
+    """BE-1 — a pending co-admin invitation, as the invited user sees it."""
+
+    company_id = serializers.CharField(source="company.id", read_only=True)
+    company_name = serializers.CharField(source="company.name", read_only=True)
+    company_logo = serializers.CharField(source="company.logo", read_only=True, default=None)
+    invited_by_name = serializers.CharField(source="invited_by.full_name", read_only=True, default=None)
+
+    class Meta:
+        model = CompanyAdminLink
+        fields = [
+            "id",
+            "company_id",
+            "company_name",
+            "company_logo",
+            "invited_by_name",
+            "invited_at",
         ]
 
 

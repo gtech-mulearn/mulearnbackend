@@ -106,6 +106,19 @@ def _get_user_company_org_ids(user_id, roles):
     return list(company_org_ids)
 
 
+def _company_events_filter(user_id, roles):
+    """Company events the caller acts for: owner, accepted co-admin or
+    company mentor (BE-10). Not gated on the Company/Mentor role — an accepted
+    co-admin holds neither, yet manages the company's events."""
+    company_org_ids = _get_user_company_org_ids(user_id, roles)
+    if not company_org_ids:
+        return None
+    return Q(
+        organiser_type=Event.OrganiserType.COMPANY.value,
+        organiser_org_id__in=company_org_ids,
+    )
+
+
 def _is_active_campus_member(user_id, org_id):
     """True if user_id has a non-alumni UserOrganizationLink to org_id.
 
@@ -255,14 +268,11 @@ class ManageEventListCreateAPI(APIView):
 
             q_filter = Q(created_by_id=user_id) | Q(id__in=co_owned_event_ids)
             
-            # Allow Company and Company Mentors to see all events for their company
-            if RoleType.COMPANY.value in roles or RoleType.MENTOR.value in roles:
-                company_org_ids = _get_user_company_org_ids(user_id, roles)
-                if company_org_ids:
-                    q_filter |= Q(
-                        organiser_type=Event.OrganiserType.COMPANY.value,
-                        organiser_org_id__in=company_org_ids
-                    )
+            # Owners, accepted co-admins and company mentors see all of
+            # their company's events.
+            company_filter = _company_events_filter(user_id, roles)
+            if company_filter is not None:
+                q_filter |= company_filter
 
             # Use _get_manageable_events() so cancelled events remain visible to their owner
             events = _get_manageable_events().filter(q_filter)
@@ -431,21 +441,6 @@ class ManageEventListCreateAPI(APIView):
                     valid_org_ids = set(_get_user_company_org_ids(user_id, roles))
                     if str(payload_organiser_org) not in [str(o) for o in valid_org_ids]:
                         return CustomResponse(general_message='You are not authorized to create events for this company.').get_failure_response()
-
-                # PRD §15 — rate/abuse limit: cap how many not-yet-published
-                # company events can be open at once, mirroring
-                # job_views.MAX_PENDING_JOBS_PER_MENTOR.
-                open_count = _get_manageable_events().filter(
-                    organiser_type=Event.OrganiserType.COMPANY,
-                    organiser_org_id=payload_organiser_org,
-                    status__in=[
-                        Event.Status.DRAFT, Event.Status.PENDING_MENTOR_APPROVAL, Event.Status.PENDING_APPROVAL,
-                    ],
-                ).count()
-                if open_count >= MAX_OPEN_COMPANY_EVENTS:
-                    return CustomResponse(
-                        general_message=f'This company already has {MAX_OPEN_COMPANY_EVENTS} draft/pending-approval events. Resolve those before creating more.'
-                    ).get_failure_response(status_code=429)
 
             # Enforce campus tenancy for Campus events
             ownership_error = _validate_campus_event_ownership(
@@ -1973,8 +1968,11 @@ class CampusEventApproveAPI(APIView):
         )
 
         # Notify the event creator + fan out to scope audience
+        # resolve_terminal_status() above may have settled the event as ONGOING
+        # (announced like PUBLISHED) or COMPLETED (a backdated event recorded
+        # after the fact — not announced, and not "progressing through review").
         if event.created_by_id:
-            if new_status == Event.Status.PUBLISHED:
+            if should_announce(new_status):
                 # Fan out EVENT_PUBLISHED to all users in the event's scope
                 # (campus members in this case). Actor auto-excluded by dispatch().
                 # Timestamp-based occurrence — see AdminEventApproveAPI for why.
@@ -1986,7 +1984,7 @@ class CampusEventApproveAPI(APIView):
                     occurrence = f"{event.id}:{event.updated_at.isoformat()}",
                     actor_id   = user_id,
                 )
-            else:
+            elif new_status != Event.Status.COMPLETED:
                 NotificationService.dispatch(
                     notif_type = NotificationType.EVENT_APPROVAL_STAGE,
                     audience   = Audience.user(str(event.created_by_id)),

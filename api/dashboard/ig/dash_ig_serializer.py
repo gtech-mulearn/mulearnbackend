@@ -330,6 +330,14 @@ class InterestGroupSerializer(serializers.ModelSerializer):
             mentor_profiles_map=mentor_profiles_map
         )
 
+        return self.apply_privacy(data)
+
+    def apply_privacy(self, data):
+        """Public views pass strip_emails: member emails are PII (BE-7)."""
+        if self.context.get("strip_emails"):
+            for field in ("leads", "mentors", "thinktank"):
+                if field in data:
+                    data[field] = _strip_emails(data[field])
         return data
 
 

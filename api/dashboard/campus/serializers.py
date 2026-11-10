@@ -625,6 +625,8 @@ class CampusIGChapterListSerializer(serializers.ModelSerializer):
     ig_icon_image = serializers.ReadOnlyField(source="ig.icon_image")
     lead_id = serializers.ReadOnlyField(source="lead.id")
     lead_name = serializers.SerializerMethodField()
+    co_lead_id = serializers.ReadOnlyField(source="co_lead.id")
+    co_lead_name = serializers.SerializerMethodField()
     campus_ig_member_count = serializers.SerializerMethodField()
 
     class Meta:
@@ -639,6 +641,8 @@ class CampusIGChapterListSerializer(serializers.ModelSerializer):
             "ig_icon_image",
             "lead_id",
             "lead_name",
+            "co_lead_id",
+            "co_lead_name",
             "description",
             "icon_link",
             "is_active",
@@ -648,6 +652,11 @@ class CampusIGChapterListSerializer(serializers.ModelSerializer):
     def get_lead_name(self, obj):
         if obj.lead:
             return obj.lead.full_name
+        return None
+
+    def get_co_lead_name(self, obj):
+        if obj.co_lead:
+            return obj.co_lead.full_name
         return None
 
     def get_campus_ig_member_count(self, obj):

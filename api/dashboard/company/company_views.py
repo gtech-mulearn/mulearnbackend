@@ -6,6 +6,7 @@ from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
 from db.company import Company, CompanyAdminLink
+from db.user import User
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 from api.notification.service import NotificationService
 from api.notification.types import NotificationType
@@ -134,8 +135,28 @@ class CompanyAdminLinkAcceptAPI(APIView):
         ).get_success_response()
 
 
+class CompanyAdminLinkMyInvitationsAPI(APIView):
+    """BE-1 — the caller's pending co-admin invitations (any signed-in user)."""
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['Dashboard - Company'],
+        description="List the authenticated user's pending co-admin invitations to verified companies.",
+        responses={200: serializers.CompanyAdminLinkInvitationSerializer(many=True)},
+    )
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        links = CompanyAdminLink.objects.filter(
+            user_id=user_id,
+            status=CompanyAdminLink.Status.PENDING,
+            company__status="verified",
+        ).select_related("company", "invited_by").order_by("-invited_at")
+        serializer = serializers.CompanyAdminLinkInvitationSerializer(links, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
+
+
 class CompanyAdminLinkRevokeAPI(APIView):
-    """Owner-only: revoke a delegate's approval authority."""
+    """Owner-only: revoke a delegate's authority, or cancel a pending invite (BE-2)."""
     permission_classes = [CustomizePermission]
 
     @extend_schema(
@@ -149,17 +170,25 @@ class CompanyAdminLinkRevokeAPI(APIView):
             return CustomResponse(general_message="Verified company profile not found.").get_failure_response(status_code=403)
 
         link = CompanyAdminLink.objects.filter(
-            id=link_id, company=company, status=CompanyAdminLink.Status.ACCEPTED
+            id=link_id,
+            company=company,
+            status__in=[CompanyAdminLink.Status.ACCEPTED, CompanyAdminLink.Status.PENDING],
         ).first()
         if not link:
-            return CustomResponse(general_message="Accepted delegate link not found.").get_failure_response(status_code=404)
+            return CustomResponse(general_message="Accepted or pending delegate link not found.").get_failure_response(status_code=404)
 
+        # A pending invite is cancelled (frees its seat under the 5-link cap);
+        # only someone who had accepted is told their access was revoked.
+        was_accepted = link.status == CompanyAdminLink.Status.ACCEPTED
         from utils.utils import DateTimeUtils
         link.status = CompanyAdminLink.Status.REVOKED
         link.revoked_by_id = user_id
         link.revoked_at = DateTimeUtils.get_current_utc_time()
         link.updated_by_id = user_id
         link.save(update_fields=["status", "revoked_by_id", "revoked_at", "updated_by_id"])
+
+        if not was_accepted:
+            return CustomResponse(general_message="Invitation cancelled.").get_success_response()
 
         NotificationService.dispatch(
             notif_type = NotificationType.COMPANY_DELEGATE_REVOKED,
@@ -239,7 +268,7 @@ class CompanyAdminLinkLeaveAPI(APIView):
 
 
 class CompanyRegistrationAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company'],
@@ -326,7 +355,7 @@ class CompanyRegistrationAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
 class CompanyStatusAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company'],
@@ -350,7 +379,7 @@ class CompanyStatusAPI(APIView):
         ).get_success_response()
 
 class CompanyProfileAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company'],
@@ -398,7 +427,7 @@ class CompanyProfileAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
 class CompanyListAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company'],
@@ -462,7 +491,7 @@ class CompanyListAPI(APIView):
         ).get_success_response()
 
 class CompanyDetailAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company'],
@@ -481,7 +510,7 @@ class CompanyDetailAPI(APIView):
         return CustomResponse(response=serializer.data).get_success_response()
 
 class CompanyVerifyAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company'],
@@ -752,7 +781,7 @@ class PublicCompanyProfileAPI(APIView):
 
 
 class CompanyAdminSummaryAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company'],
@@ -805,7 +834,7 @@ def _get_company_for_user(user_id):
 # ---------------------------------------------------------------------------
 
 class CompanyMentorNominateAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=["Dashboard - Company Mentor"],
@@ -919,7 +948,7 @@ class CompanyMentorApplyAPI(APIView):
 
 
 class CompanyMentorListAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=["Dashboard - Company Mentor"],

@@ -7,7 +7,8 @@ from utils.utils import CommonUtils, DateTimeUtils
 from db.job import CompanyJob, UserJobApplication
 from db.company import Company, CompanyAdminLink
 from db.user import User
-from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiParameter, OpenApiTypes
+from rest_framework import serializers as drf_serializers
 from api.notification.service import NotificationService
 from api.notification.types import NotificationType
 from api.notification.audience import Audience
@@ -27,7 +28,7 @@ def _is_company_owner(user_id, company):
 
 
 class CompanyJobAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company Jobs'],
@@ -145,7 +146,7 @@ class CompanyJobAPI(APIView):
 
 
 class CompanyJobDetailAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company Jobs'],
@@ -339,6 +340,18 @@ class CompanyJobRequestChangesAPI(APIView):
     """Owner or accepted delegate: send a job back to the mentor for revision."""
     permission_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Company Jobs'],
+        description=(
+            "Send a job that is waiting for approval back to its author for changes. "
+            "Only the company owner or an accepted delegate can do this. Body: {\"note\": \"<what to change>\"} "
+            "(required). The job moves to 'Needs Revision' and the author is notified with the note."
+        ),
+        request=inline_serializer(
+            name="CompanyJobRequestChangesRequest",
+            fields={"note": drf_serializers.CharField(help_text="What the author should change.")},
+        ),
+    )
     def post(self, request, job_id):
         from django.db import transaction
 
@@ -434,7 +447,7 @@ class CompanyJobRejectAPI(APIView):
 
 
 class PublicJobAPI(APIView):
-    permission_classes = [CustomizePermission]
+    permission_classes = []
 
     @extend_schema(
         tags=['Public - Jobs'],
@@ -442,7 +455,10 @@ class PublicJobAPI(APIView):
         responses={200: job_serializers.JobListSerializer(many=True)},
     )
     def get(self, request):
-        user_id = JWTUtils.fetch_user_id(request)
+        # Public endpoint: anonymous visitors have no token, and fetch_user_id
+        # would raise on the missing header. Eligibility is only computed for
+        # a logged-in learner (the serializer skips it when learner_id is None).
+        user_id = JWTUtils.fetch_user_id(request) if JWTUtils.is_logged_in(request) else None
         jobs = CompanyJob.objects.filter(status='Active', is_deleted=False, company__status="verified")
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
@@ -463,7 +479,7 @@ class PublicJobAPI(APIView):
 
 
 class JobApplicationAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company Jobs'],
@@ -521,7 +537,7 @@ class JobApplicationAPI(APIView):
         ).get_success_response()
 
 class ApplicationStatusAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company Jobs'],
@@ -586,7 +602,7 @@ class PublicCompanyJobListAPI(APIView):
         ).get_success_response()
 
 class UserApplicationWithdrawAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company Jobs'],
@@ -620,7 +636,7 @@ class UserApplicationWithdrawAPI(APIView):
         ).get_success_response()
 
 class UserApplicationResubmitAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company Jobs'],
@@ -654,7 +670,7 @@ class UserApplicationResubmitAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
 class UserAppliedJobsAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company Jobs'],
@@ -737,7 +753,7 @@ class CompanyJobEngagementAnalyticsAPIView(APIView):
 
     Fetches detailed view, application, and hired statistics for a specific job posting.
     """
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company Jobs'],

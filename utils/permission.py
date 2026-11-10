@@ -116,6 +116,26 @@ class OptionalAuthentication(authentication.BaseAuthentication):
         return f'{self.token_prefix} realm="api"'
 
 
+# 1.91 renamed the per-IG campus lead role "{code} CampusLead" -> "{code} CampusIGLead"
+# (db-scripts alter-1.91.sql renames the stored roles and keeps their holders). Tokens
+# issued before the release still carry the old title until they expire, so treat
+# the old title as the new one. The core "Campus Lead" role (with a space) is not
+# affected: it never ends in " CampusLead".
+_LEGACY_IG_CAMPUS_LEAD_SUFFIX = " CampusLead"
+_IG_CAMPUS_LEAD_SUFFIX = " CampusIGLead"
+
+
+def _with_renamed_role_titles(roles):
+    if not isinstance(roles, list):
+        return roles
+    extra = [
+        r[: -len(_LEGACY_IG_CAMPUS_LEAD_SUFFIX)] + _IG_CAMPUS_LEAD_SUFFIX
+        for r in roles
+        if isinstance(r, str) and r.endswith(_LEGACY_IG_CAMPUS_LEAD_SUFFIX)
+    ]
+    return roles + [r for r in extra if r not in roles]
+
+
 class JWTUtils:
     @staticmethod
     def fetch_role(request):
@@ -128,7 +148,7 @@ class JWTUtils:
             raise Exception(
                 "The corresponding JWT token does not contain the 'roles' key"
             )
-        return roles
+        return _with_renamed_role_titles(roles)
 
     @staticmethod
     def fetch_user_id(request):

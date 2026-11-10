@@ -10,7 +10,7 @@ class AchievementSerializer(serializers.ModelSerializer):
     class Meta:
         model = Achievement
         fields = '__all__'
-
+    
     def get_icon_url(self, obj):
         if obj.icon:
             # Check if it's already a full URL

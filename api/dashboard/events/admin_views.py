@@ -281,8 +281,11 @@ class AdminEventApproveAPI(APIView):
         )
 
         # Notify the event creator + fan out to scope audience
+        # resolve_terminal_status() above may have settled the event as ONGOING
+        # (announced like PUBLISHED) or COMPLETED (a backdated event recorded
+        # after the fact — not announced, and not "progressing through review").
         if event.created_by_id:
-            if new_status == Event.Status.PUBLISHED:
+            if should_announce(new_status):
                 # Fan out EVENT_PUBLISHED to all users in the event's scope
                 # (campus members, IG members, company members, or all users).
                 # The actor (admin approver) is auto-excluded by dispatch().
@@ -298,7 +301,7 @@ class AdminEventApproveAPI(APIView):
                     occurrence = f"{event.id}:{event.updated_at.isoformat()}",
                     actor_id   = user_id,
                 )
-            else:
+            elif new_status != Event.Status.COMPLETED:
                 NotificationService.dispatch(
                     notif_type = NotificationType.EVENT_APPROVAL_STAGE,
                     audience   = Audience.user(str(event.created_by_id)),

@@ -285,10 +285,16 @@ class PublicOngoingHiringAPI(APIView):
     def get(self, request):
         queryset = Hiring.objects.filter(lastdate__gte=timezone.now().date()).order_by("-posted_date")
         queryset = _apply_filters(queryset, request)
-        serializer = career_lab_serializers.PublicOngoingHiringSerializer(queryset, many=True)
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            queryset, request,
+            search_fields=SEARCH_FIELDS,
+            sort_fields=SORT_FIELDS,
+        )
+        serializer = career_lab_serializers.PublicOngoingHiringSerializer(paginated_queryset.get("queryset"), many=True)
         return CustomResponse(
             response={
                 "data": serializer.data,
+                "pagination": paginated_queryset.get("pagination"),
             }
         ).get_success_response()
 

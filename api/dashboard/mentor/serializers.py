@@ -446,21 +446,23 @@ class MentorUpdateSerializer(serializers.ModelSerializer):
             "hours": validated_data.pop("hours", None),
         }
         
-        mentor_profile = UserMentor.objects.filter(user=instance.user).first()
-        if mentor_profile:
-            for attr, value in profile_data.items():
-                if value is not None:
-                    setattr(mentor_profile, attr, value)
-            mentor_profile.save()
-
         # Application-specific fields cannot be changed on an approved application
         if instance.status == MentorApplication.Status.APPROVED:
             validated_data.pop('org', None)
             validated_data.pop('mentor_tier', None)
 
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
+        # Profile + application are two tables: save both or neither.
+        with transaction.atomic():
+            mentor_profile = UserMentor.objects.filter(user=instance.user).first()
+            if mentor_profile:
+                for attr, value in profile_data.items():
+                    if value is not None:
+                        setattr(mentor_profile, attr, value)
+                mentor_profile.save()
+
+            for attr, value in validated_data.items():
+                setattr(instance, attr, value)
+            instance.save()
 
         return instance
 
@@ -537,7 +539,8 @@ class MentorDetailSerializer(serializers.ModelSerializer):
     """
     user_full_name = serializers.CharField(source='user.full_name', read_only=True)
     muid = serializers.CharField(source='user.muid', read_only=True)
-    applications = MentorApplicationProfileSerializer(many=True, read_only=True, source='user.mentor_applications')
+    # Newest first, so clients don't guess which application is current (BE-6).
+    applications = serializers.SerializerMethodField()
     avg_rating = serializers.SerializerMethodField()
     rating_count = serializers.SerializerMethodField()
 
@@ -610,6 +613,36 @@ class MentorDetailSerializer(serializers.ModelSerializer):
 
     def get_rating_count(self, obj):
         return self._rating_aggregate(obj)['rating_count']
+
+    def get_applications(self, obj):
+        # .all() keeps any prefetch; sort in Python (undated last) instead of order_by().
+        apps = sorted(
+            obj.user.mentor_applications.all(),
+            key=lambda app: (app.updated_at is not None, app.updated_at),
+            reverse=True,
+        )
+        return MentorApplicationProfileSerializer(apps, many=True).data
+
+class MentorApplicationPublicSerializer(MentorApplicationProfileSerializer):
+    """Application fields safe for the public profile: no admin review note."""
+    class Meta(MentorApplicationProfileSerializer.Meta):
+        fields = [f for f in MentorApplicationProfileSerializer.Meta.fields if f != "verification_note"]
+
+
+class MentorPublicDetailSerializer(MentorDetailSerializer):
+    """
+    MentorDetailSerializer for /mentor/public/profile/<id>/, which any logged-in
+    user can open: lists only APPROVED applications (no pending / rejected
+    history) and never the admin verification_note.
+    """
+    applications = serializers.SerializerMethodField()
+
+    def get_applications(self, obj):
+        apps = obj.user.mentor_applications.filter(
+            status=MentorApplication.Status.APPROVED
+        ).select_related("org", "user")
+        return MentorApplicationPublicSerializer(apps, many=True).data
+
 
 class MentorProfileUpdateSerializer(serializers.ModelSerializer):
     linkedin = serializers.CharField(required=False, allow_blank=True, write_only=True, max_length=255)
@@ -1082,6 +1115,16 @@ class SessionCreateSerializer(serializers.ModelSerializer):
 
             if session.is_recurring:
                 child_sessions, was_truncated = generate_recurring_sessions(session)
+                # Each occurrence needs its own MENTOR row too: completion records
+                # the mentor's minutes on it, and mentor counts key off it.
+                MentorshipSessionUserLink.objects.bulk_create([
+                    MentorshipSessionUserLink(
+                        session_id=child.id,
+                        user_id=user_id,
+                        participant_role=MentorshipSessionUserLink.ParticipantRole.MENTOR,
+                    )
+                    for child in child_sessions
+                ])
                 session._child_session_ids = [c.id for c in child_sessions]
                 session._recurrence_truncated = was_truncated
             else:
@@ -1430,7 +1473,11 @@ class ParticipantJoinSerializer(serializers.Serializer):
                 raise serializers.ValidationError("You are not eligible to join this session.")
 
             if session.max_participants:
-                current_count = MentorshipSessionUserLink.objects.filter(session_id=session_id).count()
+                # Only learners use up places — the session's own mentor row doesn't.
+                current_count = MentorshipSessionUserLink.objects.filter(
+                    session_id=session_id,
+                    participant_role=MentorshipSessionUserLink.ParticipantRole.MENTEE,
+                ).count()
                 if current_count >= session.max_participants:
                     raise serializers.ValidationError("Session has reached its maximum participant limit.")
 
@@ -1475,7 +1522,11 @@ class MentorAddParticipantSerializer(serializers.Serializer):
                 raise serializers.ValidationError("Only scheduled sessions can accept participants.")
 
             if session.max_participants:
-                current_count = MentorshipSessionUserLink.objects.filter(session_id=session_id).count()
+                # Only learners use up places — the session's own mentor row doesn't.
+                current_count = MentorshipSessionUserLink.objects.filter(
+                    session_id=session_id,
+                    participant_role=MentorshipSessionUserLink.ParticipantRole.MENTEE,
+                ).count()
                 if current_count >= session.max_participants:
                     raise serializers.ValidationError("Session has reached its maximum participant limit.")
 
@@ -1505,6 +1556,8 @@ class ParticipantListSerializer(serializers.ModelSerializer):
     session_venue = serializers.CharField(source="session.venue", read_only=True)
     session_status = serializers.CharField(source="session.status", read_only=True)
     session_entity_id = serializers.CharField(source="session.entity_id", read_only=True)
+    # Lets learners' history tell company sessions apart (BE-11).
+    session_type = serializers.CharField(source="session.session_type", read_only=True)
     session_entity_name = serializers.SerializerMethodField()
 
     class Meta:
@@ -1529,6 +1582,7 @@ class ParticipantListSerializer(serializers.ModelSerializer):
             "session_venue",
             "session_status",
             "session_entity_id",
+            "session_type",
             "session_entity_name",
         ]
 

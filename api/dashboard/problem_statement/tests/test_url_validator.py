@@ -7,7 +7,7 @@ from utils.validators import validate_safe_url
 
 @pytest.mark.parametrize("url", [
     "https://github.com/user/repo",
-    "https://github.com/user/repo#readme",            # '#' and ';' are fine here (validate_safe_text rejects them)
+    "https://github.com/user/repo#readme",            # '#' and ';' are fine here
     "https://example.com/a;b?x=1&y=2",
     "https://sub.domain.co.in:8443/path",
     "HTTPS://GitHub.com/User/Repo",
