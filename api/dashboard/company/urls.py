@@ -44,6 +44,7 @@ urlpatterns = [
     # Collaboration / Partnership discovery flow (PRD §10)
     path("collaborations/",                    collaboration_views.CompanyCollaborationListCreateAPI.as_view()),
     path("collaborations/discover/",           collaboration_views.CompanyCollaborationDiscoverAPI.as_view()),
+    path("collaborations/incoming/",           collaboration_views.CompanyCollaborationIncomingAPI.as_view()),
     path("collaborations/<str:collaboration_id>/respond/", collaboration_views.CompanyCollaborationRespondAPI.as_view()),
     path("collaborations/<str:collaboration_id>/",         collaboration_views.CompanyCollaborationWithdrawAPI.as_view()),
 

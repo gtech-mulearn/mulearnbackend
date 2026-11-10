@@ -145,7 +145,7 @@ class CompanyCollaborationListCreateAPI(APIView):
                         user=lead,
                         title="New Collaboration Proposal",
                         description=f"{company.name} has proposed a collaboration: {title}.",
-                        button="View", url=None, created_by=actor,
+                        button="View", url="/dashboard/collaborations/incoming", created_by=actor,
                     )
         except Exception:
             import logging
@@ -202,6 +202,69 @@ class CompanyCollaborationDiscoverAPI(APIView):
         serializer = CollaborationSerializer(paginated.get("queryset"), many=True)
         return CustomResponse(
             response={"data": serializer.data, "pagination": paginated.get("pagination")}
+        ).get_success_response()
+
+
+IG_LEAD_SUFFIX = " IGLead"
+
+
+def ig_codes_led(roles):
+    """IG codes the caller leads, from "{code} IGLead" role titles — the same
+    convention _can_respond_as_target uses. "{code} CampusIGLead" and the bare
+    "IGLead" role do not count."""
+    return [
+        role[: -len(IG_LEAD_SUFFIX)]
+        for role in roles or []
+        if role.endswith(IG_LEAD_SUFFIX) and len(role) > len(IG_LEAD_SUFFIX)
+    ]
+
+
+class CompanyCollaborationIncomingAPI(APIView):
+    """BE-9 — PENDING collaboration invites addressed to a campus or IG the
+    caller leads (the targets _can_respond_as_target lets them answer)."""
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['Dashboard - Company'],
+        description="List collaboration invites awaiting the caller's response as a campus or IG lead.",
+    )
+    def get(self, request):
+        from django.db.models import Q
+        from db.organization import UserOrganizationLink
+        from db.task import InterestGroup
+
+        user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request) or []
+
+        campus_org_ids = []
+        if RoleType.CAMPUS_LEAD.value in roles:
+            campus_org_ids = list(
+                UserOrganizationLink.objects.filter(user_id=user_id, verified=True)
+                .values_list("org_id", flat=True)
+            )
+        codes = ig_codes_led(roles)
+        ig_ids = (
+            list(InterestGroup.objects.filter(code__in=codes).values_list("id", flat=True))
+            if codes else []
+        )
+
+        if not campus_org_ids and not ig_ids:
+            return CustomResponse(response=[]).get_success_response()
+
+        targets = Q()
+        if campus_org_ids:
+            targets |= Q(target_type=Collaboration.TargetType.CAMPUS, target_org_id__in=campus_org_ids)
+        if ig_ids:
+            targets |= Q(target_type=Collaboration.TargetType.IG, target_org_id__in=ig_ids)
+        collaborations = (
+            Collaboration.objects.filter(status=Collaboration.Status.PENDING)
+            .filter(targets)
+            .select_related("company")
+            .order_by("-created_at")
+        )
+        from .collaboration_serializers import CollaborationSerializer
+        return CustomResponse(
+            response=CollaborationSerializer(collaborations, many=True).data
         ).get_success_response()
 
 
