@@ -6,3 +6,41 @@ def test_company_detail_exposes_publish_impact_report():
     from api.dashboard.company.serializers import CompanyDetailSerializer
 
     assert "publish_impact_report" in CompanyDetailSerializer().fields
+
+
+def test_mentor_detail_lists_newest_application_first():
+    import datetime
+
+    from api.dashboard.mentor import serializers as mentor_serializers
+
+    older = mock.Mock(updated_at=datetime.datetime(2026, 1, 1))
+    newer = mock.Mock(updated_at=datetime.datetime(2026, 6, 1))
+    obj = mock.Mock()
+    obj.user.mentor_applications.all.return_value = [older, newer]
+    with mock.patch.object(
+        mentor_serializers, "MentorApplicationProfileSerializer"
+    ) as app_serializer:
+        app_serializer.side_effect = lambda apps, many: mock.Mock(data=list(apps))
+        data = mentor_serializers.MentorDetailSerializer().get_applications(obj)
+
+    assert data == [newer, older]
+
+
+def test_mentor_detail_puts_undated_applications_last():
+    import datetime
+
+    from api.dashboard.mentor import serializers as mentor_serializers
+
+    undated = mock.Mock(updated_at=None)
+    dated = mock.Mock(
+        updated_at=datetime.datetime(2026, 6, 1, tzinfo=datetime.timezone.utc)
+    )
+    obj = mock.Mock()
+    obj.user.mentor_applications.all.return_value = [undated, dated]
+    with mock.patch.object(
+        mentor_serializers, "MentorApplicationProfileSerializer"
+    ) as app_serializer:
+        app_serializer.side_effect = lambda apps, many: mock.Mock(data=list(apps))
+        data = mentor_serializers.MentorDetailSerializer().get_applications(obj)
+
+    assert data == [dated, undated]
