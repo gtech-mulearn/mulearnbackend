@@ -28,7 +28,11 @@ class MentorshipSessionCalendarSerializer(serializers.ModelSerializer):
         mentor_link = obj.participant_links.filter(
             participant_role=MentorshipSessionUserLink.ParticipantRole.MENTOR
         ).select_related('user').first()
-        return mentor_link.user.full_name if mentor_link else None
+        if mentor_link:
+            return mentor_link.user.full_name
+        # Fallback for sessions created before the MENTOR participant link
+        # was auto-created at session-creation time.
+        return obj.created_by.full_name if obj.created_by_id else None
 
     def get_mentee_count(self, obj):
         return obj.participant_links.filter(

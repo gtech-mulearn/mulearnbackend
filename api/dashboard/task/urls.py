@@ -16,6 +16,8 @@ urlpatterns = [
     path("level/", dash_task_view.LevelDropdownAPI.as_view()),
     path("task-types/", dash_task_view.TaskTypesDropDownAPI.as_view()),
     path("", dash_task_view.TaskListAPI.as_view()),  # list task, create
+    path("active/", dash_task_view.TaskActiveListAPI.as_view()),  # list active tasks only
+    path("inactive/", dash_task_view.TaskInactiveListAPI.as_view()),  # list inactive tasks only
     path("list/", dash_task_view.TaskPublicListAPI.as_view()),  # list task public
     path("csv/", dash_task_view.TaskListCSV.as_view()),  # CSV
     path("import/", dash_task_view.ImportTaskListCSV.as_view()),

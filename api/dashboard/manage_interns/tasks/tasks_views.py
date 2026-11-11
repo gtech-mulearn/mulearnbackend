@@ -12,6 +12,8 @@ from utils.types import RoleType, InternHashtag
 from utils.utils import CommonUtils
 from db.intern import InternTask
 from db.task import KarmaActivityLog, TaskList, Wallet
+from utils.karma import notify_karma_change
+from api.notification.types import NotificationType
 from .serializers import ManageInternTaskSerializer
 
 class ManageInternTaskAPI(APIView):
@@ -200,7 +202,7 @@ class ManageInternTaskVerifyAPI(APIView):
                     hashtag=InternHashtag.TASK_VERIFIED_HASHTAG.value
                 ).first()
                 if task_list:
-                    KarmaActivityLog.objects.create(
+                    kal = KarmaActivityLog.objects.create(
                         id=str(uuid.uuid4()),
                         user_id=intern_user_id,
                         task=task_list,
@@ -217,6 +219,9 @@ class ManageInternTaskVerifyAPI(APIView):
                         defaults={'created_by_id': admin_id, 'updated_by_id': admin_id}
                     )
                     Wallet.objects.filter(id=wallet.id).update(karma=F('karma') + karma_awarded)
+                    notify_karma_change(
+                        NotificationType.KARMA_AWARDED, intern_user_id, admin_id, task_list.title, karma_awarded, kal.id
+                    )
 
             from db.mentor import SystemActionLog
             SystemActionLog.objects.create(

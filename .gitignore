@@ -30,3 +30,5 @@ venv/
 dump.rdb
 
 static/
+
+.claude

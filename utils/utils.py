@@ -48,6 +48,7 @@ class CommonUtils:
         search_fields,
         sort_fields: dict = None,
         is_pagination: bool = True,
+        extra_q: Q = None,
     ) -> QuerySet:
         """
         Returns a paginated queryset based on the provided parameters.
@@ -58,6 +59,9 @@ class CommonUtils:
             - search_fields (list): The list of fields to search for.
             - sort_fields (dict, optional): A dictionary mapping sort fields. Defaults to None.
             - is_pagination (bool, optional): Flag indicating whether pagination should be applied. Defaults to True.
+            - extra_q (Q, optional): An additional condition OR'd into the search filter, for
+              matching values that aren't backed by a real searchable column (e.g. a display-only
+              label). Ignored unless a search query is present.
 
         Returns:
             - QuerySet or dict: The paginated queryset or a dictionary containing the paginated queryset and pagination information.
@@ -86,6 +90,8 @@ class CommonUtils:
             query = Q()
             for field in search_fields:
                 query |= Q(**{f"{field}__icontains": search_query})
+            if extra_q:
+                query |= extra_q
 
             queryset = queryset.filter(query)
 
@@ -99,12 +105,22 @@ class CommonUtils:
         # GROUP BY, silently corrupting any aggregate() computed there.
         is_grouped = queryset._fields is not None
         if sort_by:
-            sort = sort_by[1:] if sort_by.startswith("-") else sort_by
-            if sort_field_name := sort_fields.get(sort):
-                if sort_by.startswith("-"):
-                    sort_field_name = f"-{sort_field_name}"
+            is_descending = sort_by.startswith("-")
+            sort = sort_by[1:] if is_descending else sort_by
+            if sort_mapped := sort_fields.get(sort):
+                if isinstance(sort_mapped, (list, tuple)):
+                    order_fields = [
+                        f if f.startswith("-") else f"-{f}" if is_descending else f
+                        for f in sort_mapped
+                    ]
+                else:
+                    order_fields = [
+                        sort_mapped if sort_mapped.startswith("-") else f"-{sort_mapped}" if is_descending else sort_mapped
+                    ]
 
-                order_fields = (sort_field_name,) if is_grouped else (sort_field_name, "pk")
+                if not is_grouped and "pk" not in order_fields and "-pk" not in order_fields:
+                    order_fields.append("pk")
+
                 queryset = queryset.order_by(*order_fields)
         elif is_pagination and not is_grouped and not queryset.ordered:
             # Paginator does LIMIT/OFFSET, which MySQL does not guarantee a
@@ -380,13 +396,25 @@ class DateTimeUtils:
         return date_time.replace(microsecond=0)
 
     @staticmethod
-    def get_start_and_end_of_previous_month():
-        today = DateTimeUtils.get_current_utc_time()
-        start_date = today.replace(day=1)
-        end_date = start_date.replace(
-            day=1, month=start_date.month % 12 + 1
-        ) - timedelta(days=1)
-        return start_date, end_date
+    def get_current_month_range():
+        """Return (start, next_month_start) for the current UTC month.
+
+        Both boundaries are at midnight so no karma is missed at the edges.
+        Use __gte=start and __lt=next_month_start in queries (not __range,
+        which is inclusive on both ends).
+
+        Handles December correctly: rolls the year forward instead of
+        wrapping month to 1 with the same year.
+        """
+        today = datetime.datetime.utcnow().replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        start = today.replace(day=1)
+        if today.month == 12:
+            next_month = start.replace(year=today.year + 1, month=1)
+        else:
+            next_month = start.replace(month=today.month + 1)
+        return start, next_month
 
 
 class _CustomHTTPHandler:
@@ -496,3 +524,10 @@ def generate_code(char_count=6):
     characters = string.ascii_uppercase + string.digits
     code = "".join(random.choices(characters, k=char_count))
     return code
+
+def get_user_mentor_profile(user_id):
+    """
+    Helper to fetch a user's UserMentor profile.
+    """
+    from db.user import UserMentor
+    return UserMentor.objects.filter(user_id=user_id).first()

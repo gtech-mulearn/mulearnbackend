@@ -1,7 +1,7 @@
 from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 
-from utils.permission import CustomizePermission, JWTUtils, role_required
+from utils.permission import CustomizePermission, JWTUtils, role_required, mentor_active_required
 from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
@@ -201,7 +201,8 @@ class MentorStudentRequestVerifyAPI(APIView):
     include the session's entity_id + session_type).
 
     On APPROVE:
-      - The session moves from REQUESTED → PENDING_APPROVAL.
+      - The session moves from REQUESTED → SCHEDULED directly (mentor
+        approval is the trust gate — there is no separate admin step).
       - `created_by` is updated to this mentor (so it appears in their dashboard).
       - `requested_by` is preserved for audit purposes.
       - Optional field overrides (starts_at, ends_at, mode, meeting_link, venue)
@@ -225,6 +226,7 @@ class MentorStudentRequestVerifyAPI(APIView):
         request=serializers.MentorStudentRequestVerifySerializer,
     )
     @role_required([RoleType.MENTOR.value])
+    @mentor_active_required
     def patch(self, request, session_id):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -256,7 +258,7 @@ class MentorStudentRequestVerifyAPI(APIView):
             action = serializer.validated_data["status"]
             if action == "APPROVED":
                 msg = (
-                    "Session request approved. It is now pending admin scheduling. "
+                    "Session request approved and scheduled. "
                     "You can manage it from your sessions dashboard."
                 )
             else:
@@ -277,29 +279,22 @@ def _mentor_can_act(user_id: str, session: MentorshipSession) -> bool:
     the session. All sessions are Interest-Group scoped, so eligibility is:
 
       - Global MENTOR → may act on anything.
-      - Any other tier → may act on an IG_SESSION request for an Interest
-        Group they actively mentor (active MENTOR UserIgLink), regardless of
-        tier.
+      - Any other tier → may act on an IG_SESSION request for an Interest Group
+        they actively mentor (i.e., they have an active IG_MENTOR grant for it).
     """
-    from db.task import UserIgLink
     from db.user import MentorScopeGrant
-    from api.dashboard.mentor.dash_mentor_helper import get_mentor_scopes
-
-    scopes = get_mentor_scopes(user_id)
-
-    if not scopes:
-        return False
+    from api.dashboard.mentor.dash_mentor_helper import has_scope
 
     # Global mentor can act on anything.
-    if (MentorScopeGrant.ScopeType.MENTOR, None) in scopes:
+    if has_scope(user_id, MentorScopeGrant.ScopeType.MENTOR):
         return True
 
     if session.session_type != MentorshipSession.SessionType.IG_SESSION:
         return False
 
-    return UserIgLink.objects.filter(
-        user_id=user_id,
-        ig_id=session.entity_id,
-        assignment_type=UserIgLink.AssignmentType.MENTOR,
-        is_active=True,
-    ).exists()
+    # Check for a specific IG_MENTOR grant for this session's IG.
+    return has_scope(
+        user_id,
+        MentorScopeGrant.ScopeType.IG_MENTOR,
+        session.entity_id
+    )

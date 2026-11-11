@@ -1,3 +1,4 @@
+from django.core.cache import cache
 from django.db.models import Q
 from rest_framework.views import APIView
 
@@ -11,6 +12,45 @@ from . import location_serializer
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers as s
 
+# Bounded, fixed key space: these three public list endpoints take no query
+# params, so each has exactly one possible cached result. Invalidated on any
+# write across Country/State/Zone/District (see _invalidate_location_list_caches) —
+# this data is admin-edited reference data (countries/states/zones), not a
+# frequent-write path.
+LOCATION_COUNTRIES_CACHE_KEY = "location_countries_list"
+LOCATION_STATES_CACHE_KEY = "location_states_list"
+LOCATION_ZONES_CACHE_KEY = "location_zones_list"
+LOCATION_LIST_CACHE_TTL = 60 * 10  # matches api/register/register_views.py's TTL for the same class of data
+
+
+def _invalidate_location_list_caches():
+    """Drop all three location list caches. Called unconditionally from every
+    Country/State/Zone/District write, since Country/State deletes cascade
+    (on_delete=CASCADE) and can affect the states/zones lists too."""
+    cache.delete(LOCATION_COUNTRIES_CACHE_KEY)
+    cache.delete(LOCATION_STATES_CACHE_KEY)
+    cache.delete(LOCATION_ZONES_CACHE_KEY)
+
+
+def _single_record_response(queryset, serializer_cls):
+    """Detail-by-id GET (queryset already filtered to a single id) kept the
+    same paginated_response() envelope the list branch uses, but routing it
+    through CommonUtils.get_paginated_queryset issued a redundant
+    Paginator.count COUNT(*) query on top of the actual SELECT -- the count is
+    already known to be 0 or 1 from the id filter. Builds the pagination dict
+    directly instead, in the same shape get_paginated_queryset returns."""
+    obj = queryset.first()
+    objects = [obj] if obj else []
+    serializer = serializer_cls(objects, many=True)
+    pagination = {
+        "count": len(objects),
+        "totalPages": 1 if objects else 0,
+        "isNext": False,
+        "isPrev": False,
+        "nextPage": None,
+    }
+    return CustomResponse().paginated_response(data=serializer.data, pagination=pagination)
+
 
 class CountryDataAPI(APIView):
     permission_classes = [CustomizePermission]
@@ -23,9 +63,12 @@ class CountryDataAPI(APIView):
     )
     def get(self, request, country_id=None):
         if country_id:
-            countries = Country.objects.filter(id=country_id)
-        else:
-            countries = Country.objects.select_related("created_by", "updated_by")
+            countries = Country.objects.filter(id=country_id).select_related(
+                "created_by", "updated_by"
+            )
+            return _single_record_response(countries, location_serializer.LocationSerializer)
+
+        countries = Country.objects.select_related("created_by", "updated_by")
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             countries,
@@ -69,6 +112,7 @@ class CountryDataAPI(APIView):
         )
         if serializer.is_valid():
             serializer.save()
+            _invalidate_location_list_caches()
             return CustomResponse(response=serializer.data).get_success_response()
 
         return CustomResponse(general_message=serializer.errors).get_failure_response()
@@ -89,6 +133,7 @@ class CountryDataAPI(APIView):
 
         if serializer.is_valid():
             serializer.save()
+            _invalidate_location_list_caches()
 
             return CustomResponse(response=serializer.data).get_success_response()
 
@@ -101,6 +146,7 @@ class CountryDataAPI(APIView):
     def delete(self, request, country_id):
         country = Country.objects.get(id=country_id)
         country.delete()
+        _invalidate_location_list_caches()
 
         return CustomResponse(
             general_message="Country deleted successfully"
@@ -121,10 +167,11 @@ class StateDataAPI(APIView):
             states = State.objects.filter(pk=state_id).select_related(
                 "country", "created_by", "updated_by"
             )
-        else:
-            states = State.objects.all().select_related(
-                "country", "created_by", "updated_by"
-            )
+            return _single_record_response(states, location_serializer.StateRetrievalSerializer)
+
+        states = State.objects.all().select_related(
+            "country", "created_by", "updated_by"
+        )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             states,
@@ -167,6 +214,7 @@ class StateDataAPI(APIView):
 
         if serializer.is_valid():
             serializer.save()
+            _invalidate_location_list_caches()
 
             return CustomResponse(response=serializer.data).get_success_response()
 
@@ -188,6 +236,7 @@ class StateDataAPI(APIView):
 
         if serializer.is_valid():
             serializer.save()
+            _invalidate_location_list_caches()
 
             return CustomResponse(response=serializer.data).get_success_response()
 
@@ -200,6 +249,7 @@ class StateDataAPI(APIView):
     def delete(self, request, state_id):
         state = State.objects.get(id=state_id)
         state.delete()
+        _invalidate_location_list_caches()
 
         return CustomResponse(
             general_message="State deleted successfully"
@@ -217,11 +267,14 @@ class ZoneDataAPI(APIView):
     )
     def get(self, request, zone_id=None):
         if zone_id:
-            zones = Zone.objects.filter(pk=zone_id)
-        else:
-            zones = Zone.objects.all().select_related(
+            zones = Zone.objects.filter(pk=zone_id).select_related(
                 "state", "state__country", "created_by", "updated_by"
             )
+            return _single_record_response(zones, location_serializer.ZoneRetrievalSerializer)
+
+        zones = Zone.objects.all().select_related(
+            "state", "state__country", "created_by", "updated_by"
+        )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             zones,
@@ -270,6 +323,7 @@ class ZoneDataAPI(APIView):
 
         if serializer.is_valid():
             serializer.save()
+            _invalidate_location_list_caches()
 
             return CustomResponse(response=serializer.data).get_success_response()
 
@@ -291,6 +345,7 @@ class ZoneDataAPI(APIView):
 
         if serializer.is_valid():
             serializer.save()
+            _invalidate_location_list_caches()
 
             return CustomResponse(response=serializer.data).get_success_response()
 
@@ -303,6 +358,7 @@ class ZoneDataAPI(APIView):
     def delete(self, request, zone_id):
         zone = Zone.objects.get(id=zone_id)
         zone.delete()
+        _invalidate_location_list_caches()
 
         return CustomResponse(
             general_message="Zone deleted successfully"
@@ -320,16 +376,18 @@ class DistrictDataAPI(APIView):
     )
     def get(self, request, district_id=None):
         if district_id:
-            districts = District.objects.filter(pk=district_id)
-
-        else:
-            districts = District.objects.all().select_related(
-                "zone",
-                "zone__state",
-                "zone__state__country",
-                "created_by",
-                "updated_by",
+            districts = District.objects.filter(pk=district_id).select_related(
+                "zone", "zone__state", "zone__state__country", "created_by", "updated_by"
             )
+            return _single_record_response(districts, location_serializer.DistrictRetrievalSerializer)
+
+        districts = District.objects.all().select_related(
+            "zone",
+            "zone__state",
+            "zone__state__country",
+            "created_by",
+            "updated_by",
+        )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             districts,
@@ -379,6 +437,7 @@ class DistrictDataAPI(APIView):
         )
         if serializer.is_valid():
             serializer.save()
+            _invalidate_location_list_caches()
 
             return CustomResponse(response=serializer.data).get_success_response()
 
@@ -400,6 +459,7 @@ class DistrictDataAPI(APIView):
 
         if serializer.is_valid():
             serializer.save()
+            _invalidate_location_list_caches()
 
             return CustomResponse(response=serializer.data).get_success_response()
 
@@ -412,6 +472,7 @@ class DistrictDataAPI(APIView):
     def delete(self, request, district_id):
         district = District.objects.get(id=district_id)
         district.delete()
+        _invalidate_location_list_caches()
 
         return CustomResponse(
             general_message="District deleted successfully"
@@ -430,7 +491,10 @@ class CountryListApi(APIView):
         )},
     )
     def get(self, request):
-        country = Country.objects.all().values("id", "name").order_by("name")
+        country = cache.get(LOCATION_COUNTRIES_CACHE_KEY)
+        if country is None:
+            country = list(Country.objects.all().values("id", "name").order_by("name"))
+            cache.set(LOCATION_COUNTRIES_CACHE_KEY, country, LOCATION_LIST_CACHE_TTL)
 
         return CustomResponse(response=country).get_success_response()
 
@@ -447,7 +511,10 @@ class StateListApi(APIView):
         )},
     )
     def get(self, request):
-        state = State.objects.all().values("id", "name").order_by("name")
+        state = cache.get(LOCATION_STATES_CACHE_KEY)
+        if state is None:
+            state = list(State.objects.all().values("id", "name").order_by("name"))
+            cache.set(LOCATION_STATES_CACHE_KEY, state, LOCATION_LIST_CACHE_TTL)
 
         return CustomResponse(response=state).get_success_response()
 
@@ -464,6 +531,9 @@ class ZoneListApi(APIView):
         )},
     )
     def get(self, request):
-        zone = Zone.objects.all().values("id", "name").order_by("name")
+        zone = cache.get(LOCATION_ZONES_CACHE_KEY)
+        if zone is None:
+            zone = list(Zone.objects.all().values("id", "name").order_by("name"))
+            cache.set(LOCATION_ZONES_CACHE_KEY, zone, LOCATION_LIST_CACHE_TTL)
 
         return CustomResponse(response=zone).get_success_response()

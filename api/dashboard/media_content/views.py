@@ -41,6 +41,9 @@ from api.dashboard.media_content.image_utils import (
     delete_stale_media,
 )
 from mu_celery.media_content_tasks import fetch_and_attach_poster
+from api.notification.service import NotificationService
+from api.notification.types import NotificationType
+from api.notification.audience import Audience
 
 from drf_spectacular.utils import extend_schema
 
@@ -100,11 +103,32 @@ def _apply_common_filters(qs, request, *, has_zone: bool = False):
     return qs
 
 
-def _sync_ig_links(record, ig_ids):
+def _ig_names_map_for_records(records):
+    """Batch-resolve every IgMediaContentLink id referenced by `records`
+    (Office Hours) into one {link_id: interest_group_name} map with a single
+    query, instead of one query per record via the read serializer."""
+    all_link_ids = {
+        link_id
+        for record in records
+        for link_id in (record.interest_groups or [])
+    }
+    if not all_link_ids:
+        return {}
+    links = IgMediaContentLink.objects.filter(
+        id__in=all_link_ids
+    ).select_related('interest_group')
+    return {link.id: link.interest_group.name for link in links}
+
+
+def _sync_ig_links(record, ig_ids, *, is_new=False):
     """Replace all IgMediaContentLink rows for `record` with one per id in
     `ig_ids`, and return the new link ids (to store on record.interest_groups).
+    `is_new=True` skips the delete step for a just-created record, which
+    cannot have any existing links yet — avoids a guaranteed-no-op DELETE
+    query on every create (including per-row on CSV bulk import).
     """
-    record.ig_links.all().delete()
+    if not is_new:
+        record.ig_links.all().delete()
     ig_ids = ig_ids or []
     links = IgMediaContentLink.objects.bulk_create([
         IgMediaContentLink(
@@ -115,6 +139,59 @@ def _sync_ig_links(record, ig_ids):
         for ig_id in ig_ids
     ])
     return [link.id for link in links]
+
+
+def _notify_new_media_content(record, actor_id, link_ids=None):
+    """
+    Announce a newly created MediaContent record. Shared by all 4 single-
+    create views and the bulk CSV importer, so every producer of a new
+    session/episode notifies the same way. Office Hours resolves to its
+    tagged IG's learners; the other 3 shows go global (campus/zone kept as
+    descriptive text only — see notification_docs/MediaContent_Notification_Table.md
+    for why: campus is free text, not a real FK, so there's no audience to
+    resolve without a schema change).
+    """
+    content_type = record.content_type
+    if content_type == MediaContent.ContentType.OFFICE_HOURS:
+        NotificationService.dispatch(
+            notif_type = NotificationType.OFFICE_HOURS_ANNOUNCED,
+            audience   = Audience.ig_via_media_content_links(link_ids or []),
+            context    = {"title": record.title, "performer": record.performer or "TBA"},
+            entity_id  = str(record.id),
+            occurrence = "1",
+            actor_id   = actor_id,
+        )
+    elif content_type == MediaContent.ContentType.SALT_MANGO_TREE:
+        NotificationService.dispatch(
+            notif_type = NotificationType.SALT_MANGO_TREE_ANNOUNCED,
+            audience   = Audience.all(),
+            context    = {"title": record.title, "campus": record.campus or "your campus"},
+            entity_id  = str(record.id),
+            occurrence = "1",
+            actor_id   = actor_id,
+        )
+    elif content_type == MediaContent.ContentType.INSPIRATION_STATION:
+        NotificationService.dispatch(
+            notif_type = NotificationType.INSPIRATION_STATION_ANNOUNCED,
+            audience   = Audience.all(),
+            context    = {"title": record.title, "campus": record.campus or "your campus"},
+            entity_id  = str(record.id),
+            occurrence = "1",
+            actor_id   = actor_id,
+        )
+    elif content_type == MediaContent.ContentType.GRAB_YOUR_SUPERPOWERS:
+        NotificationService.dispatch(
+            notif_type = NotificationType.GRAB_YOUR_SUPERPOWERS_ANNOUNCED,
+            audience   = Audience.all(),
+            context    = {
+                "title": record.title,
+                "campus": record.campus or "your campus",
+                "performer": record.performer or "TBA",
+            },
+            entity_id  = str(record.id),
+            occurrence = "1",
+            actor_id   = actor_id,
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -146,7 +223,11 @@ class OfficeHoursListCreateAPI(PublicGetMixin, APIView):
             },
         )
 
-        serializer = OfficeHoursReadSerializer(paginated['queryset'], many=True, context={'request': request})
+        records = list(paginated['queryset'])
+        serializer = OfficeHoursReadSerializer(
+            records, many=True,
+            context={'request': request, 'ig_names_map': _ig_names_map_for_records(records)},
+        )
         return CustomResponse().paginated_response(
             data=serializer.data,
             pagination=paginated['pagination'],
@@ -188,12 +269,14 @@ class OfficeHoursListCreateAPI(PublicGetMixin, APIView):
             **data,
         )
 
-        link_ids = _sync_ig_links(record, ig_ids)
+        link_ids = _sync_ig_links(record, ig_ids, is_new=True)
         record.interest_groups = link_ids
         record.save(update_fields=['interest_groups'])
 
         for field, (raw_url, subdir) in pending_urls.items():
             fetch_and_attach_poster.delay(record.id, raw_url, subdir, field)
+
+        _notify_new_media_content(record, user_id, link_ids)
 
         return CustomResponse(
             general_message='Office Hours session created successfully.',
@@ -377,6 +460,8 @@ class SaltMangoTreeListCreateAPI(PublicGetMixin, APIView):
             **data,
         )
 
+        _notify_new_media_content(record, user_id)
+
         return CustomResponse(
             general_message='Salt Mango Tree episode created successfully.',
             response=SaltMangoTreeReadSerializer(record).data,
@@ -527,6 +612,8 @@ class InspirationStationListCreateAPI(PublicGetMixin, APIView):
             updated_by_id=user_id,
             **data,
         )
+
+        _notify_new_media_content(record, user_id)
 
         return CustomResponse(
             general_message='Inspiration Station episode created successfully.',
@@ -679,6 +766,8 @@ class GrabYourSuperpowersListCreateAPI(PublicGetMixin, APIView):
             **data,
         )
 
+        _notify_new_media_content(record, user_id)
+
         return CustomResponse(
             general_message='Grab Your Superpowers session created successfully.',
             response=GrabYourSuperpowersReadSerializer(record).data,
@@ -815,12 +904,43 @@ class MediaContentBulkImportAPI(APIView):
         success_count = 0
         failed_rows = []
 
+        # Resolve every interest-group name referenced anywhere in the file in
+        # one query, instead of one InterestGroup lookup per Office Hours row.
+        office_hours_ig_names = {
+            name.strip()
+            for row in rows
+            if row.get('content_type', '').strip() == MediaContent.ContentType.OFFICE_HOURS
+            for name in str(row.get('interest_groups') or '').split(',')
+            if name.strip()
+        }
+        ig_by_name = dict(
+            InterestGroup.objects.filter(
+                name__in=office_hours_ig_names
+            ).values_list('name', 'id')
+        ) if office_hours_ig_names else {}
+        known_ig_ids = set(ig_by_name.values())
+
+        # Rows are validated one at a time (error reporting stays per-row),
+        # but the actual writes are batched after the loop: one bulk_create
+        # for every MediaContent row, one bulk_create for every IgMediaContentLink,
+        # and one bulk_update for the interest_groups field — instead of one
+        # INSERT/UPDATE per CSV row.
+        pending_records = []
+        office_hours_pending = []  # [(record, ig_ids)]
+
         for row_num, row in enumerate(rows, start=2):
             content_type = row.get('content_type', '').strip()
             row_data = dict(row)
 
             # Clean up empty values to avoid validation issues
             row_data = {k: v for k, v in row_data.items() if v is not None and str(v).strip() != ''}
+            # The write serializers don't declare a `content_type` input field
+            # (it's derived from the CSV's own `content_type` column, above,
+            # and injected by each serializer's to_internal_value) — and this
+            # project's global strict-serializer patch (mulearnbackend/__init__.py)
+            # rejects any key not in `self.fields`. Left in, every row fails
+            # validation with "Unknown field.".
+            row_data.pop('content_type', None)
 
             if content_type == MediaContent.ContentType.OFFICE_HOURS:
                 # Normalize: CSV may use 'topic' instead of 'title'
@@ -828,15 +948,13 @@ class MediaContentBulkImportAPI(APIView):
                     row_data['title'] = row_data.pop('topic')
                 if 'interest_groups' in row_data:
                     # CSV supplies human-readable IG names; resolve to ids
-                    # (the write serializer expects interest_group ids).
+                    # (the write serializer expects interest_group ids) using
+                    # the file-wide map built above.
                     names = [
                         ig.strip()
                         for ig in str(row_data['interest_groups']).split(',')
                         if ig.strip()
                     ]
-                    ig_by_name = dict(
-                        InterestGroup.objects.filter(name__in=names).values_list('name', 'id')
-                    )
                     unknown_names = [n for n in names if n not in ig_by_name]
                     if unknown_names:
                         failed_rows.append({
@@ -846,7 +964,9 @@ class MediaContentBulkImportAPI(APIView):
                         })
                         continue
                     row_data['interest_groups'] = [ig_by_name[n] for n in names]
-                serializer = OfficeHoursWriteSerializer(data=row_data)
+                serializer = OfficeHoursWriteSerializer(
+                    data=row_data, context={'known_ig_ids': known_ig_ids}
+                )
 
             elif content_type == MediaContent.ContentType.SALT_MANGO_TREE:
                 # Normalize: CSV may use 'title' instead of 'topic'
@@ -878,15 +998,15 @@ class MediaContentBulkImportAPI(APIView):
             if serializer.is_valid():
                 data = serializer.validated_data
                 ig_ids = data.pop('interest_groups', None)
-                record = MediaContent.objects.create(
+                record = MediaContent(
                     id=str(uuid.uuid4()),
                     created_by_id=user_id,
                     updated_by_id=user_id,
                     **data,
                 )
+                pending_records.append(record)
                 if content_type == MediaContent.ContentType.OFFICE_HOURS:
-                    record.interest_groups = _sync_ig_links(record, ig_ids)
-                    record.save(update_fields=['interest_groups'])
+                    office_hours_pending.append((record, ig_ids or []))
                 success_count += 1
             else:
                 failed_rows.append({
@@ -894,6 +1014,33 @@ class MediaContentBulkImportAPI(APIView):
                     "title": row.get('title') or row.get('topic', ''),
                     "reason": serializer.errors,
                 })
+
+        if pending_records:
+            MediaContent.objects.bulk_create(pending_records)
+
+        if office_hours_pending:
+            ig_links_to_create = []
+            for record, ig_ids in office_hours_pending:
+                links = [
+                    IgMediaContentLink(
+                        id=str(uuid.uuid4()),
+                        media_content=record,
+                        interest_group_id=ig_id,
+                    )
+                    for ig_id in ig_ids
+                ]
+                ig_links_to_create.extend(links)
+                record.interest_groups = [link.id for link in links]
+            if ig_links_to_create:
+                IgMediaContentLink.objects.bulk_create(ig_links_to_create)
+            MediaContent.objects.bulk_update(
+                [record for record, _ in office_hours_pending], ['interest_groups']
+            )
+
+        # One announcement per successfully imported row — individual, not a
+        # single digest, same as every other producer in this module.
+        for record in pending_records:
+            _notify_new_media_content(record, user_id, record.interest_groups)
 
         return CustomResponse(
             general_message='Bulk import completed.',
@@ -918,11 +1065,14 @@ class MediaContentBulkExportAPI(APIView):
     ])
     def get(self, request, content_type):
         if content_type == MediaContent.ContentType.OFFICE_HOURS:
-            queryset = MediaContent.objects.filter(
+            queryset = list(MediaContent.objects.filter(
                 content_type=MediaContent.ContentType.OFFICE_HOURS,
                 deleted_at__isnull=True,
+            ))
+            serializer = OfficeHoursReadSerializer(
+                queryset, many=True,
+                context={'request': request, 'ig_names_map': _ig_names_map_for_records(queryset)},
             )
-            serializer = OfficeHoursReadSerializer(queryset, many=True, context={'request': request})
         elif content_type == MediaContent.ContentType.SALT_MANGO_TREE:
             queryset = MediaContent.objects.filter(
                 content_type=MediaContent.ContentType.SALT_MANGO_TREE,

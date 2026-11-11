@@ -12,7 +12,7 @@ from db.user import User, UserRoleLink
 from utils.types import OrganizationType
 from utils.types import RoleType, SocialPlatformType
 from utils.utils import DateTimeUtils
-from .dash_campus_helper import validate_campus_member, assign_ig_campus_lead
+from .dash_campus_helper import validate_campus_member, assign_ig_campus_lead, ensure_ig_execom_catalog_entries
 from db.events import Event
 from db.learning_circle import LearningCircle, UserCircleLink
 
@@ -63,9 +63,7 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
 
     def get_total_karma(self, obj):
         from db.task import Wallet
-        users_in_org = obj.user_organization_link_org.filter(
-            verified=True
-        ).values_list('user', flat=True)
+        users_in_org = obj.user_organization_link_org.filter(verified=True).values_list('user', flat=True)
         return Wallet.objects.filter(
             user__in=users_in_org
         ).aggregate(total_karma=Sum("karma"))["total_karma"] or 0
@@ -321,23 +319,21 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
         last_month = DateTimeUtils.get_current_utc_time() - timedelta(
             weeks=26
         )  # 6months
-        verified_user_ids = obj.org.user_organization_link_org.filter(
-            verified=True
-        ).values_list("user_id", flat=True).distinct()
+        member_user_ids = obj.org.user_organization_link_org.filter(verified=True).values_list("user_id", flat=True).distinct()
         return Wallet.objects.filter(
-            user_id__in=verified_user_ids,
+            user_id__in=member_user_ids,
             karma_last_updated_at__gte=last_month,
         ).count()
 
     def get_total_karma(self, obj):
         from db.task import Wallet
 
-        verified_user_ids = obj.org.user_organization_link_org.filter(
+        member_user_ids = obj.org.user_organization_link_org.filter(
             org__org_type=OrganizationType.COLLEGE.value,
             verified=True,
         ).values_list("user_id", flat=True).distinct()
         return Wallet.objects.filter(
-            user_id__in=verified_user_ids
+            user_id__in=member_user_ids
         ).aggregate(total_karma=Sum("karma"))["total_karma"] or 0
 
     def get_rank(self, obj):
@@ -369,12 +365,10 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
             return position + 1
     def get_karma_last_7_days(self, obj):
         seven_days_ago = DateTimeUtils.get_current_utc_time() - timedelta(days=7)
-        verified_user_ids = obj.org.user_organization_link_org.filter(
-            verified=True
-        ).values_list("user_id", flat=True).distinct()
+        member_user_ids = obj.org.user_organization_link_org.filter(verified=True).values_list("user_id", flat=True).distinct()
         return (
             KarmaActivityLog.objects.filter(
-                user_id__in=verified_user_ids,
+                user_id__in=member_user_ids,
                 created_at__gte=seven_days_ago,
                 appraiser_approved=True,
             ).aggregate(total_karma=Sum("karma"))["total_karma"] or 0
@@ -382,12 +376,10 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
 
     def get_karma_last_30_days(self, obj):
         thirty_days_ago = DateTimeUtils.get_current_utc_time() - timedelta(days=30)
-        verified_user_ids = obj.org.user_organization_link_org.filter(
-            verified=True
-        ).values_list("user_id", flat=True).distinct()
+        member_user_ids = obj.org.user_organization_link_org.filter(verified=True).values_list("user_id", flat=True).distinct()
         return (
             KarmaActivityLog.objects.filter(
-                user_id__in=verified_user_ids,
+                user_id__in=member_user_ids,
                 created_at__gte=thirty_days_ago,
                 appraiser_approved=True,
             ).aggregate(total_karma=Sum("karma"))["total_karma"] or 0
@@ -455,13 +447,11 @@ class WeeklyKarmaSerializer(serializers.ModelSerializer):
         today = DateTimeUtils.get_current_utc_time().date()
         date_range = [today - timedelta(days=i) for i in range(7)]
 
-        verified_user_ids = instance.user_organization_link_org.filter(
-            verified=True
-        ).values_list("user_id", flat=True).distinct()
+        member_user_ids = instance.user_organization_link_org.filter(verified=True).values_list("user_id", flat=True).distinct()
 
         for date in date_range:
             karma_logs = KarmaActivityLog.objects.filter(
-                user_id__in=verified_user_ids,
+                user_id__in=member_user_ids,
                 created_at__date=date,
                 appraiser_approved=True,
             ).aggregate(
@@ -510,12 +500,20 @@ class UserRoleLinkSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         user_id = self.context.get("user_id")
-        validated_data["created_by_id"] = user_id
-        validated_data["id"] = uuid.uuid4()
-        validated_data["verified"] = True
 
-        user_role_link = UserRoleLink.objects.create(**validated_data)
-        return user_role_link
+        link, created = UserRoleLink.objects.get_or_create(
+            user=validated_data["user"],
+            role=validated_data["role"],
+            defaults={
+                "id": str(uuid.uuid4()),
+                "created_by_id": user_id,
+                "verified": True,
+            }
+        )
+        if not created:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError("User already has this role.")
+        return link
 
 
 class CampusEventListSerializer(serializers.ModelSerializer):
@@ -564,13 +562,11 @@ class ExecomMemberSerializer(serializers.ModelSerializer):
 
     def get_ig_name(self, obj):
         title = obj.role.title
-        # IG campus lead roles use canonical format: "{ig_code} CampusLead"
-        if title not in (
-            RoleType.CAMPUS_LEAD.value,
-            RoleType.LEAD_ENABLER.value,
-        ) and title.endswith("CampusLead"):
-            ig_name = title.replace("CampusLead", "").strip()
-            return ig_name or None
+        # IG campus lead/co-lead roles use canonical format: "{ig_code} CampusIGLead" / "{ig_code} CampusIGCoLead"
+        for suffix in ("CampusIGLead", "CampusIGCoLead"):
+            if title.endswith(suffix):
+                ig_name = title[: -len(suffix)].strip()
+                return ig_name or None
         return None
 
         
@@ -625,8 +621,12 @@ class CampusIGChapterListSerializer(serializers.ModelSerializer):
     ig_name = serializers.ReadOnlyField(source="ig.name")
     ig_code = serializers.ReadOnlyField(source="ig.code")
     ig_icon = serializers.ReadOnlyField(source="ig.icon")
+    ig_cover_image = serializers.ReadOnlyField(source="ig.cover_image")
+    ig_icon_image = serializers.ReadOnlyField(source="ig.icon_image")
     lead_id = serializers.ReadOnlyField(source="lead.id")
     lead_name = serializers.SerializerMethodField()
+    co_lead_id = serializers.ReadOnlyField(source="co_lead.id")
+    co_lead_name = serializers.SerializerMethodField()
     campus_ig_member_count = serializers.SerializerMethodField()
 
     class Meta:
@@ -637,8 +637,12 @@ class CampusIGChapterListSerializer(serializers.ModelSerializer):
             "ig_name",
             "ig_code",
             "ig_icon",
+            "ig_cover_image",
+            "ig_icon_image",
             "lead_id",
             "lead_name",
+            "co_lead_id",
+            "co_lead_name",
             "description",
             "icon_link",
             "is_active",
@@ -648,6 +652,11 @@ class CampusIGChapterListSerializer(serializers.ModelSerializer):
     def get_lead_name(self, obj):
         if obj.lead:
             return obj.lead.full_name
+        return None
+
+    def get_co_lead_name(self, obj):
+        if obj.co_lead:
+            return obj.co_lead.full_name
         return None
 
     def get_campus_ig_member_count(self, obj):
@@ -698,14 +707,18 @@ class CampusIGChapterCreateSerializer(serializers.ModelSerializer):
         with transaction.atomic():
             chapter = CampusIGChapter.objects.create(**validated_data)
 
+            ig_name = chapter.ig.name
+            ig_code = chapter.ig.code
+
+            # Populate the global role directory with this IG's assignable titles
+            # immediately on chapter creation, regardless of whether a lead is set yet.
+            ensure_ig_execom_catalog_entries(ig_code, ig_name, user_id)
+
             if chapter.lead:
                 # assign_ig_campus_lead handles bootstrapping the roles internally
                 assign_ig_campus_lead(chapter, chapter.lead, user_id)
             else:
                 # Ensure IG roles exist in the database
-                ig_name = chapter.ig.name
-                ig_code = chapter.ig.code
-
                 roles_to_ensure = [
                     {
                         "title": ig_name,
@@ -714,6 +727,10 @@ class CampusIGChapterCreateSerializer(serializers.ModelSerializer):
                     {
                         "title": RoleType.IG_CAMPUS_LEAD_ROLE(ig_code),
                         "description": f"{ig_name} Interest Group Campus Lead",
+                    },
+                    {
+                        "title": RoleType.IG_CAMPUS_COLEAD_ROLE(ig_code),
+                        "description": f"{ig_name} Interest Group Campus Co-Lead",
                     },
                     {
                         "title": RoleType.IG_LEAD_ROLE(ig_code),
@@ -852,10 +869,12 @@ class CampusLCMemberSerializer(serializers.ModelSerializer):
 
 class CampusIGListSerializer(serializers.ModelSerializer):
     campus_member_count = serializers.IntegerField(default=0)
+    cover_image = serializers.ReadOnlyField()
+    icon_image = serializers.ReadOnlyField()
 
     class Meta:
         model = InterestGroup
-        fields = ["id", "name", "code", "campus_member_count"]
+        fields = ["id", "name", "code", "campus_member_count", "cover_image", "icon_image"]
 
 class CampusIGMemberSerializer(serializers.ModelSerializer):
     user_id = serializers.CharField(source="user.id")

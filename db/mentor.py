@@ -13,20 +13,33 @@ class MentorshipSession(models.Model):
     class Status(models.TextChoices):
         REQUESTED = 'REQUESTED', 'Requested'
         SCHEDULED = 'SCHEDULED', 'Scheduled'
-        PENDING_APPROVAL = 'PENDING_APPROVAL', 'Pending Approval'
+        PENDING_APPROVAL = 'PENDING_APPROVAL', 'Pending_Approval'
         COMPLETED = 'COMPLETED', 'Completed'
         CANCELLED = 'CANCELLED', 'Cancelled'
         REJECTED = 'REJECTED', 'Rejected'
 
     class SessionType(models.TextChoices):
-        IG_SESSION      = 'ig_session',      'IG Session'
-        CAMPUS_SESSION  = 'campus_session',  'Campus Session'
-        COMPANY_SESSION = 'company_session', 'Company Session'
+        IG_SESSION      = 'IG_SESSION',      'IG_Session'
+        CAMPUS_SESSION  = 'CAMPUS_SESSION',  'Campus_Session'
+        COMPANY_SESSION = 'COMPANY_SESSION', 'Company_Session'
 
     class RecurrenceType(models.TextChoices):
         DAILY   = 'DAILY',   'Daily'
         WEEKLY  = 'WEEKLY',  'Weekly'
         MONTHLY = 'MONTHLY', 'Monthly'
+
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        # Sessions created before 1.91 store 'ig_session' / 'campus_session' /
+        # 'company_session'. db-scripts alter-1.91.sql upper-cases them, but read
+        # them as the new values anyway so Python comparisons such as
+        # session.session_type == SessionType.IG_SESSION never depend on that
+        # backfill. (DB filters already match: the column is case-insensitive.)
+        instance = super().from_db(db, field_names, values)
+        session_type = instance.__dict__.get('session_type')
+        if isinstance(session_type, str) and not session_type.isupper():
+            instance.session_type = session_type.upper()
+        return instance
 
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     session_type = models.CharField(max_length=20, choices=SessionType.choices, default=SessionType.IG_SESSION)
@@ -102,6 +115,10 @@ class MentorshipSessionUserLink(models.Model):
     attendance_status = models.CharField(max_length=20, choices=AttendanceStatus.choices, default=AttendanceStatus.INVITED)
     progress_note = models.CharField(max_length=500, blank=True, null=True)
     feedback = models.TextField(blank=True, null=True)
+    # 1-5 rating left by a MENTEE about the MENTOR of the session — the
+    # numeric counterpart to the free-text `feedback`, rolled up into the
+    # mentor's public profile / admin review queue (addon §6.6).
+    rating = models.PositiveSmallIntegerField(blank=True, null=True)
     contributed_minutes = models.IntegerField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -199,8 +216,13 @@ class MentorKarmaAward(models.Model):
 class SystemActionLog(models.Model):
 
     class ActionType(models.TextChoices):
-        PERSONA_SWITCH   = 'PERSONA_SWITCH',   'Persona Switch'
+        MENTOR_APP_SUBMITTED = 'MENTOR_APP_SUBMITTED', 'Mentor App Submitted'
         MENTOR_VERIFY    = 'MENTOR_VERIFY',    'Mentor Verify'
+        MENTOR_DEACTIVATE = 'MENTOR_DEACTIVATE', 'Mentor Deactivate'
+        DELEGATE_INVITED = 'DELEGATE_INVITED', 'Delegate Invited'
+        DELEGATE_RESPONDED = 'DELEGATE_RESPONDED', 'Delegate Responded'
+        DELEGATE_REVOKED = 'DELEGATE_REVOKED', 'Delegate Revoked'
+        MENTOR_REACTIVATE = 'MENTOR_REACTIVATE', 'Mentor Reactivate'
         TASK_REVIEW      = 'TASK_REVIEW',      'Task Review'
         EVENT_REVIEW     = 'EVENT_REVIEW',     'Event Review'
         SESSION_CREATE   = 'SESSION_CREATE',   'Session Create'
@@ -215,6 +237,19 @@ class SystemActionLog(models.Model):
         INTERN_LEAVE_REVIEW = 'INTERN_LEAVE_REVIEW', 'Intern Leave Review'
         INTERN_TIMESHEET_EDIT = 'INTERN_TIMESHEET_EDIT', 'Intern Timesheet Edit'
         INTERN_GUILD_REASSIGN = 'INTERN_GUILD_REASSIGN', 'Intern Guild Reassign'
+        MENTOR_APPLY          = 'MENTOR_APPLY',          'Mentor Apply'
+        MENTOR_NOMINATE       = 'MENTOR_NOMINATE',       'Mentor Nominate'
+        COMPANY_MENTOR_VERIFY = 'COMPANY_MENTOR_VERIFY', 'Company Mentor Verify'
+        JOB_APPROVE           = 'JOB_APPROVE',           'Job Approve'
+        JOB_REJECT            = 'JOB_REJECT',            'Job Reject'
+        COMPANY_EVENT_APPROVE = 'COMPANY_EVENT_APPROVE', 'Company Event Approve'
+        COMPANY_EVENT_REJECT = 'COMPANY_EVENT_REJECT', 'Company Event Reject'
+        CAMPUS_EVENT_APPROVE = 'CAMPUS_EVENT_APPROVE', 'Campus Event Approve'
+        CAMPUS_EVENT_REJECT = 'CAMPUS_EVENT_REJECT', 'Campus Event Reject'
+        IG_EVENT_APPROVE = 'IG_EVENT_APPROVE', 'IG Event Approve'
+        IG_EVENT_REJECT = 'IG_EVENT_REJECT', 'IG Event Reject'
+        IMPACT_PROJECT_PUBLISH = 'IMPACT_PROJECT_PUBLISH', 'Impact Project Publish'
+        COMPANY_DEACTIVATED   = 'COMPANY_DEACTIVATED',   'Company Deactivated'
 
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     action_type = models.CharField(max_length=25, choices=ActionType.choices)

@@ -30,6 +30,8 @@ urlpatterns = [
     path('mentor/<str:event_id>/reject/', manage_views.MentorEventRejectAPI.as_view()),
     path('campus/<str:event_id>/approve/', manage_views.CampusEventApproveAPI.as_view()),
     path('campus/<str:event_id>/reject/', manage_views.CampusEventRejectAPI.as_view()),
+    path('company/<str:event_id>/approve/', manage_views.CompanyEventApproveAPI.as_view()),
+    path('company/<str:event_id>/reject/', manage_views.CompanyEventRejectAPI.as_view()),
 
     # ── Manage (BEFORE <event_id> wildcard) ──────────────────
     path('manage/', manage_views.ManageEventListCreateAPI.as_view()),

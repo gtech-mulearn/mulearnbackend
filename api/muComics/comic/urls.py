@@ -27,6 +27,7 @@ urlpatterns = [
     # Status workflow
     path('<str:comic_id>/publish/', comic_views.ComicPublishView.as_view(),  name='comic-publish'),
     path('<str:comic_id>/archive/', comic_views.ComicArchiveView.as_view(),  name='comic-archive'),
+    path('<str:comic_id>/unarchive/', comic_views.ComicUnarchiveView.as_view(), name='comic-unarchive'),
 
     # Contributors
     path('<str:comic_id>/contributors/',

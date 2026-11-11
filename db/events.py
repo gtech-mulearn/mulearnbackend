@@ -267,20 +267,20 @@ class EventLog(models.Model):
         Action-type constants stored inside changed_fields['action'].
         Plain class (not TextChoices) — no DB column required.
         """
-        CREATED          = 'event_created'
-        UPDATED          = 'event_updated'
-        PUBLISHED        = 'event_published'
-        CANCELLED        = 'event_cancelled'
-        FEATURED         = 'event_featured'
-        UNFEATURED       = 'event_unfeatured'
-        APPROVED         = 'event_approved'
-        REJECTED         = 'event_rejected'
-        CO_OWNER_ADDED   = 'co_owner_added'
-        CO_OWNER_REMOVED = 'co_owner_removed'
-        COLLAB_INVITED   = 'collaborator_invited'
-        COLLAB_ACCEPTED  = 'collaborator_accepted'
-        COLLAB_REJECTED  = 'collaborator_rejected'
-        COLLAB_REMOVED   = 'collaborator_removed'
+        CREATED          = 'EVENT_CREATED'
+        UPDATED          = 'EVENT_UPDATED'
+        PUBLISHED        = 'EVENT_PUBLISHED'
+        CANCELLED        = 'EVENT_CANCELLED'
+        FEATURED         = 'EVENT_FEATURED'
+        UNFEATURED       = 'EVENT_UNFEATURED'
+        APPROVED         = 'EVENT_APPROVED'
+        REJECTED         = 'EVENT_REJECTED'
+        CO_OWNER_ADDED   = 'CO_OWNER_ADDED'
+        CO_OWNER_REMOVED = 'CO_OWNER_REMOVED'
+        COLLAB_INVITED   = 'COLLABORATOR_INVITED'
+        COLLAB_ACCEPTED  = 'COLLABORATOR_ACCEPTED'
+        COLLAB_REJECTED  = 'COLLABORATOR_REJECTED'
+        COLLAB_REMOVED   = 'COLLABORATOR_REMOVED'
 
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     event = models.ForeignKey(
@@ -344,9 +344,9 @@ class MediaContent(models.Model):
         GRAB_YOUR_SUPERPOWERS = 'grab_your_superpowers',  'Grab Your Superpowers'
 
     class Zone(models.TextChoices):
-        NORTH   = 'north',   'North'
-        CENTRAL = 'central', 'Central'
-        SOUTH   = 'south',   'South'
+        NORTH   = 'NORTH',   'North'
+        CENTRAL = 'CENTRAL', 'Central'
+        SOUTH   = 'SOUTH',   'South'
 
     # ── Primary key ───────────────────────────────────────────────────────────
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
