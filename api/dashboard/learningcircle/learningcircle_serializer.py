@@ -208,11 +208,19 @@ class LearningCircleListMinSerializer(serializers.ModelSerializer):
     is_joined = serializers.SerializerMethodField()
     is_creator = serializers.SerializerMethodField()
     status = serializers.SerializerMethodField()
-    # attendees = serializers.SerializerMethodField()
+    member_info = serializers.SerializerMethodField()
+
     class Meta:
         model = LearningCircle
-        # The 'attendees' field is removed as 'total_members' is used instead.
-        fields = ["id", "ig", "title", "org", "total_members", "is_joined", "is_creator", "status"]
+        fields = ["id", "ig", "title", "org", "total_members", "is_joined", "is_creator", "status", "member_info"]
+
+    def get_member_info(self, obj):
+        # Batched into context['member_info_map'] by the view (one query for the
+        # whole page) to avoid an N+1 member lookup per circle card.
+        previews_map = self.context.get("member_info_map")
+        if previews_map is None:
+            return []
+        return previews_map.get(obj.id, [])
 
     def get_is_joined(self, obj):
         user_id = self.context.get("user_id")
