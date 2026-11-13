@@ -120,6 +120,30 @@ class LearningCircleView(APIView):
                 circle_id__in=page_circle_ids,
             ).values_list("circle_id", flat=True)
         )
+
+        # One query for the whole page: leads first, then earliest accepted, capped
+        # at 4 per circle in Python (SQL can't easily cap rows per group here).
+        member_info_map = {}
+        member_links = (
+            UserCircleLink.objects.filter(
+                circle_id__in=page_circle_ids,
+                accepted=True,
+            )
+            .select_related("user")
+            .order_by("circle_id", "-lead", "accepted_at")
+        )
+        for link in member_links:
+            previews = member_info_map.setdefault(link.circle_id, [])
+            if len(previews) >= 4:
+                continue
+            previews.append(
+                {
+                    "id": link.user.id,
+                    "full_name": link.user.full_name,
+                    "profile_pic": link.user.profile_pic,
+                }
+            )
+
         serializer = LearningCircleListMinSerializer(
             page,
             many=True,
@@ -127,6 +151,7 @@ class LearningCircleView(APIView):
                 "user_id": user_id,
                 "joined_circle_ids": joined_circle_ids,
                 "pending_circle_ids": pending_circle_ids,
+                "member_info_map": member_info_map,
             },
         )
         return CustomResponse().paginated_response(
