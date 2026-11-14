@@ -1,4 +1,5 @@
 import uuid
+from django.conf import settings
 from django.db import models
 
 class Company(models.Model):
@@ -66,8 +67,8 @@ class CompanyAdminLink(models.Model):
     responded_at = models.DateTimeField(null=True, blank=True)
     revoked_by = models.ForeignKey('User', on_delete=models.SET_NULL, null=True, blank=True, db_column='revoked_by_id', related_name='company_admin_links_revoked_by')
     revoked_at = models.DateTimeField(null=True, blank=True)
-    created_by = models.ForeignKey('User', on_delete=models.CASCADE, db_column='created_by', related_name='company_admin_links_created_by')
-    updated_by = models.ForeignKey('User', on_delete=models.CASCADE, db_column='updated_by', related_name='company_admin_links_updated_by')
+    created_by = models.ForeignKey('User', on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='created_by', related_name='company_admin_links_created_by')
+    updated_by = models.ForeignKey('User', on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='updated_by', related_name='company_admin_links_updated_by')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -94,7 +95,7 @@ class CompanyTalentShortlist(models.Model):
     )
     note = models.CharField(max_length=500, blank=True, null=True)
     created_by = models.ForeignKey(
-        'User', on_delete=models.CASCADE,
+        'User', on_delete=models.SET(settings.SYSTEM_ADMIN_ID),
         db_column='created_by', related_name='company_talent_shortlist_created_by'
     )
     created_at = models.DateTimeField(auto_now_add=True)
@@ -196,11 +197,11 @@ class Collaboration(models.Model):
     responded_at = models.DateTimeField(blank=True, null=True)
     rejection_reason = models.CharField(max_length=500, blank=True, null=True)
     created_by = models.ForeignKey(
-        'User', on_delete=models.CASCADE,
+        'User', on_delete=models.SET(settings.SYSTEM_ADMIN_ID),
         db_column='created_by', related_name='collaboration_created_by'
     )
     updated_by = models.ForeignKey(
-        'User', on_delete=models.CASCADE,
+        'User', on_delete=models.SET(settings.SYSTEM_ADMIN_ID),
         db_column='updated_by', related_name='collaboration_updated_by'
     )
     created_at = models.DateTimeField(auto_now_add=True)
@@ -233,7 +234,7 @@ class CompanyTaskTemplate(models.Model):
         db_column='type_id', related_name='company_task_templates'
     )
     created_by = models.ForeignKey(
-        'User', on_delete=models.CASCADE,
+        'User', on_delete=models.SET(settings.SYSTEM_ADMIN_ID),
         db_column='created_by', related_name='company_task_template_created_by'
     )
     created_at = models.DateTimeField(auto_now_add=True)
@@ -256,7 +257,7 @@ class CompanyEventTemplate(models.Model):
     event_type = models.CharField(max_length=50, blank=True, null=True)
     default_duration_minutes = models.IntegerField(blank=True, null=True)
     created_by = models.ForeignKey(
-        'User', on_delete=models.CASCADE,
+        'User', on_delete=models.SET(settings.SYSTEM_ADMIN_ID),
         db_column='created_by', related_name='company_event_template_created_by'
     )
     created_at = models.DateTimeField(auto_now_add=True)

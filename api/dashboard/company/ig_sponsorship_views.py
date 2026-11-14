@@ -63,6 +63,43 @@ class IgSponsorshipRequestAPI(APIView):
         return CustomResponse(general_message="Sponsorship request submitted. Awaiting admin approval.").get_success_response()
 
 
+def pending_sponsorship_rows(igs):
+    """Rows for the admin review queue. The request sets updated_at, so it
+    stands in for the request time (there is no dedicated column)."""
+    return [
+        {
+            "ig_id": str(ig.id),
+            "ig_name": ig.name,
+            "company_id": str(ig.sponsor_company_id),
+            "company_name": ig.sponsor_company.name,
+            "requested_at": ig.updated_at,
+        }
+        for ig in igs
+    ]
+
+
+class IgSponsorshipPendingListAPI(APIView):
+    """BE-3 — platform admin queue of IG sponsorship requests awaiting review."""
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=["Dashboard - Company"],
+        description="List IG sponsorship requests awaiting review (platform admin only).",
+    )
+    @role_required([RoleType.ADMIN.value])
+    def get(self, request):
+        from db.task import InterestGroup
+
+        igs = (
+            InterestGroup.objects.filter(
+                sponsor_status="pending", sponsor_company__isnull=False
+            )
+            .select_related("sponsor_company")
+            .order_by("-updated_at")
+        )
+        return CustomResponse(response=pending_sponsorship_rows(igs)).get_success_response()
+
+
 class IgSponsorshipReviewAPI(APIView):
     """Platform-admin approves/rejects a pending IG sponsorship request."""
     permission_classes = [CustomizePermission]

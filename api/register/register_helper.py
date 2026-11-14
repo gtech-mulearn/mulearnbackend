@@ -137,4 +137,4 @@ def get_auth_token_by_id(user_id):
             body.get("message")
             or "Auth service returned an unexpected error. Please try again."
         )
-    return body.get("response")
+    return body.get("response")

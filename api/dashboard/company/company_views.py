@@ -6,7 +6,11 @@ from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
 from db.company import Company, CompanyAdminLink
+from db.user import User
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
+from api.notification.service import NotificationService
+from api.notification.types import NotificationType
+from api.notification.audience import Audience
 from . import serializers
 
 
@@ -85,25 +89,21 @@ class CompanyAdminLinkCreateAPI(APIView):
                 "revoked_by", "revoked_at", "updated_by_id",
             ])
         else:
-            CompanyAdminLink.objects.create(
+            link = CompanyAdminLink.objects.create(
                 company=company, user=delegate,
                 status=CompanyAdminLink.Status.PENDING,
                 invited_by_id=user_id, invited_at=now,
                 created_by_id=user_id, updated_by_id=user_id,
             )
 
-        try:
-            from api.notification.notifications_utils import NotificationUtils
-            actor = User.every.filter(id=user_id).first()
-            NotificationUtils.insert_notification(
-                user=delegate,
-                title="Company Delegate Invitation",
-                description=f"{actor.full_name} has invited you to be an approval delegate for {company.name}.",
-                button="Respond", url=None, created_by=actor,
-            )
-        except Exception:
-            import logging
-            logging.getLogger(__name__).exception("Failed to notify delegate of company admin-link invitation")
+        NotificationService.dispatch(
+            notif_type = NotificationType.COMPANY_DELEGATE_INVITED,
+            audience   = Audience.user(str(delegate.id)),
+            context    = {"company_name": company.name, "inviter_name": User.objects.filter(id=user_id).values_list("full_name", flat=True).first() or ""},
+            entity_id  = str(company.id),
+            occurrence = f"{link.id}:{now.isoformat()}",
+            actor_id   = user_id,
+        )
 
         return CustomResponse(general_message="Delegate invited successfully. Awaiting their acceptance.").get_success_response()
 
@@ -135,8 +135,28 @@ class CompanyAdminLinkAcceptAPI(APIView):
         ).get_success_response()
 
 
+class CompanyAdminLinkMyInvitationsAPI(APIView):
+    """BE-1 — the caller's pending co-admin invitations (any signed-in user)."""
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['Dashboard - Company'],
+        description="List the authenticated user's pending co-admin invitations to verified companies.",
+        responses={200: serializers.CompanyAdminLinkInvitationSerializer(many=True)},
+    )
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        links = CompanyAdminLink.objects.filter(
+            user_id=user_id,
+            status=CompanyAdminLink.Status.PENDING,
+            company__status="verified",
+        ).select_related("company", "invited_by").order_by("-invited_at")
+        serializer = serializers.CompanyAdminLinkInvitationSerializer(links, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
+
+
 class CompanyAdminLinkRevokeAPI(APIView):
-    """Owner-only: revoke a delegate's approval authority."""
+    """Owner-only: revoke a delegate's authority, or cancel a pending invite (BE-2)."""
     permission_classes = [CustomizePermission]
 
     @extend_schema(
@@ -150,11 +170,16 @@ class CompanyAdminLinkRevokeAPI(APIView):
             return CustomResponse(general_message="Verified company profile not found.").get_failure_response(status_code=403)
 
         link = CompanyAdminLink.objects.filter(
-            id=link_id, company=company, status=CompanyAdminLink.Status.ACCEPTED
+            id=link_id,
+            company=company,
+            status__in=[CompanyAdminLink.Status.ACCEPTED, CompanyAdminLink.Status.PENDING],
         ).first()
         if not link:
-            return CustomResponse(general_message="Accepted delegate link not found.").get_failure_response(status_code=404)
+            return CustomResponse(general_message="Accepted or pending delegate link not found.").get_failure_response(status_code=404)
 
+        # A pending invite is cancelled (frees its seat under the 5-link cap);
+        # only someone who had accepted is told their access was revoked.
+        was_accepted = link.status == CompanyAdminLink.Status.ACCEPTED
         from utils.utils import DateTimeUtils
         link.status = CompanyAdminLink.Status.REVOKED
         link.revoked_by_id = user_id
@@ -162,19 +187,17 @@ class CompanyAdminLinkRevokeAPI(APIView):
         link.updated_by_id = user_id
         link.save(update_fields=["status", "revoked_by_id", "revoked_at", "updated_by_id"])
 
-        try:
-            from api.notification.notifications_utils import NotificationUtils
-            from db.user import User
-            actor = User.every.filter(id=user_id).first()
-            NotificationUtils.insert_notification(
-                user=link.user,
-                title="Company Delegate Access Revoked",
-                description=f"Your approval delegate access for {company.name} has been revoked.",
-                button=None, url=None, created_by=actor,
-            )
-        except Exception:
-            import logging
-            logging.getLogger(__name__).exception("Failed to notify delegate of company admin-link revocation")
+        if not was_accepted:
+            return CustomResponse(general_message="Invitation cancelled.").get_success_response()
+
+        NotificationService.dispatch(
+            notif_type = NotificationType.COMPANY_DELEGATE_REVOKED,
+            audience   = Audience.user(str(link.user_id)),
+            context    = {"company_name": company.name},
+            entity_id  = str(company.id),
+            occurrence = f"{link.id}:{link.revoked_at.isoformat()}",
+            actor_id   = user_id,
+        )
 
         return CustomResponse(general_message="Delegate revoked successfully.").get_success_response()
 
@@ -232,25 +255,20 @@ class CompanyAdminLinkLeaveAPI(APIView):
         link.updated_by_id = user_id
         link.save(update_fields=["status", "revoked_by_id", "revoked_at", "updated_by_id"])
 
-        try:
-            from api.notification.notifications_utils import NotificationUtils
-            from db.user import User
-            actor = User.every.filter(id=user_id).first()
-            NotificationUtils.insert_notification(
-                user=link.company.company_user,
-                title="Company Delegate Left",
-                description=f"{actor.full_name} has left as an approval delegate for {link.company.name}.",
-                button=None, url=None, created_by=actor,
-            )
-        except Exception:
-            import logging
-            logging.getLogger(__name__).exception("Failed to notify owner of delegate self-removal")
+        NotificationService.dispatch(
+            notif_type = NotificationType.COMPANY_DELEGATE_LEFT,
+            audience   = Audience.user(str(link.company.company_user_id)),
+            context    = {"company_name": link.company.name, "delegate_name": User.objects.filter(id=user_id).values_list("full_name", flat=True).first() or ""},
+            entity_id  = str(link.company_id),
+            occurrence = f"{link.id}:{link.revoked_at.isoformat()}",
+            actor_id   = user_id,
+        )
 
         return CustomResponse(general_message="You have left as a company delegate successfully.").get_success_response()
 
 
 class CompanyRegistrationAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company'],
@@ -272,11 +290,19 @@ class CompanyRegistrationAPI(APIView):
 
         if serializer.is_valid():
             serializer.save()
+            NotificationService.dispatch(
+                notif_type = NotificationType.ADMIN_COMPANY_PENDING,
+                audience   = Audience.admins(),
+                context    = {"company_name": serializer.instance.name},
+                entity_id  = str(serializer.instance.id),
+                occurrence = "1",
+                actor_id   = user_id,
+            )
             return CustomResponse(
                 general_message="Company registration submitted successfully.",
                 response=serializer.data
             ).get_success_response()
-            
+
         return CustomResponse(message=serializer.errors).get_failure_response()
 
     @extend_schema(
@@ -308,6 +334,15 @@ class CompanyRegistrationAPI(APIView):
             if company.status == "rejected":
                 serializer.save(status="pending", rejection_reason=None)
                 msg = "Company registration updated and resubmitted successfully."
+                from utils.utils import DateTimeUtils
+                NotificationService.dispatch(
+                    notif_type = NotificationType.ADMIN_COMPANY_PENDING,
+                    audience   = Audience.admins(),
+                    context    = {"company_name": company.name},
+                    entity_id  = str(company.id),
+                    occurrence = f"resubmitted:{DateTimeUtils.get_current_utc_time().isoformat()}",
+                    actor_id   = user_id,
+                )
             else:
                 serializer.save()
                 msg = "Company registration updated successfully."
@@ -320,7 +355,7 @@ class CompanyRegistrationAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
 class CompanyStatusAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company'],
@@ -344,7 +379,7 @@ class CompanyStatusAPI(APIView):
         ).get_success_response()
 
 class CompanyProfileAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company'],
@@ -392,7 +427,7 @@ class CompanyProfileAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
 class CompanyListAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company'],
@@ -431,10 +466,20 @@ class CompanyListAPI(APIView):
         if country_id:
             companies = companies.filter(district__zone__state__country_id=country_id)
 
+        # Newest verification request first unless the client sorts; pk
+        # breaks ties so offset pagination stays stable.
+        companies = companies.order_by("-verification_requested_at", "pk")
+
         paginated_queryset = CommonUtils.get_paginated_queryset(
             companies, request, 
             search_fields=["name", "slug", "email", "industry_sector"],
-            sort_fields={"name": "name", "status": "status", "created_at": "created_at"}
+            sort_fields={
+                "name": "name",
+                "status": "status",
+                "industry_sector": "industry_sector",
+                "verification_requested_at": "verification_requested_at",
+                "created_at": "created_at",
+            }
         )
         
         serializer = serializers.CompanyListSerializer(paginated_queryset.get("queryset"), many=True)
@@ -446,7 +491,7 @@ class CompanyListAPI(APIView):
         ).get_success_response()
 
 class CompanyDetailAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company'],
@@ -465,7 +510,7 @@ class CompanyDetailAPI(APIView):
         return CustomResponse(response=serializer.data).get_success_response()
 
 class CompanyVerifyAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company'],
@@ -498,6 +543,28 @@ class CompanyVerifyAPI(APIView):
 
             updated_status = serializer.validated_data.get('status')
             serializer.save()
+
+        from utils.utils import DateTimeUtils
+        decided_at = DateTimeUtils.get_current_utc_time().isoformat()
+
+        if updated_status == 'verified':
+            NotificationService.dispatch(
+                notif_type = NotificationType.COMPANY_VERIFIED,
+                audience   = Audience.user(str(company.company_user_id)),
+                context    = {"company_name": company.name},
+                entity_id  = str(company.id),
+                occurrence = decided_at,
+                actor_id   = user_id,
+            )
+        elif updated_status == 'rejected':
+            NotificationService.dispatch(
+                notif_type = NotificationType.COMPANY_REJECTED,
+                audience   = Audience.user(str(company.company_user_id)),
+                context    = {"company_name": company.name},
+                entity_id  = str(company.id),
+                occurrence = decided_at,
+                actor_id   = user_id,
+            )
 
         return CustomResponse(
             general_message=f"Company status updated to {updated_status} successfully."
@@ -566,17 +633,16 @@ class CompanyDeactivateAPI(APIView):
         revoked_links = _deactivate_company(company, user_id)
 
         try:
-            from api.notification.notifications_utils import NotificationUtils
-            from db.user import User
-            from api.dashboard.mentor.dash_mentor_helper import notify_admins_company_mentor_decision
-            actor = User.every.filter(id=user_id).first()
-            for link in revoked_links:
-                NotificationUtils.insert_notification(
-                    user=link.user,
-                    title="Company Deactivated",
-                    description=f"{company.name} has been deactivated; your co-admin access has been revoked.",
-                    button=None, url=None, created_by=actor,
+            if revoked_links:
+                NotificationService.dispatch(
+                    notif_type = NotificationType.COMPANY_DEACTIVATED,
+                    audience   = Audience.users([str(link.user_id) for link in revoked_links]),
+                    context    = {"company_name": company.name},
+                    entity_id  = str(company.id),
+                    occurrence = f"delegates:{company.updated_at.isoformat()}",
+                    actor_id   = user_id,
                 )
+            actor = User.every.filter(id=user_id).first()
             _notify_admins_company_action(actor, company, "deactivated (self-service by owner)")
         except Exception:
             import logging
@@ -603,23 +669,18 @@ class CompanyAdminDeactivateAPI(APIView):
         revoked_links = _deactivate_company(company, user_id)
 
         try:
-            from api.notification.notifications_utils import NotificationUtils
-            from db.user import User
             from db.mentor import SystemActionLog
             actor = User.every.filter(id=user_id).first()
-            NotificationUtils.insert_notification(
-                user=company.company_user,
-                title="Company Deactivated by Admin",
-                description=f"Your company {company.name} has been deactivated by a platform admin.",
-                button=None, url=None, created_by=actor,
+
+            recipient_ids = [str(company.company_user_id)] + [str(link.user_id) for link in revoked_links]
+            NotificationService.dispatch(
+                notif_type = NotificationType.COMPANY_DEACTIVATED,
+                audience   = Audience.users(recipient_ids),
+                context    = {"company_name": company.name},
+                entity_id  = str(company.id),
+                occurrence = f"admin-triggered:{company.updated_at.isoformat()}",
+                actor_id   = user_id,
             )
-            for link in revoked_links:
-                NotificationUtils.insert_notification(
-                    user=link.user,
-                    title="Company Deactivated",
-                    description=f"{company.name} has been deactivated; your co-admin access has been revoked.",
-                    button=None, url=None, created_by=actor,
-                )
             SystemActionLog.objects.create(
                 action_type=SystemActionLog.ActionType.COMPANY_DEACTIVATED,
                 actor_user=actor,
@@ -658,19 +719,14 @@ class CompanyReactivateAPI(APIView):
         company.updated_by = user_id
         company.save(update_fields=["status", "deleted_at", "deleted_by", "updated_by", "updated_at"])
 
-        try:
-            from api.notification.notifications_utils import NotificationUtils
-            from db.user import User
-            actor = User.every.filter(id=user_id).first()
-            NotificationUtils.insert_notification(
-                user=company.company_user,
-                title="Company Reactivated",
-                description=f"Your company {company.name} has been reactivated by a platform admin.",
-                button=None, url=None, created_by=actor,
-            )
-        except Exception:
-            import logging
-            logging.getLogger(__name__).exception("Failed to notify on company reactivation")
+        NotificationService.dispatch(
+            notif_type = NotificationType.COMPANY_REACTIVATED,
+            audience   = Audience.user(str(company.company_user_id)),
+            context    = {"company_name": company.name},
+            entity_id  = str(company.id),
+            occurrence = f"reactivated:{company.updated_at.isoformat()}",
+            actor_id   = user_id,
+        )
 
         return CustomResponse(general_message="Company reactivated successfully.").get_success_response()
 
@@ -682,21 +738,16 @@ def _notify_admins_company_action(actor, company, action_description):
     shape (PRD §4.4.6/§15): admin gets a notification + SystemActionLog entry,
     with no approval authority over the action itself.
     """
-    from api.notification.notifications_utils import NotificationUtils
-    from db.user import UserRoleLink
     from db.mentor import SystemActionLog
-    from django.conf import settings
 
-    admin_links = UserRoleLink.objects.filter(role__title=RoleType.ADMIN.value, is_active=True).select_related('user')
-    for admin_link in admin_links:
-        NotificationUtils.insert_notification(
-            user=admin_link.user,
-            title="Company Self-Deactivated",
-            description=f"{actor.full_name} (owner) has {action_description} for {company.name}. For your visibility — no action needed.",
-            button="View",
-            url=f"{settings.FR_DOMAIN_NAME}/dashboard/admin/companies/{company.id}/",
-            created_by=actor,
-        )
+    NotificationService.dispatch(
+        notif_type = NotificationType.COMPANY_DEACTIVATED,
+        audience   = Audience.admins(),
+        context    = {"company_name": company.name},
+        entity_id  = str(company.id),
+        occurrence = f"admin-audit:{company.updated_at.isoformat()}",
+        actor_id   = actor.id,
+    )
 
     SystemActionLog.objects.create(
         action_type=SystemActionLog.ActionType.COMPANY_DEACTIVATED,
@@ -730,7 +781,7 @@ class PublicCompanyProfileAPI(APIView):
 
 
 class CompanyAdminSummaryAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company'],
@@ -783,7 +834,7 @@ def _get_company_for_user(user_id):
 # ---------------------------------------------------------------------------
 
 class CompanyMentorNominateAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=["Dashboard - Company Mentor"],
@@ -822,27 +873,23 @@ class CompanyMentorNominateAPI(APIView):
         application = serializer.save()
 
         try:
-            from api.notification.notifications_utils import NotificationUtils
             from db.user import User
-            from django.conf import settings
             from api.dashboard.mentor.dash_mentor_helper import notify_admins_company_mentor_decision
 
             nominator = User.every.filter(id=user_id).first()
 
-            # Notify the nominated user
-            NotificationUtils.insert_notification(
-                user=application.user,
-                title=f"Company Mentor Approved: {company.name}"[:50],
-                description=(
-                    f"You have been approved as a Company Mentor for {company.name}."
-                )[:200],
-                button='View',
-                url='/mentor/status/',
-                created_by=nominator,
+            NotificationService.dispatch(
+                notif_type = NotificationType.MENTOR_NOMINATED,
+                audience   = Audience.user(str(application.user_id)),
+                context    = {"company_name": company.name},
+                entity_id  = str(application.id),
+                occurrence = "1",
+                actor_id   = user_id,
             )
 
             # Passive admin visibility + audit log — admin has no approval
-            # authority over this decision (§4.5).
+            # authority over this decision (§4.5). Left on the legacy path
+            # deliberately (not migrated in this pass).
             notify_admins_company_mentor_decision(nominator, application, "approved (via nomination)")
         except Exception:
             import logging
@@ -879,7 +926,21 @@ class CompanyMentorApplyAPI(APIView):
         if not serializer.is_valid():
             return CustomResponse(message=serializer.errors).get_failure_response()
 
+        company = serializer.validated_data["_company"]
         application = serializer.save()
+
+        NotificationService.dispatch(
+            notif_type = NotificationType.COMPANY_MENTOR_APPLICATION_SUBMITTED,
+            audience   = Audience.user(str(company.company_user_id)),
+            context    = {
+                "applicant_name": User.objects.filter(id=user_id).values_list("full_name", flat=True).first() or "",
+                "company_name":   company.name,
+            },
+            entity_id  = str(application.id),
+            occurrence = "1",
+            actor_id   = user_id,
+        )
+
         return CustomResponse(
             general_message="Application submitted successfully. It is pending review by the company owner.",
             response=serializers.CompanyMentorListSerializer(application).data,
@@ -887,7 +948,7 @@ class CompanyMentorApplyAPI(APIView):
 
 
 class CompanyMentorListAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=["Dashboard - Company Mentor"],

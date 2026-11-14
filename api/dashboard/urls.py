@@ -31,11 +31,13 @@ urlpatterns = [
     path("projects/", include("api.dashboard.projects.urls")),
     path("achievement/", include("api.dashboard.achievement.urls")),
     path("skill/", include("api.dashboard.skill.urls")),
+    path("task-report/", include("api.dashboard.task_report.urls")),
     path("media-content/", include("api.dashboard.media_content.urls")),
     path("community-partner/", include("api.dashboard.community_partner.urls")),
 
     path("category/", include("api.dashboard.category.urls")),
     path("mentor/", include("api.dashboard.mentor.urls")),
+    path("problem-statements/", include("api.dashboard.problem_statement.urls")),
     path("intern/", include("api.dashboard.intern.urls")),
     path("manage-interns/", include("api.dashboard.manage_interns.urls")),
     path("company/", include("api.dashboard.company.urls")),

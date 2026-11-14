@@ -4,7 +4,8 @@ from drf_spectacular.utils import extend_schema
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType
-from .serializers import MentorDeactivationSerializer
+from .serializers import MentorDeactivationSerializer, MentorDetailSerializer
+from utils.utils import CommonUtils
 from db.user import UserMentor
 from db.mentor import SystemActionLog
 from api.notification.notifications_utils import NotificationUtils
@@ -12,6 +13,36 @@ from django.conf import settings
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+class MentorDeactivatedListAPI(APIView):
+    """BE-5 — platform-admin list of deactivated mentors, for reactivation.
+    Rows are UserMentor profiles, so each row's id is what reactivate takes."""
+    permission_classes = [CustomizePermission]
+    serializer_class = MentorDetailSerializer
+
+    @extend_schema(
+        tags=["Dashboard - Mentor Admin"],
+        description="List deactivated mentors (platform admin only), paginated.",
+        responses={200: MentorDetailSerializer(many=True)},
+    )
+    @role_required([RoleType.ADMIN.value])
+    def get(self, request):
+        mentors = (
+            UserMentor.objects.filter(is_active=False)
+            .select_related("user")
+            .order_by("-updated_at")
+        )
+        paginated = CommonUtils.get_paginated_queryset(
+            mentors,
+            request,
+            search_fields=["user__full_name", "user__muid", "user__email"],
+            sort_fields={"updated_at": "updated_at"},
+        )
+        serializer = self.serializer_class(paginated.get("queryset"), many=True)
+        return CustomResponse(
+            response={"data": serializer.data, "pagination": paginated.get("pagination")}
+        ).get_success_response()
 
 
 class MentorDeactivationAPI(APIView):

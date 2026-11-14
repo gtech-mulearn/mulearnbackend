@@ -52,7 +52,7 @@ class TaskReportTaskGroupingView(APIView):
 
     @RoleRequired(roles=[RoleType.ADMIN, RoleType.FELLOW])
     @extend_schema(tags=['Dashboard - Task Report'], description="Retrieve Task Report Task Grouping.",
-        responses={200: TaskReportSerializer},
+        responses={200: serializers.TaskReportSerializer},
     )
     def get(self, request):
         # 1) How many people reported to each tasks
@@ -84,7 +84,7 @@ class TaskReportReporterGroupingView(APIView):
 
     @RoleRequired(roles=[RoleType.ADMIN, RoleType.FELLOW])
     @extend_schema(tags=['Dashboard - Task Report'], description="Retrieve Task Report Reporter Grouping.",
-        responses={200: TaskReportSerializer},
+        responses={200: serializers.TaskReportSerializer},
     )
     def get(self, request):
         # Request #2: "How many tasks were reported by a person" - confusing phrasing

@@ -32,17 +32,21 @@ def generate_recurring_sessions(parent_session: MentorshipSession):
     interval = parent_session.recurrence_interval
     r_type = parent_session.recurrence_type
 
+    def next_start(start):
+        if r_type == MentorshipSession.RecurrenceType.DAILY:
+            return start + timedelta(days=interval)
+        if r_type == MentorshipSession.RecurrenceType.WEEKLY:
+            return start + timedelta(weeks=interval)
+        if r_type == MentorshipSession.RecurrenceType.MONTHLY:
+            return start + relativedelta(months=interval)
+        return None
+
     # Start loop
     count = 0
     was_truncated = False
     while count < MAX_RECURRENCE_COUNT:
-        if r_type == MentorshipSession.RecurrenceType.DAILY:
-            current_start += timedelta(days=interval)
-        elif r_type == MentorshipSession.RecurrenceType.WEEKLY:
-            current_start += timedelta(weeks=interval)
-        elif r_type == MentorshipSession.RecurrenceType.MONTHLY:
-            current_start += relativedelta(months=interval)
-        else:
+        current_start = next_start(current_start)
+        if current_start is None:
             break
 
         # Check if we exceeded the end date
@@ -83,10 +87,12 @@ def generate_recurring_sessions(parent_session: MentorshipSession):
         child_sessions.append(child_session)
         count += 1
     else:
-        # Loop only exits via the `while` condition (count reached the cap)
-        # when there was no `break` above — i.e. the next occurrence would
-        # still have been on/before end_date, so real occurrences were cut off.
-        was_truncated = True
+        # The cap was reached without a `break`. That alone doesn't mean
+        # anything was dropped: the 50th occurrence may be the last one before
+        # end_date. Only report truncation if one more occurrence would still
+        # have been on/before end_date.
+        following = next_start(current_start)
+        was_truncated = following is not None and following.date() <= end_date
 
     if child_sessions:
         MentorshipSession.objects.bulk_create(child_sessions)

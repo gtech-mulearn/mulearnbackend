@@ -7,8 +7,11 @@ from utils.utils import CommonUtils, DateTimeUtils
 from db.job import CompanyJob, UserJobApplication
 from db.company import Company, CompanyAdminLink
 from db.user import User
-from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
-from api.notification.notifications_utils import NotificationUtils
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiParameter, OpenApiTypes
+from rest_framework import serializers as drf_serializers
+from api.notification.service import NotificationService
+from api.notification.types import NotificationType
+from api.notification.audience import Audience
 from django.conf import settings
 from . import job_serializers
 from .company_views import _get_company_for_user
@@ -25,7 +28,7 @@ def _is_company_owner(user_id, company):
 
 
 class CompanyJobAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company Jobs'],
@@ -85,25 +88,14 @@ class CompanyJobAPI(APIView):
                 message = "Job posted successfully."
             else:
                 message = "Job submitted for approval successfully."
-                # Notify company owner
-                try:
-                    from api.notification.notifications_utils import NotificationUtils
-                    from django.conf import settings
-
-                    mentor = User.objects.get(id=user_id)
-                    owner = company.company_user
-
-                    NotificationUtils.insert_notification(
-                        user=owner,
-                        title="New Job Posting for Approval",
-                        description=f"Mentor {mentor.full_name} has submitted a new job posting '{job.title}' for your approval.",
-                        button="View Jobs",
-                        url=f"{settings.FR_DOMAIN_NAME}/dashboard/company/jobs/pending/",
-                        created_by=mentor,
-                    )
-                except Exception:
-                    # Silently fail on notification error
-                    pass
+                NotificationService.dispatch(
+                    notif_type = NotificationType.JOB_PENDING_APPROVAL,
+                    audience   = Audience.user(str(company.company_user_id)),
+                    context    = {"job_title": job.title},
+                    entity_id  = str(job.id),
+                    occurrence = "created",
+                    actor_id   = user_id,
+                )
 
             return CustomResponse(
                 general_message=message,
@@ -154,7 +146,7 @@ class CompanyJobAPI(APIView):
 
 
 class CompanyJobDetailAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company Jobs'],
@@ -226,21 +218,14 @@ class CompanyJobDetailAPI(APIView):
             general_message = "Job updated successfully."
             if needs_reapproval:
                 general_message = "Job submitted for owner approval (only the company owner can publish directly)."
-                try:
-                    from api.notification.notifications_utils import NotificationUtils
-                    from db.user import User
-                    actor = User.every.filter(id=user_id).first()
-                    NotificationUtils.insert_notification(
-                        user=company.company_user,
-                        title="Job Posting Awaiting Approval",
-                        description=f'A job "{job.title}" is awaiting your approval.',
-                        button="Review",
-                        url=None,
-                        created_by=actor,
-                    )
-                except Exception:
-                    import logging
-                    logging.getLogger(__name__).exception("Failed to notify company owner of job %s awaiting approval", job.id)
+                NotificationService.dispatch(
+                    notif_type = NotificationType.JOB_PENDING_APPROVAL,
+                    audience   = Audience.user(str(company.company_user_id)),
+                    context    = {"job_title": job.title},
+                    entity_id  = str(job.id),
+                    occurrence = f"edited:{job.updated_at.isoformat()}",
+                    actor_id   = user_id,
+                )
             return CustomResponse(
                 general_message=general_message,
                 response=serializer.data
@@ -338,20 +323,15 @@ class CompanyJobApproveAPI(APIView):
             job.updated_by_id = user_id
             job.save(update_fields=["status", "approved_by_id", "approved_at", "updated_at", "updated_by_id"])
 
-        try:
-            from api.notification.notifications_utils import NotificationUtils
-            from db.user import User
-            actor = User.every.filter(id=user_id).first()
-            if job.created_by and actor:
-                NotificationUtils.insert_notification(
-                    user=job.created_by,
-                    title="Job Posting Approved",
-                    description=f'Your job posting "{job.title}" has been approved and is now live.',
-                    button=None, url=None, created_by=actor,
-                )
-        except Exception:
-            import logging
-            logging.getLogger(__name__).exception("Failed to notify mentor of job %s approval", job.id)
+        if job.created_by_id:
+            NotificationService.dispatch(
+                notif_type = NotificationType.JOB_APPROVED,
+                audience   = Audience.user(str(job.created_by_id)),
+                context    = {"job_title": job.title},
+                entity_id  = str(job.id),
+                occurrence = job.approved_at.isoformat(),
+                actor_id   = user_id,
+            )
 
         return CustomResponse(general_message="Job approved and published successfully.").get_success_response()
 
@@ -360,6 +340,18 @@ class CompanyJobRequestChangesAPI(APIView):
     """Owner or accepted delegate: send a job back to the mentor for revision."""
     permission_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Company Jobs'],
+        description=(
+            "Send a job that is waiting for approval back to its author for changes. "
+            "Only the company owner or an accepted delegate can do this. Body: {\"note\": \"<what to change>\"} "
+            "(required). The job moves to 'Needs Revision' and the author is notified with the note."
+        ),
+        request=inline_serializer(
+            name="CompanyJobRequestChangesRequest",
+            fields={"note": drf_serializers.CharField(help_text="What the author should change.")},
+        ),
+    )
     def post(self, request, job_id):
         from django.db import transaction
 
@@ -393,21 +385,15 @@ class CompanyJobRequestChangesAPI(APIView):
             job.updated_at = DateTimeUtils.get_current_utc_time()
             job.save(update_fields=["status", "rejection_reason", "updated_at", "updated_by_id"])
 
-        # Notify the mentor
-        try:
-            from api.notification.notifications_utils import NotificationUtils
-            from db.user import User
-            actor = User.every.filter(id=user_id).first()
-            if job.created_by and actor:
-                NotificationUtils.insert_notification(
-                    user=job.created_by,
-                    title="Job Posting Needs Revision",
-                    description=f'Your job "{job.title}" needs changes: {note}',
-                    button=None, url=None, created_by=actor,
-                )
-        except Exception:
-            import logging
-            logging.getLogger(__name__).exception("Failed to notify mentor of job %s revision request", job.id)
+        if job.created_by_id:
+            NotificationService.dispatch(
+                notif_type = NotificationType.JOB_NEEDS_REVISION,
+                audience   = Audience.user(str(job.created_by_id)),
+                context    = {"job_title": job.title, "note": note},
+                entity_id  = str(job.id),
+                occurrence = f"revision:{job.updated_at.isoformat()}",
+                actor_id   = user_id,
+            )
         return CustomResponse(
             general_message="Revision requested. Mentor notified."
         ).get_success_response()
@@ -447,26 +433,21 @@ class CompanyJobRejectAPI(APIView):
             job.updated_by_id = user_id
             job.save(update_fields=["status", "rejection_reason", "updated_at", "updated_by_id"])
 
-        try:
-            from api.notification.notifications_utils import NotificationUtils
-            from db.user import User
-            actor = User.every.filter(id=user_id).first()
-            if job.created_by and actor:
-                NotificationUtils.insert_notification(
-                    user=job.created_by,
-                    title="Job Posting Rejected",
-                    description=f'Your job posting "{job.title}" was rejected. Reason: {reason}',
-                    button=None, url=None, created_by=actor,
-                )
-        except Exception:
-            import logging
-            logging.getLogger(__name__).exception("Failed to notify mentor of job %s rejection", job.id)
+        if job.created_by_id:
+            NotificationService.dispatch(
+                notif_type = NotificationType.JOB_REJECTED,
+                audience   = Audience.user(str(job.created_by_id)),
+                context    = {"job_title": job.title, "reason": reason},
+                entity_id  = str(job.id),
+                occurrence = "1",
+                actor_id   = user_id,
+            )
 
         return CustomResponse(general_message="Job rejected successfully.").get_success_response()
 
 
 class PublicJobAPI(APIView):
-    permission_classes = [CustomizePermission]
+    permission_classes = []
 
     @extend_schema(
         tags=['Public - Jobs'],
@@ -474,7 +455,10 @@ class PublicJobAPI(APIView):
         responses={200: job_serializers.JobListSerializer(many=True)},
     )
     def get(self, request):
-        user_id = JWTUtils.fetch_user_id(request)
+        # Public endpoint: anonymous visitors have no token, and fetch_user_id
+        # would raise on the missing header. Eligibility is only computed for
+        # a logged-in learner (the serializer skips it when learner_id is None).
+        user_id = JWTUtils.fetch_user_id(request) if JWTUtils.is_logged_in(request) else None
         jobs = CompanyJob.objects.filter(status='Active', is_deleted=False, company__status="verified")
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
@@ -495,7 +479,7 @@ class PublicJobAPI(APIView):
 
 
 class JobApplicationAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company Jobs'],
@@ -553,7 +537,7 @@ class JobApplicationAPI(APIView):
         ).get_success_response()
 
 class ApplicationStatusAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company Jobs'],
@@ -572,6 +556,14 @@ class ApplicationStatusAPI(APIView):
         )
         if serializer.is_valid():
             serializer.save()
+            NotificationService.dispatch(
+                notif_type = NotificationType.JOB_APPLICATION_STATUS,
+                audience   = Audience.user(str(application.user_id)),
+                context    = {"job_title": application.job.title, "status": application.status},
+                entity_id  = str(application.id),
+                occurrence = f"{application.id}:{application.updated_at.isoformat()}",
+                actor_id   = user_id,
+            )
             return CustomResponse(
                 general_message="Application status updated successfully.",
                 response=serializer.data
@@ -610,7 +602,7 @@ class PublicCompanyJobListAPI(APIView):
         ).get_success_response()
 
 class UserApplicationWithdrawAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company Jobs'],
@@ -644,7 +636,7 @@ class UserApplicationWithdrawAPI(APIView):
         ).get_success_response()
 
 class UserApplicationResubmitAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company Jobs'],
@@ -678,7 +670,7 @@ class UserApplicationResubmitAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
 class UserAppliedJobsAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company Jobs'],
@@ -761,7 +753,7 @@ class CompanyJobEngagementAnalyticsAPIView(APIView):
 
     Fetches detailed view, application, and hired statistics for a specific job posting.
     """
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company Jobs'],

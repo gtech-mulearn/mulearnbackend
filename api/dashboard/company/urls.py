@@ -44,10 +44,13 @@ urlpatterns = [
     # Collaboration / Partnership discovery flow (PRD §10)
     path("collaborations/",                    collaboration_views.CompanyCollaborationListCreateAPI.as_view()),
     path("collaborations/discover/",           collaboration_views.CompanyCollaborationDiscoverAPI.as_view()),
+    path("collaborations/incoming/",           collaboration_views.CompanyCollaborationIncomingAPI.as_view()),
     path("collaborations/<str:collaboration_id>/respond/", collaboration_views.CompanyCollaborationRespondAPI.as_view()),
     path("collaborations/<str:collaboration_id>/",         collaboration_views.CompanyCollaborationWithdrawAPI.as_view()),
 
     # Company-sponsored IG (PRD §7.3)
+    # Before ig-sponsorship/<str:ig_id>/ so "pending" isn't taken as an IG id.
+    path("ig-sponsorship/pending/",             ig_sponsorship_views.IgSponsorshipPendingListAPI.as_view()),
     path("ig-sponsorship/<str:ig_id>/",         ig_sponsorship_views.IgSponsorshipRequestAPI.as_view()),
     path("ig-sponsorship/<str:ig_id>/review/",  ig_sponsorship_views.IgSponsorshipReviewAPI.as_view()),
     path("ig-sponsorship/<str:ig_id>/metrics/", ig_sponsorship_views.IgSponsorshipMetricsAPI.as_view()),
@@ -59,6 +62,8 @@ urlpatterns = [
     # Company Co-Admin — Delegation (Addon §6.5 / PRD §4.4)
     path("admin-link/",                       company_views.CompanyAdminLinkCreateAPI.as_view()),
     path("admin-link/list/",                  company_views.CompanyAdminLinkListAPI.as_view()),
+    # Before admin-link/<str:link_id>/ so "invitations" isn't taken as a link id.
+    path("admin-link/invitations/",           company_views.CompanyAdminLinkMyInvitationsAPI.as_view()),
     path("admin-link/<str:link_id>/respond/", company_views.CompanyAdminLinkAcceptAPI.as_view()),
     path("admin-link/<str:link_id>/leave/",   company_views.CompanyAdminLinkLeaveAPI.as_view()),
     path("admin-link/<str:link_id>/",         company_views.CompanyAdminLinkRevokeAPI.as_view()),

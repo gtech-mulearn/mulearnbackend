@@ -44,6 +44,7 @@ urlpatterns = [
     path('tasks/<str:task_id>/', task_views.MentorTaskDetailAPI.as_view(),        name='mentor-task-detail'),
     path('admin/assign/',                       mentor_views.AdminAssignMentorAPI.as_view(), name='admin-assign-mentor'),
     path('admin/assign/<str:user_muid>/',       mentor_views.AdminAssignMentorAPI.as_view(), name='admin-revoke-mentor'),
+    path('admin/deactivated/',                admin_views.MentorDeactivatedListAPI.as_view(), name='mentor-deactivated-list'),
     path('admin/deactivate/<str:user_mentor_id>/', admin_views.MentorDeactivationAPI.as_view(), name='mentor-deactivate'),
     path('admin/reactivate/<str:user_mentor_id>/', admin_views.MentorReactivationAPI.as_view(), name='mentor-reactivate'),
     path('<str:mentor_id>/preferred-igs/',        mentor_views.MentorPreferredIgAPI.as_view(), name='mentor-preferred-igs'),

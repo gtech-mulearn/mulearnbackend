@@ -104,8 +104,8 @@ class MentorApplication(models.Model):
     # Addon §6.2 — nomination/application expiry: a PENDING application past
     # this timestamp is auto-rejected by mu_celery.mentor_tasks.expire_stale_applications.
     nomination_expires_at = models.DateTimeField(blank=True, null=True)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by_id', related_name='created_mentor_applications')
-    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by_id', related_name='updated_mentor_applications')
+    created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='created_by_id', related_name='created_mentor_applications')
+    updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='updated_by_id', related_name='updated_mentor_applications')
     created_at = models.DateTimeField()
     updated_at = models.DateTimeField()
 

@@ -65,7 +65,9 @@ class ComicListItemSerializer(serializers.ModelSerializer):
         return MinimalGenreSerializer(active_genres, many=True).data
 
     def get_contributors(self, obj):
-        links = obj.contributor_links.select_related('user').all()
+        # .all() reuses the list view's prefetch_related('contributor_links__user');
+        # select_related() here would start a fresh query for every comic.
+        links = obj.contributor_links.all()
         return ContributorSerializer(links, many=True).data
 
 
@@ -143,7 +145,7 @@ class ComicWriteSerializer(serializers.ModelSerializer):
 
     def validate_creator_muid(self, value):
         try:
-            return User.objects.get(muid=value, is_active=True)
+            return User.objects.get(muid=value)
         except User.DoesNotExist:
             raise serializers.ValidationError(f'No active user with muid "{value}" found.')
 
@@ -240,7 +242,7 @@ class ContributorWriteSerializer(serializers.Serializer):
 
     def validate_muid(self, value):
         try:
-            return User.objects.get(muid=value, is_active=True)
+            return User.objects.get(muid=value)
         except User.DoesNotExist:
             raise serializers.ValidationError(f'No Active user with muid "{value}" not found.')
 

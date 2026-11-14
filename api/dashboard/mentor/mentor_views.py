@@ -20,7 +20,7 @@ NOMINATION_EXPIRY_DAYS = 14
 
 
 class MentorRegistrationAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor'],
@@ -125,7 +125,7 @@ class MentorRegistrationAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
 class MentorStatusAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor'],
@@ -169,7 +169,7 @@ class MentorStatusAPI(APIView):
         ).get_success_response()
 
 class MentorActivityListAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor'],
@@ -242,7 +242,7 @@ class MentorActivityListAPI(APIView):
         ).get_success_response()
 
 class MentorProfileAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor'],
@@ -329,7 +329,7 @@ class MentorListAPI(APIView):
     roster of currently-active mentors (see MentorRosterAPI), since a tier's
     membership is no longer stored on a single reviewable row.
     """
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor'],
@@ -355,7 +355,7 @@ class MentorListAPI(APIView):
             ).values_list('user_id', 'mentor_tier')
         )
 
-        applications = MentorApplication.objects.select_related('user')
+        applications = MentorApplication.objects.select_related('user', 'org')
         if approved_user_tier_pairs:
             change_request_ids = [
                 app.id for app in applications.filter(status=MentorApplication.Status.PENDING)
@@ -371,6 +371,10 @@ class MentorListAPI(APIView):
             applications = applications.filter(status=status)
         if mentor_tier:
             applications = applications.filter(mentor_tier=mentor_tier)
+
+        # Newest first unless the client sorts; pk breaks created_at ties so
+        # offset pagination stays stable.
+        applications = applications.order_by("-created_at", "pk")
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             applications, request,
@@ -452,7 +456,7 @@ class MentorRosterAPI(APIView):
         ).get_success_response()
 
 class MentorDetailAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor'],
@@ -489,14 +493,16 @@ class MentorChangeRequestListAPI(APIView):
             ).values_list('user_id', 'mentor_tier')
         )
 
-        pending_applications = MentorApplication.objects.select_related('user').filter(
+        pending_applications = MentorApplication.objects.select_related('user', 'org').filter(
             status=MentorApplication.Status.PENDING
         )
         change_request_ids = [
             app.id for app in pending_applications
             if (app.user_id, app.mentor_tier) in approved_user_tier_pairs
         ]
-        change_requests = pending_applications.filter(id__in=change_request_ids)
+        change_requests = pending_applications.filter(
+            id__in=change_request_ids
+        ).order_by("-created_at", "pk")
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             change_requests, request, 
@@ -542,9 +548,10 @@ def _is_company_owner_of(actor_id, mentor):
 
 def _is_ig_lead_of(actor_id, application):
     """
-    True if `actor_id` holds the IGLead role for at least one of `application`'s
-    preferred IGs. Lets an IG's own lead verify an IG_MENTOR application for
-    that IG, alongside (not instead of) platform admins.
+    True if `actor_id` holds the IGLead role for EVERY one of `application`'s
+    preferred IGs. Approval grants mentor access to all of those IGs, so leading
+    only one of them is not enough - otherwise IG A's lead could approve a
+    mentor for IG B. Works alongside (not instead of) platform admins.
     """
     if application.mentor_tier != MentorApplication.MentorTier.IG_MENTOR:
         return False
@@ -555,18 +562,22 @@ def _is_ig_lead_of(actor_id, application):
 
     from db.task import InterestGroup
     from db.user import UserRoleLink
-    lead_role_titles = InterestGroup.objects.filter(id__in=ig_ids).values_list('code', flat=True)
-    lead_role_titles = [RoleType.IG_LEAD_ROLE(code) for code in lead_role_titles]
-    if not lead_role_titles:
+    ig_ids = set(ig_ids)
+    ig_codes = list(InterestGroup.objects.filter(id__in=ig_ids).values_list('code', flat=True))
+    if len(ig_codes) != len(ig_ids):
+        # Unknown IG ids in the application - leave it to a platform admin.
         return False
+    lead_role_titles = {RoleType.IG_LEAD_ROLE(code) for code in ig_codes}
 
-    return UserRoleLink.objects.filter(
+    # MySQL matches titles case-insensitively, so compare the same way here.
+    held = {t.lower() for t in UserRoleLink.objects.filter(
         user_id=actor_id, role__title__in=lead_role_titles,
-    ).exists()
+    ).values_list('role__title', flat=True)}
+    return held == {t.lower() for t in lead_role_titles}
 
 
 class MentorVerifyAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor'],
@@ -656,17 +667,49 @@ class MentorVerifyAPI(APIView):
             updated_status = serializer.validated_data.get('status')
             serializer.save()
 
+        # Company-mentor self-apply outcome — tell the applicant. Nomination
+        # (the other path onto this tier) already notifies via
+        # MENTOR_NOMINATED in api/dashboard/company/company_views.py; this is
+        # the missing mirror for the self-apply-and-wait path specifically.
+        if application.mentor_tier == MentorApplication.MentorTier.COMPANY_MENTOR:
+            from api.notification.service import NotificationService
+            from api.notification.types import NotificationType
+            from api.notification.audience import Audience
+            from db.company import Company
+
+            company = Company.objects.filter(org_id=application.org_id).first()
+            company_name = company.name if company else (application.org.title if application.org else "the company")
+
+            if updated_status == MentorApplication.Status.APPROVED:
+                NotificationService.dispatch(
+                    notif_type = NotificationType.COMPANY_MENTOR_APPLICATION_APPROVED,
+                    audience   = Audience.user(str(application.user_id)),
+                    context    = {"company_name": company_name},
+                    entity_id  = str(application.id),
+                    occurrence = "1",
+                    actor_id   = user_id,
+                )
+            elif updated_status == MentorApplication.Status.REJECTED:
+                NotificationService.dispatch(
+                    notif_type = NotificationType.COMPANY_MENTOR_APPLICATION_REJECTED,
+                    audience   = Audience.user(str(application.user_id)),
+                    context    = {"company_name": company_name},
+                    entity_id  = str(application.id),
+                    occurrence = "1",
+                    actor_id   = user_id,
+                )
+
         return CustomResponse(
             general_message=f"Mentor status updated to {updated_status} successfully."
         ).get_success_response()
 
 class MentorPublicProfileAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor Public'],
         description="View a mentor's profile publicly.",
-        responses={200: serializers.MentorDetailSerializer},
+        responses={200: serializers.MentorPublicDetailSerializer},
     )
     def get(self, request, mentor_id):
         # The public profile is identified by the UserMentor profile ID
@@ -681,7 +724,7 @@ class MentorPublicProfileAPI(APIView):
         if not MentorApplication.objects.filter(user=mentor.user, status=MentorApplication.Status.APPROVED).exists():
             return CustomResponse(general_message="This user is not an approved mentor.").get_failure_response(status_code=403)
             
-        serializer = serializers.MentorDetailSerializer(mentor, context={'request': request})
+        serializer = serializers.MentorPublicDetailSerializer(mentor, context={'request': request})
         return CustomResponse(response=serializer.data).get_success_response()
 
 class MentorChangeCompanyAPI(APIView):
@@ -1007,7 +1050,7 @@ class MentorPreferredIgAPI(APIView):
 
 
 class MentorOverviewAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor'],
@@ -1095,7 +1138,7 @@ class AdminAssignMentorAPI(APIView):
         Revokes mentor assignment for the given user.
         Optional query param ?mentor_tier=<tier> scopes revocation to a single tier.
     """
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
     @extend_schema(
@@ -1224,7 +1267,7 @@ class MentorScopeGrantListAPI(APIView):
     Admins see any mentor; a Company owner sees only their own employees'
     grants.
     """
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor'],
@@ -1262,7 +1305,7 @@ class MentorScopeGrantRevokeAPI(APIView):
     application is all-or-nothing, not per-grant. The mentor's
     UserOrganizationLink employment record is left untouched.
     """
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor'],

@@ -26,8 +26,13 @@ class PersonaStatusAPI(APIView):
     @role_required([RoleType.MENTOR.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        user_settings, _ = UserSettings.objects.get_or_create(user_id=user_id)
-        
+        # created_by/updated_by are NOT NULL; users who predate the settings
+        # row (registered before it was created at signup) would otherwise 500.
+        user_settings, _ = UserSettings.objects.get_or_create(
+            user_id=user_id,
+            defaults={"created_by_id": user_id, "updated_by_id": user_id},
+        )
+
         scope_name = None
         if user_settings.active_persona == 'mentor' and user_settings.active_scope_type:
             scope_type = user_settings.active_scope_type
@@ -73,7 +78,10 @@ class PersonaSwitchAPI(APIView):
         validated_data = serializer.validated_data
         persona = validated_data.get("persona")
 
-        user_settings, _ = UserSettings.objects.get_or_create(user_id=user_id)
+        user_settings, _ = UserSettings.objects.get_or_create(
+            user_id=user_id,
+            defaults={"created_by_id": user_id, "updated_by_id": user_id},
+        )
         old_persona_data = {
             "persona": user_settings.active_persona,
             "scope_type": user_settings.active_scope_type,

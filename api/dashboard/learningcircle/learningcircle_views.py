@@ -19,7 +19,6 @@ from db.task import KarmaActivityLog
 from db.user import UserDomains, User
 from django.conf import settings
 from api.notification.broadcast_utils import BroadcastUtils
-from api.notification.notifications_utils import NotificationUtils
 from api.notification.service import NotificationService
 from api.notification.types import NotificationType
 from api.notification.audience import Audience
@@ -121,6 +120,30 @@ class LearningCircleView(APIView):
                 circle_id__in=page_circle_ids,
             ).values_list("circle_id", flat=True)
         )
+
+        # One query for the whole page: leads first, then earliest accepted, capped
+        # at 4 per circle in Python (SQL can't easily cap rows per group here).
+        member_info_map = {}
+        member_links = (
+            UserCircleLink.objects.filter(
+                circle_id__in=page_circle_ids,
+                accepted=True,
+            )
+            .select_related("user")
+            .order_by("circle_id", "-lead", "accepted_at")
+        )
+        for link in member_links:
+            previews = member_info_map.setdefault(link.circle_id, [])
+            if len(previews) >= 4:
+                continue
+            previews.append(
+                {
+                    "id": link.user.id,
+                    "full_name": link.user.full_name,
+                    "profile_pic": link.user.profile_pic,
+                }
+            )
+
         serializer = LearningCircleListMinSerializer(
             page,
             many=True,
@@ -128,6 +151,7 @@ class LearningCircleView(APIView):
                 "user_id": user_id,
                 "joined_circle_ids": joined_circle_ids,
                 "pending_circle_ids": pending_circle_ids,
+                "member_info_map": member_info_map,
             },
         )
         return CustomResponse().paginated_response(
@@ -657,6 +681,7 @@ class LearningCircleAttendeeReportAPI(APIView):
             user_id,
             Lc.ATTENDEE_REPORT_SUBMIT_HASHTAG.value,
             Lc.ATTENDEE_REPORT_SUBMIT_KARMA.value,
+            removed_by=user_id,
         )
         return CustomResponse(
             general_message="You have successfully deleted the report"
@@ -825,6 +850,7 @@ class LearningCircleReportAPI(APIView):
                     karma_user_ids,
                     Lc.LC_REPORT_HASHTAG.value,
                     Lc.LC_REPORT_KARMA.value,
+                    removed_by=user_id,
                 )
         return CustomResponse(
             general_message="The report has been deleted successfully"
@@ -1765,7 +1791,18 @@ class CircleLeaveAPI(APIView):
                     general_message="You are the lead. Transfer leadership before leaving."
                 ).get_failure_response()
 
+            left_link_id = str(link.id)
             link.delete()
+
+            leaver_name = User.objects.filter(id=user_id).values_list("full_name", flat=True).first() or ""
+            NotificationService.dispatch(
+                notif_type = NotificationType.LC_MEMBER_LEFT,
+                audience   = Audience.lc_lead(circle_id),
+                context    = {"lc_name": circle.title, "member_name": leaver_name},
+                entity_id  = str(circle_id),
+                occurrence = left_link_id,   # unique per leave — the deleted link's own id
+                actor_id   = user_id,
+            )
 
         return CustomResponse(
             general_message="You have left the circle successfully"
@@ -1842,18 +1879,16 @@ class CircleMemberRemoveAPI(APIView):
                     general_message="Transfer leadership before removing the circle lead"
                 ).get_failure_response()
 
+            removed_link_id = str(link.id)
             link.delete()
 
-        # Notify the removed user
-        lead_user = User.objects.filter(id=user_id).first()
-        if lead_user:
-            NotificationUtils.insert_notification(
-                user=target_user,
-                title="Removed from Circle",
-                description=f"You have been removed from the learning circle '{circle.title}'.",
-                button=None,
-                url=None,
-                created_by=lead_user,
+            NotificationService.dispatch(
+                notif_type = NotificationType.LC_MEMBER_REMOVED,
+                audience   = Audience.user(str(target_user_id)),
+                context    = {"lc_name": circle.title},
+                entity_id  = str(circle_id),
+                occurrence = removed_link_id,   # unique per removal — the deleted link's own id
+                actor_id   = user_id,
             )
 
         return CustomResponse(
