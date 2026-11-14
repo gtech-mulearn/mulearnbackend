@@ -1,8 +1,8 @@
 from django.urls import path
 
-from .views import MediaUploadAPIView, MediaRetrieveAPIView
+from . import views
 
 urlpatterns = [
-    path('upload/', MediaUploadAPIView.as_view()),
-    path('<path:key>/', MediaRetrieveAPIView.as_view()),
+    # Called by the media worker's scheduled cleanup (Api-Key header).
+    path("unreferenced-keys/", views.UnreferencedMediaKeysAPI.as_view()),
 ]

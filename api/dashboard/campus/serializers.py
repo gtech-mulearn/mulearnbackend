@@ -620,8 +620,9 @@ class CampusIGChapterListSerializer(serializers.ModelSerializer):
     ig_id = serializers.ReadOnlyField(source="ig.id")
     ig_name = serializers.ReadOnlyField(source="ig.name")
     ig_code = serializers.ReadOnlyField(source="ig.code")
-    ig_icon = serializers.ReadOnlyField(source="ig.icon")
-    ig_cover_image = serializers.ReadOnlyField(source="ig.cover_image")
+    ig_cover_image_key = serializers.ReadOnlyField(source="ig.cover_image_key")
+    ig_icon_image_key = serializers.ReadOnlyField(source="ig.icon_image_key")
+    ig_cover_image =serializers.ReadOnlyField(source="ig.cover_image")
     ig_icon_image = serializers.ReadOnlyField(source="ig.icon_image")
     lead_id = serializers.ReadOnlyField(source="lead.id")
     lead_name = serializers.SerializerMethodField()
@@ -634,7 +635,8 @@ class CampusIGChapterListSerializer(serializers.ModelSerializer):
             "ig_id",
             "ig_name",
             "ig_code",
-            "ig_icon",
+            "ig_cover_image_key",
+            "ig_icon_image_key",
             "ig_cover_image",
             "ig_icon_image",
             "lead_id",

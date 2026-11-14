@@ -1,66 +1,74 @@
 from drf_spectacular.utils import extend_schema
 from rest_framework.views import APIView
 
-from utils import r2_storage
-from utils.permission import CustomizePermission
+from db.task import InterestGroup
+from utils.media_keys import validate_key
+from utils.media_modules import MEDIA_MODULES
+from utils.permission import BackendApiKeyPermission
 from utils.response import CustomResponse
 
+# Largest batch one request may ask about; the media worker sends fewer.
+MAX_KEYS_PER_REQUEST = 500
 
-class MediaUploadAPIView(APIView):
+# Every database column that can hold a media key: (model, field name).
+# Add an entry here when a new module starts storing keys, or its images
+# would look unused and be deleted by the media worker's cleanup.
+MEDIA_KEY_COLUMNS = (
+    (InterestGroup, "cover_image_key"),
+    (InterestGroup, "icon_image_key"),
+)
+
+
+def referenced_keys(keys):
+    """The subset of `keys` that some record still points at."""
+    found = set()
+    for model, field in MEDIA_KEY_COLUMNS:
+        found.update(
+            model.objects.filter(**{f"{field}__in": keys}).values_list(field, flat=True)
+        )
+    return found
+
+
+class UnreferencedMediaKeysAPI(APIView):
     """
-    The one upload endpoint every module uses to put a file in Cloudflare
-    R2. The caller sends the file by itself here first, gets back a key,
-    then sends that key on to whichever module endpoint actually owns the
-    record (e.g. POST .../ig/<pk>/cover-image/) — the key is inert until a
-    module attaches it to something. See utils/r2_storage.py MODULE_RULES
-    for the list of valid `module` values.
+    Used by the media worker's scheduled cleanup (not by the frontend).
+
+    The worker lists images in the bucket and asks which of them no record
+    uses, then deletes those. This endpoint only answers the question; the
+    backend holds no storage credentials and deletes nothing.
     """
-    authentication_classes = [CustomizePermission]
+
+    # Machine-to-machine: the shared Api-Key header, not a user login.
+    authentication_classes = []
+    permission_classes = [BackendApiKeyPermission]
 
     @extend_schema(
-        tags=['Media'],
-        description="Upload a file to Cloudflare R2. Requires 'file' and 'module' fields.",
+        tags=["Media"],
+        description=(
+            "Given storage keys, returns the ones that no record references. "
+            "Requires the Api-Key header."
+        ),
     )
     def post(self, request):
-        file_obj = request.FILES.get("file")
-        module = request.data.get("module")
-
-        if not file_obj:
-            return CustomResponse(general_message="No file provided").get_failure_response()
-        if not module:
-            return CustomResponse(general_message="No module provided").get_failure_response()
-        if module not in r2_storage.MODULE_RULES:
+        keys = request.data.get("keys")
+        if (
+            not isinstance(keys, list)
+            or not keys
+            or len(keys) > MAX_KEYS_PER_REQUEST
+            or not all(isinstance(k, str) for k in keys)
+        ):
             return CustomResponse(
-                general_message=f"Unknown module '{module}'"
+                general_message=f"'keys' must be a list of 1 to {MAX_KEYS_PER_REQUEST} strings"
             ).get_failure_response()
 
-        error = r2_storage.validate_image(file_obj, module)
-        if error:
-            return CustomResponse(general_message=error).get_failure_response()
+        # Only keys the media worker could have issued. Anything else is refused
+        # so this cannot be used to probe other values.
+        if not all(any(validate_key(module, k) for module in MEDIA_MODULES) for k in keys):
+            return CustomResponse(
+                general_message="'keys' contains a value that is not a media key"
+            ).get_failure_response()
 
-        key = r2_storage.build_key(module)
-        r2_storage.save(key, file_obj)
-
-        return CustomResponse(
-            response={"key": key, "url": r2_storage.get_url(key)}
-        ).get_success_response()
-
-
-class MediaRetrieveAPIView(APIView):
-    """
-    Turns a previously-issued R2 key back into a public URL. Since the
-    bucket is public, this is a convenience lookup for a client that only
-    has a key on hand (e.g. read back from a database field) and doesn't
-    want to hardcode the R2 public domain itself — it does not check the
-    object actually exists (module tables are the source of truth for that,
-    via their own `_key` columns).
-    """
-
-    @extend_schema(
-        tags=['Media'],
-        description="Resolve a previously-issued R2 key to its public URL.",
-    )
-    def get(self, request, key):
-        return CustomResponse(
-            response={"key": key, "url": r2_storage.get_url(key)}
-        ).get_success_response()
+        unique = list(dict.fromkeys(keys))
+        in_use = referenced_keys(unique)  # one query per column, not per key
+        unreferenced = [k for k in unique if k not in in_use]
+        return CustomResponse(response={"unreferenced": unreferenced}).get_success_response()

@@ -14,6 +14,29 @@ from drf_spectacular.openapi import OpenApiTypes
 from rest_framework import serializers as s
 
 
+# Fields loaded for an IG organiser/collaborator option.
+_IG_OPTION_FIELDS = ('id', 'name', 'code', 'cover_image_key', 'icon_image_key')
+
+
+def _ig_options(queryset, limit=None):
+    """
+    IG dropdown entries with resolved image URLs, not raw storage keys.
+    cover_image/icon_image are the model properties, which also cover images
+    uploaded before the R2 migration.
+    """
+    qs = queryset.only(*_IG_OPTION_FIELDS)
+    return [
+        {
+            'id': ig.id,
+            'name': ig.name,
+            'code': ig.code,
+            'cover_image': ig.cover_image,
+            'icon_image': ig.icon_image,
+        }
+        for ig in (qs[:limit] if limit else qs)
+    ]
+
+
 class LinkableEventsAPI(APIView):
     """
     GET /events/meta/linkable-events/
@@ -140,10 +163,9 @@ class OrganizerOptionsAPI(APIView):
             for r in roles if r.endswith(' IGLead')
         ]
         if ig_lead_codes:
-            igs = InterestGroup.objects.filter(code__in=ig_lead_codes).values(
-                'id', 'name', 'icon', 'code'
+            options['can_create_as_ig'] = _ig_options(
+                InterestGroup.objects.filter(code__in=ig_lead_codes)
             )
-            options['can_create_as_ig'] = list(igs)
 
         # Campus IG leads: roles like "WEBDEV CampusIGLead"
         ci_lead_codes = [
@@ -151,10 +173,9 @@ class OrganizerOptionsAPI(APIView):
             for r in roles if r.endswith(' CampusIGLead')
         ]
         if ci_lead_codes:
-            igs = InterestGroup.objects.filter(code__in=ci_lead_codes).values(
-                'id', 'name', 'icon', 'code'
+            options['can_create_as_campus_ig'] = _ig_options(
+                InterestGroup.objects.filter(code__in=ci_lead_codes)
             )
-            options['can_create_as_campus_ig'] = list(igs)
 
         # Campus Lead or Zonal/District leads can create campus events
         campus_lead_roles = {
@@ -219,9 +240,9 @@ class OrganizerOptionsAPI(APIView):
                     ).values_list('ig_id', flat=True)
                 )
                 if mentored_ig_ids:
-                    mentored_igs = InterestGroup.objects.filter(
-                        id__in=mentored_ig_ids
-                    ).values('id', 'name', 'icon', 'code')
+                    mentored_igs = _ig_options(
+                        InterestGroup.objects.filter(id__in=mentored_ig_ids)
+                    )
                     # Merge with existing ig options (avoid duplicates)
                     existing_ig_ids = {ig['id'] for ig in options['can_create_as_ig']}
                     for ig in mentored_igs:
@@ -233,10 +254,12 @@ class OrganizerOptionsAPI(APIView):
             if campus_org_ids:
                 # Only IGs with an active chapter at one of the mentor's
                 # campuses qualify as campus_ig organiser options.
-                campus_igs = InterestGroup.objects.filter(
-                    campus_ig_chapter_ig__org_id__in=campus_org_ids,
-                    campus_ig_chapter_ig__is_active=True,
-                ).distinct().values('id', 'name', 'icon', 'code')
+                campus_igs = _ig_options(
+                    InterestGroup.objects.filter(
+                        campus_ig_chapter_ig__org_id__in=campus_org_ids,
+                        campus_ig_chapter_ig__is_active=True,
+                    ).distinct()
+                )
                 existing_ci_ids = {ig['id'] for ig in options['can_create_as_campus_ig']}
                 for ig in campus_igs:
                     if ig['id'] not in existing_ci_ids:
@@ -306,7 +329,7 @@ class CollaborationTargetsAPI(APIView):
             if search:
                 qs = qs.filter(name__icontains=search)
             if not filter_type or filter_type == 'ig':
-                results['ig'] = list(qs.values('id', 'name', 'icon', 'code')[:20])
+                results['ig'] = _ig_options(qs, limit=20)
             if not filter_type or filter_type == 'campus_ig':
                 # campus_ig entries are identified by their IG; return as campus_ig key.
                 # When a campus context is given, only IGs with an active chapter
@@ -317,7 +340,7 @@ class CollaborationTargetsAPI(APIView):
                         campus_ig_chapter_ig__org_id=campus_id,
                         campus_ig_chapter_ig__is_active=True,
                     ).distinct()
-                results['campus_ig'] = list(ci_qs.values('id', 'name', 'icon', 'code')[:20])
+                results['campus_ig'] = _ig_options(ci_qs, limit=20)
 
         if not filter_type or filter_type == 'campus':
             qs = Organization.objects.filter(org_type='College')

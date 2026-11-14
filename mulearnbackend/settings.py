@@ -313,15 +313,14 @@ BACKEND_API_KEY = decouple_config("BACKEND_API_KEY")
 
 DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
 
-# Cloudflare R2 (S3-compatible object storage). USE_R2_STORAGE is an on/off
-# switch so the app still runs on local disk for anyone without R2
-# credentials configured. See utils/r2_storage.py for how this is used.
-USE_R2_STORAGE = decouple_config("USE_R2_STORAGE", default=False, cast=bool)
-R2_ACCESS_KEY_ID = decouple_config("R2_ACCESS_KEY_ID", default="")
-R2_SECRET_ACCESS_KEY = decouple_config("R2_SECRET_ACCESS_KEY", default="")
-R2_BUCKET_NAME = decouple_config("R2_BUCKET_NAME", default="")
-R2_ENDPOINT_URL = decouple_config("R2_ENDPOINT_URL", default="")
-R2_PUBLIC_BASE_URL = decouple_config("R2_PUBLIC_BASE_URL", default="")
+# Public base URL of the R2 bucket (custom domain). Images are uploaded by the
+# media worker (mulearn-media-worker), which returns a key; the backend only
+# stores that key and builds the public URL from it (see utils/media_keys.py).
+# Upload modules (module -> R2 folder) are defined in utils/media_modules.py.
+# No R2 credentials are needed here.
+# Required (no default): without it image URLs would silently become relative
+# paths that 404, so a missing value must stop startup instead.
+R2_PUBLIC_BASE_URL = decouple_config("R2_PUBLIC_BASE_URL")
 
 import socket
 
@@ -376,12 +375,5 @@ CELERY_BEAT_SCHEDULE = {
     'refresh-learning-circle-aggregates-cron': {
         'task': 'mu_celery.learning_circle_aggregates_cron.refresh_learning_circle_aggregates',
         'schedule': crontab(minute='*/15'),
-    },
-    # Sweeps R2 for uploads (POST /api/v1/media/upload/) that were never
-    # attached to a record and are now past ORPHAN_GRACE_PERIOD. Hourly is
-    # plenty given the 24h grace period.
-    'delete-orphaned-r2-uploads-cron': {
-        'task': 'mu_celery.r2_storage_tasks.delete_orphaned_r2_uploads',
-        'schedule': crontab(minute=0),
     },
 }
