@@ -363,6 +363,12 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'mu_celery.intern_cron.intern_task_deadline_cron',
         'schedule': crontab(hour=0, minute=10),
     },
+    # 18:35 UTC = 00:05 IST the next day, so it fires at the start of the IST
+    # day the monthly review window opens / closes.
+    'intern-monthly-review-window-cron': {
+        'task': 'mu_celery.intern_cron.intern_monthly_review_window_cron',
+        'schedule': crontab(hour=18, minute=35),
+    },
     'update-alumni-status-cron': {
         'task': 'mu_celery.alumni_cron.update_alumni_status_cron',
         'schedule': crontab(hour=0, minute=15),
