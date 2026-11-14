@@ -505,6 +505,18 @@ class DateTimeUtils:
         return DateTimeUtils.format_time(local_now)
 
     @staticmethod
+    def get_ist_today() -> datetime.date:
+        """
+        Returns today's calendar date in IST (Asia/Kolkata).
+
+        The project runs on UTC (settings.TIME_ZONE), so `now().date()` lags
+        the IST date between 00:00 and 05:30 IST. Use this wherever a business
+        rule is defined in terms of the user's local day (e.g. intern daily
+        timesheets). Stored timestamps stay UTC.
+        """
+        return now().astimezone(pytz.timezone("Asia/Kolkata")).date()
+
+    @staticmethod
     def format_time(date_time: datetime.datetime) -> datetime.datetime:
         """
         Formats a datetime object to the format '%Y-%m-%d %H:%M:%S'.

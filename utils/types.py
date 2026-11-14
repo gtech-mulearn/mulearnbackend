@@ -314,6 +314,21 @@ class InternSubmissionStatus(Enum):
     PENDING = "PENDING"
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
+    # Daily timesheets no longer go through admin review: a new timesheet is
+    # stored as SUBMITTED and counts immediately. Weekly reviews still use
+    # PENDING/APPROVED/REJECTED.
+    SUBMITTED = "SUBMITTED"
+
+
+# Daily timesheet statuses that count toward the streak, milestone karma and
+# the intern leaderboard. PENDING is included so timesheets that were still
+# awaiting review when admin approval was removed are counted without a data
+# migration. REJECTED never counts.
+COUNTED_TIMESHEET_STATUSES = [
+    InternSubmissionStatus.APPROVED.value,
+    InternSubmissionStatus.SUBMITTED.value,
+    InternSubmissionStatus.PENDING.value,
+]
 
 class InternLeaveType(Enum):
     SICK = "SICK"

@@ -1,10 +1,13 @@
 from celery import shared_task
-from django.utils.timezone import now
 from datetime import timedelta
-from db.intern import UserInternGuildLink, InternDailyTimesheet, InternTask
-from utils.types import InternGuildStatus, InternTaskStatus
-from db.intern import UserInternGuildLink, InternDailyTimesheet, InternLeaveRequest
-from utils.types import InternGuildStatus, InternLeaveStatus
+from db.intern import UserInternGuildLink, InternDailyTimesheet, InternTask, InternLeaveRequest
+from utils.types import InternGuildStatus, InternTaskStatus, InternLeaveStatus
+from utils.utils import DateTimeUtils
+
+# Interns may still submit yesterday's timesheet today (IST), so the missed-day
+# scan starts from the day before yesterday — a day that can still be
+# submitted is never counted as missed.
+MISSED_DAY_SCAN_START_OFFSET = 2
 
 @shared_task
 def intern_daily_status_cron():
@@ -13,12 +16,14 @@ def intern_daily_status_cron():
     Rules:
     - >= 6 missed timesheets (out of last 10 working days) -> AT_RISK
     - >= 10 missed timesheets (out of last 10 working days) -> INACTIVE
+    Working days are counted back from the day before yesterday (IST).
     """
     active_interns = UserInternGuildLink.objects.filter(
         status__in=[InternGuildStatus.ACTIVE.value, InternGuildStatus.AT_RISK.value]
     )
     
-    today = now().date()
+    # Same IST day boundaries as timesheet submission.
+    today = DateTimeUtils.get_ist_today()
     
     # 1. Batch fetch all timesheets for the last 20 days (to cover 10 working days)
     date_range_start = today - timedelta(days=20)
@@ -59,7 +64,7 @@ def intern_daily_status_cron():
     for intern in active_interns:
         missed_count = 0
         days_checked = 0
-        days_back = 1
+        days_back = MISSED_DAY_SCAN_START_OFFSET
         
         while days_checked < 10:
             check_date = today - timedelta(days=days_back)
@@ -142,9 +147,9 @@ def intern_task_deadline_cron():
     """
     Cron job to evaluate intern tasks deadline.
     Rules:
-    - If deadline < today and status != COMPLETED and not verified -> OVERDUE
+    - If deadline < today (IST) and status != COMPLETED and not verified -> OVERDUE
     """
-    today = now().date()
+    today = DateTimeUtils.get_ist_today()
     overdue_tasks = InternTask.objects.filter(
         deadline__lt=today,
         is_verified=False
