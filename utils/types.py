@@ -260,6 +260,8 @@ class InternHashtag(Enum):
     DAILY_LOG_HASHTAG = "#intern-daily-log"
     WEEKLY_REVIEW_KARMA = 0
     WEEKLY_REVIEW_HASHTAG = "#intern-weekly-review"
+    MONTHLY_REVIEW_KARMA = 0
+    MONTHLY_REVIEW_HASHTAG = "#intern-monthly-review"
     TASK_VERIFIED_HASHTAG = "#intern-task-verified"
     STREAK_7_KARMA = 7
     STREAK_7_HASHTAG = "#intern-streak-7"

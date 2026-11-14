@@ -106,6 +106,41 @@ class InternWeeklyReview(models.Model):
         db_table = 'intern_weekly_review'
 
 
+class InternMonthlyReview(models.Model):
+    """
+    One review per intern per calendar month, submitted inside the month-end
+    window (see api/dashboard/intern/monthly_review/window.py). Replaces the
+    weekly review; there is no streak, no hours and no late flag.
+    """
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='intern_monthly_reviews', db_column='user_id')
+    year = models.SmallIntegerField()
+    month = models.SmallIntegerField()
+    period_start = models.DateField()
+    period_end = models.DateField()
+    team = models.CharField(max_length=75)
+    # tasks_completed: JSON array of {task_id, title, category, complexity, deadline, final_status, output_link}
+    tasks_completed = models.JSONField(null=True, blank=True)
+    monthly_review = models.TextField()
+    # task_remarks: {rating, learnings, challenges_faced, next_month_plan}
+    task_remarks = models.JSONField(null=True, blank=True)
+    blockers = models.TextField(null=True, blank=True)
+    leave_days = models.SmallIntegerField(default=0)
+    suggestions = models.TextField(null=True, blank=True)
+    status = models.CharField(max_length=15, default='PENDING')
+    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='intern_monthly_reviews_reviewed', db_column='reviewed_by')
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_note = models.CharField(max_length=300, null=True, blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='intern_monthly_review_created', db_column='created_by')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='intern_monthly_review_updated', db_column='updated_by')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        managed = False
+        db_table = 'intern_monthly_review'
+
+
 class InternLeaveRequest(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='intern_leave_requests', db_column='user_id')

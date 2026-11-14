@@ -374,6 +374,21 @@ TEMPLATES: dict[tuple, dict] = {
         "body":  "{body}",
     },
 
+    # ── INTERN_MONTHLY_REVIEW_OPEN ────────────────────────────────────────────
+    # Who gets it: every intern who isn't INACTIVE, on the window's first day
+    # Context keys: month_name, year, closes_on
+    ("INTERN_MONTHLY_REVIEW_OPEN", "IN_APP"): {
+        "title": "Monthly review is open",
+        "body":  "Your {month_name} {year} review is open until {closes_on}. Submit it before the window closes.",
+    },
+
+    # ── INTERN_MONTHLY_REVIEW_LAST_DAY ────────────────────────────────────────
+    # Who gets it: interns (not INACTIVE) with no review for the month, or a rejected one
+    # Context keys: month_name, year
+    ("INTERN_MONTHLY_REVIEW_LAST_DAY", "IN_APP"): {
+        "title": "Last day for your monthly review",
+        "body":  "Today is the last day to submit your {month_name} {year} review.",
+    },
 
     # ── PUSH copy (activity pushes) ───────────────────────────────────────────
     # Each type has rotating versions; one is picked at random per push and

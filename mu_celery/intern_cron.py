@@ -1,3 +1,5 @@
+import calendar
+
 from celery import shared_task
 from datetime import timedelta
 from db.intern import UserInternGuildLink, InternDailyTimesheet, InternTask, InternLeaveRequest
@@ -158,3 +160,67 @@ def intern_task_deadline_cron():
     for task in overdue_tasks:
         task.status = InternTaskStatus.OVERDUE.value
         task.save()
+
+
+@shared_task
+def intern_monthly_review_window_cron():
+    """
+    Monthly review window notifications. Scheduled daily at 00:05 IST.
+
+    - Window's first day: "review is open" to every intern who isn't INACTIVE
+      (ON_LEAVE included — the notification waits in their list).
+    - Window's last day: "last day" to the same interns, minus those who
+      already have a PENDING or APPROVED review for the month.
+    - Any other day: returns without querying.
+
+    Idempotent: the dedupe key is "<type>:<YYYY-MM>:<open|last_day>", and the
+    notification table is unique on (user_id, dedupe_key), so a re-run or a
+    retry never notifies anyone twice.
+    """
+    from django.db import transaction
+
+    from api.dashboard.intern.monthly_review.window import get_monthly_review_window
+    from api.notification.audience import Audience
+    from api.notification.service import NotificationService
+    from api.notification.types import NotificationType
+    from db.intern import InternMonthlyReview
+    from utils.types import InternSubmissionStatus
+
+    today = DateTimeUtils.get_ist_today()
+    window = get_monthly_review_window(today)
+    if not window.is_open:
+        return
+
+    if today == window.opens_on:
+        notif_type, occurrence = NotificationType.INTERN_MONTHLY_REVIEW_OPEN, "open"
+    elif today == window.closes_on:
+        notif_type, occurrence = NotificationType.INTERN_MONTHLY_REVIEW_LAST_DAY, "last_day"
+    else:
+        return
+
+    recipients = UserInternGuildLink.objects.exclude(status=InternGuildStatus.INACTIVE.value)
+    if occurrence == "last_day":
+        already_submitted = (
+            InternMonthlyReview.objects
+            .filter(year=window.year, month=window.month)
+            .exclude(status=InternSubmissionStatus.REJECTED.value)
+            .values('user_id')
+        )
+        recipients = recipients.exclude(user_id__in=already_submitted)
+
+    user_ids = [str(uid) for uid in recipients.values_list('user_id', flat=True).distinct()]
+    if not user_ids:
+        return
+
+    with transaction.atomic():
+        NotificationService.dispatch(
+            notif_type=notif_type,
+            audience=Audience.users(user_ids),
+            context={
+                "month_name": calendar.month_name[window.month],
+                "year": window.year,
+                "closes_on": window.closes_on.strftime("%d %b"),
+            },
+            entity_id=f"{window.year}-{window.month:02d}",
+            occurrence=occurrence,
+        )

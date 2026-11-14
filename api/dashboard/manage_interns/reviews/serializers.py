@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from db.intern import InternWeeklyReview, InternDailyTimesheet
+from db.intern import InternWeeklyReview, InternDailyTimesheet, InternMonthlyReview
 
 class ManageInternWeeklyReviewSerializer(serializers.ModelSerializer):
     user_name = serializers.CharField(source='user.full_name', read_only=True)
@@ -13,6 +13,19 @@ class ManageInternWeeklyReviewSerializer(serializers.ModelSerializer):
             'weekly_review', 'task_remarks', 'hours_committed', 'blockers',
             'leave_days', 'suggestions', 'is_late', 'status',
             'review_note', 'created_at'
+        ]
+
+class ManageInternMonthlyReviewSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source='user.full_name', read_only=True)
+    muid = serializers.CharField(source='user.muid', read_only=True)
+
+    class Meta:
+        model = InternMonthlyReview
+        fields = [
+            'id', 'user_id', 'user_name', 'muid', 'year', 'month', 'period_start', 'period_end',
+            'team', 'tasks_completed', 'monthly_review', 'task_remarks', 'blockers',
+            'leave_days', 'suggestions', 'status', 'reviewed_by_id', 'reviewed_at',
+            'review_note', 'created_at', 'updated_at',
         ]
 
 class ManageInternTimesheetSerializer(serializers.ModelSerializer):
