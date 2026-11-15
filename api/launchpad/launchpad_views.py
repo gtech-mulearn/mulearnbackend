@@ -118,6 +118,12 @@ def generate_launchpad_jwt(user, user_type):
     return access_token, refresh_token
 
 
+import json
+
+# Public launchpad boards are cached for this long (fixed keys, no parameters).
+LAUNCHPAD_BOARD_TTL = 60 * 5
+
+
 class RegisterCompanyAPI(APIView):
     @extend_schema(
         tags=['Launchpad'],
@@ -2188,30 +2194,39 @@ class Leaderboard(APIView):
                 time_=Max("karma_activity_log_user__created_at"),
             )
             .order_by("-karma", "time_")
+            # Read by LaunchpadLeaderBoardSerializer (actual_karma, launchpad_id);
+            # without these each row cost two more queries.
+            .select_related("wallet_user")
+            .prefetch_related("launchpad_user")
         )
 
-        rank_list = list(users)
-        for index, user in enumerate(rank_list):
-            user.rank = index + 1
+        # Ranks are positions in the full board, so the whole board has to be
+        # built before any page can be served. That build (three correlated
+        # subqueries per participant) used to run on every request, plus a
+        # second copy for search. It is now built once into one fixed cache key
+        # and every page and search is served from that list. The board can lag
+        # new karma by up to LAUNCHPAD_BOARD_TTL.
+        from api.leaderboard.leaderboard_view import get_or_rebuild_leaderboard
 
+        def build():
+            rows = LaunchpadLeaderBoardSerializer(
+                [setattr(user, "rank", index + 1) or user for index, user in enumerate(users)],
+                many=True,
+            ).data
+            return json.loads(json.dumps(rows))
+
+        board = get_or_rebuild_leaderboard(
+            "launchpad:leaderboard", build, timeout=LAUNCHPAD_BOARD_TTL
+        )
+
+        # Same search fields and pagination as before, applied to the cached rows.
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            users, request, ["full_name", "karma", "org", "district_name", "state"]
+            board, request, ["full_name", "karma", "org", "district_name", "state"]
         )
-
-        final_users = paginated_queryset.get("queryset")
-        if request.query_params.get("search"):
-            final_users = list(final_users)
-            for user in final_users:
-                user.rank = next(
-                    rank_user.rank
-                    for rank_user in rank_list
-                    if rank_user.muid == user.muid
-                )
-
-        serializer = LaunchpadLeaderBoardSerializer(final_users, many=True)
 
         return CustomResponse().paginated_response(
-            data=serializer.data, pagination=paginated_queryset.get("pagination")
+            data=list(paginated_queryset.get("queryset")),
+            pagination=paginated_queryset.get("pagination"),
         )
 
 
@@ -2279,29 +2294,31 @@ class TaskCompletedLeaderboard(APIView):
                 time_=Max("karma_activity_log_user__created_at"),
             )
             .order_by("-karma", "time_")
+            # is_public is read for every row.
+            .select_related("user_settings_user")
         )
 
-        rank_list = list(users)
-        for index, user in enumerate(rank_list):
-            user.rank = index + 1
+        # Built once per LAUNCHPAD_BOARD_TTL into one fixed key, and every page
+        # and search served from it: same approach and reasoning as Leaderboard.
+        from api.leaderboard.leaderboard_view import get_or_rebuild_leaderboard
+
+        def build():
+            rows = TaskCompletedLeaderBoardSerializer(
+                [setattr(user, "rank", index + 1) or user for index, user in enumerate(users)],
+                many=True,
+            ).data
+            return json.loads(json.dumps(rows))
+
+        board = get_or_rebuild_leaderboard(
+            "launchpad:task_completed_leaderboard", build, timeout=LAUNCHPAD_BOARD_TTL
+        )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            users, request, ["muid", "full_name", "org"]
+            board, request, ["muid", "full_name", "org"]
         )
-
-        final_users = paginated_queryset.get("queryset")
-        if request.query_params.get("search"):
-            final_users = list(final_users)
-            for user in final_users:
-                user.rank = next(
-                    rank_user.rank
-                    for rank_user in rank_list
-                    if rank_user.muid == user.muid
-                )
-
-        serializer = TaskCompletedLeaderBoardSerializer(final_users, many=True)
         return CustomResponse().paginated_response(
-            data=serializer.data, pagination=paginated_queryset.get("pagination")
+            data=list(paginated_queryset.get("queryset")),
+            pagination=paginated_queryset.get("pagination"),
         )
 
 
@@ -2351,14 +2368,8 @@ class ListParticipantsAPI(APIView):
                 karma_activity_log_user__appraiser_approved=True,
                 id__in=intro_task_completed_users,
             )
-            .prefetch_related(
-                Prefetch(
-                    "user_role_link_user",
-                    queryset=UserRoleLink.objects.filter(
-                        verified=True, role__title__in=allowed_levels
-                    ).select_related("role"),
-                )
-            )
+            # (A prefetch of user_role_link_user used to sit here; the serializer
+            # only reads the annotations below, so it was a wasted query.)
             .annotate(
                 org=Subquery(latest_org_link),
                 district_name=Subquery(latest_district),
@@ -2468,14 +2479,23 @@ class LaunchpadDetailsCount(APIView):
             .distinct()
         )
 
-        # Count participants at each level
-        level_counts = {
-            "total_participants": users.values("id").count(),
-            "Level_1": users.filter(level=LaunchPadLevels.LEVEL_1.value).count(),
-            "Level_2": users.filter(level=LaunchPadLevels.LEVEL_2.value).count(),
-            "Level_3": users.filter(level=LaunchPadLevels.LEVEL_3.value).count(),
-            "Level_4": users.filter(level=LaunchPadLevels.LEVEL_4.value).count(),
-        }
+        # Count participants at each level. Five COUNTs over the same heavy,
+        # subquery-annotated queryset; the endpoint takes no parameters, so the
+        # result is cached under one fixed key (may lag by LAUNCHPAD_BOARD_TTL).
+        from api.leaderboard.leaderboard_view import get_or_rebuild_leaderboard
+
+        def build():
+            return {
+                "total_participants": users.values("id").count(),
+                "Level_1": users.filter(level=LaunchPadLevels.LEVEL_1.value).count(),
+                "Level_2": users.filter(level=LaunchPadLevels.LEVEL_2.value).count(),
+                "Level_3": users.filter(level=LaunchPadLevels.LEVEL_3.value).count(),
+                "Level_4": users.filter(level=LaunchPadLevels.LEVEL_4.value).count(),
+            }
+
+        level_counts = get_or_rebuild_leaderboard(
+            "launchpad:details_count", build, timeout=LAUNCHPAD_BOARD_TTL
+        )
 
         return CustomResponse(response=level_counts).get_success_response()
 
@@ -2493,14 +2513,9 @@ class CollegeData(APIView):
             Organization.objects.filter(
                 org_type="College",
             )
-            .prefetch_related(
-                Prefetch(
-                    "user_organization_link_org",
-                    queryset=UserOrganizationLink.objects.filter(
-                        user__user_role_link_user__role__title__in=allowed_levels
-                    ),
-                )
-            )
+            # (A prefetch of every matching membership row used to sit here;
+            # CollegeDataSerializer only reads the annotations, so it loaded
+            # those rows for nothing.)
             .filter(
                 user_organization_link_org__user__user_role_link_user__role__title__in=allowed_levels
             )
@@ -3140,9 +3155,12 @@ class IGLeaderboardView(APIView):
                 "full_name": row.get("user__full_name"),
                 "email": row.get("user__email"),
                 "muid": row.get("user__muid"),
+                # Was formatted with the literal string "user_id", so every row
+                # checked the same non-existent file and got None. Fixed to the
+                # row's user id, which is what the field was meant to show.
                 "profile_pic": (
-                    f"{decouple_config('BE_DOMAIN_NAME')}{fs.url('user/profile/{}.png'.format('user_id'))}"
-                    if fs.exists("user/profile/{}.png".format("user_id"))
+                    f"{decouple_config('BE_DOMAIN_NAME')}{fs.url('user/profile/{}.png'.format(row.get('user_id')))}"
+                    if fs.exists("user/profile/{}.png".format(row.get("user_id")))
                     else None
                 ),
                 "category_karma": row.get("category_karma"),

@@ -323,6 +323,13 @@ class GetInstitutionsAPI(APIView):
         else:
             organisations = Organization.objects.filter(org_type=org_type)
 
+        # InstitutionSerializer reads affiliation and district > zone > state >
+        # country for every row; without this that is about five queries per
+        # organisation on an unauthenticated list (same chain as InstitutionAPI).
+        organisations = organisations.select_related(
+            "affiliation", "district__zone__state__country"
+        )
+
         paginated_organisations = CommonUtils.get_paginated_queryset(
             organisations, request, ["title", "code"]
         )

@@ -11,6 +11,7 @@ from db.task import InterestGroup, KarmaActivityLog, TaskList, UserIgLink
 from db.user import User
 from utils.exception import CustomException
 from utils.response import CustomResponse
+from utils.utils import external_json_request
 from utils.types import IntegrationType
 from utils.utils import DateTimeUtils, send_template_mail
 
@@ -244,11 +245,15 @@ class KKEMdetailsFetchAPI(APIView):
             integration = Integration.objects.get(name=IntegrationType.KKEM.value)
             token, BASE_URL = integration.token, integration.base_url
 
-            response = requests.post(
-                url=f"{BASE_URL}/MuLearn/api/jobseeker-details",
+            response, failure = external_json_request(
+                "post",
+                f"{BASE_URL}/MuLearn/api/jobseeker-details",
+                "KKEM",
                 data=f'{{"job_seeker_id": {jsid}}}',
                 headers={"Authorization": f"Bearer {token}"},
             )
+            if failure:
+                return failure
             response_data = response.json()
 
             if "response" in response_data:

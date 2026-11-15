@@ -32,3 +32,6 @@ dump.rdb
 static/
 
 .claude
+CLAUDE.md
+latest.sql
+perf/

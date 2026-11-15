@@ -246,9 +246,8 @@ class NotificationService:
         # New unread rows landed — the cached unread_count for every
         # recipient is now stale. Bounded to this batch's recipient list,
         # same size class as the bulk_create itself.
-        from api.notification.notifications_utils import invalidate_unread_count
-        for uid in recipient_ids:
-            invalidate_unread_count(uid)
+        from api.notification.notifications_utils import invalidate_unread_counts
+        invalidate_unread_counts(recipient_ids)
 
         logger.info(
             "_write_notifications: type=%s attempted=%d",

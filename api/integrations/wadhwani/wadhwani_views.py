@@ -2,6 +2,7 @@ import json
 import requests
 
 from utils.response import CustomResponse
+from utils.utils import external_json_request
 from utils.permission import JWTUtils
 from db.user import User
 
@@ -32,7 +33,9 @@ class WadhwaniAuthToken(APIView):
             "client_secret": settings.WADHWANI_CLIENT_SECRET,
         }
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
-        response = requests.post(url, data=data, headers=headers)
+        response, failure = external_json_request("post", url, "Wadhwani", data=data, headers=headers)
+        if failure:
+            return failure
 
         if response.json().get("error", None):
             return CustomResponse(
@@ -87,7 +90,9 @@ class WadhwaniUserLogin(APIView):
                 "courseRootId": course_root_id,
             }
         )
-        response = requests.post(url, headers=headers, data=data)
+        response, failure = external_json_request("post", url, "Wadhwani", headers=headers, data=data)
+        if failure:
+            return failure
 
         if response.json().get("status", None) == "ERROR":
             return CustomResponse(
@@ -130,7 +135,9 @@ class WadhwaniCourseDetails(APIView):
             ).get_failure_response()
 
         headers = {"Authorization": token}
-        response = requests.get(url, headers=headers)
+        response, failure = external_json_request("get", url, "Wadhwani", headers=headers)
+        if failure:
+            return failure
 
         if response.json().get("status", None) == "ERROR":
             return CustomResponse(
@@ -171,7 +178,9 @@ class WadhwaniCourseEnrollStatus(APIView):
             ).get_failure_response()
 
         headers = {"Authorization": token}
-        response = requests.get(url, params={"username": user.email}, headers=headers)
+        response, failure = external_json_request("get", url, "Wadhwani", params={"username": user.email}, headers=headers)
+        if failure:
+            return failure
 
         if response.json().get("status", None) == "ERROR":
             return CustomResponse(
@@ -221,7 +230,9 @@ class WadhwaniCourseQuizData(APIView):
             settings.WADHWANI_BASE_URL
             + f"/api/v1/courseservice/oauth/course/{course_id}/reports/quiz/student/{user.email}"
         )
-        response = requests.get(url, headers=headers)
+        response, failure = external_json_request("get", url, "Wadhwani", headers=headers)
+        if failure:
+            return failure
 
         if response.json().get("status", None) == "ERROR":
             return CustomResponse(

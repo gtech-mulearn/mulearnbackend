@@ -1,6 +1,4 @@
-from collections import defaultdict
-
-from django.db.models import Q
+from django.db.models import Count, F, Min, Q
 from rest_framework.views import APIView
 
 from db.task import KarmaActivityLog
@@ -21,11 +19,16 @@ class TaskList(APIView):
         responses={200: KarmaActivityLogSerializer},
     )
     def get(self, request):
-        tasks = KarmaActivityLog.objects.all()
+        # The serializer reads user.full_name and task.title / discord_link.
+        tasks = KarmaActivityLog.objects.select_related("user", "task")
         paginated_queryset = CommonUtils.get_paginated_queryset(
             tasks,
             request,
-            ['id', 'full_name', 'task_name', 'status', 'discordlink']
+            # Model paths of the serializer fields. The old list used the
+            # serializer names (full_name, task_name, ...), which are not model
+            # fields, so any ?search= raised FieldError. "status" is computed
+            # from two booleans and is not searchable.
+            ['id', 'user__full_name', 'task__title', 'task__discord_link']
         )
 
         serializer = KarmaActivityLogSerializer(
@@ -54,20 +57,16 @@ class PendingTasks(APIView):
     )
     def get(self, request):
         date = request.query_params.get("date")
+        tasks = KarmaActivityLog.objects.all()
         if date:
-            tasks = KarmaActivityLog.objects.filter(created_at=date)
-            peerpending = tasks.filter(peer_approved=False).count()
-            appraiserpending = tasks.filter(appraiser_approved=False).count()
-            data = {'peer_pending': peerpending,
-                    'appraise_pending': appraiserpending}
-            return CustomResponse(response=data).get_success_response()
-
-        peerpending = KarmaActivityLog.objects.filter(
-            peer_approved=False).count()
-        appraiserpending = KarmaActivityLog.objects.filter(
-            appraiser_approved=False).count()
-        data = {'peer_pending': peerpending,
-                'appraise_pending': appraiserpending}
+            tasks = tasks.filter(created_at=date)
+        # Both counts in one pass over the table instead of two full scans.
+        counts = tasks.aggregate(
+            peer_pending=Count("id", filter=Q(peer_approved=False)),
+            appraise_pending=Count("id", filter=Q(appraiser_approved=False)),
+        )
+        data = {'peer_pending': counts["peer_pending"],
+                'appraise_pending': counts["appraise_pending"]}
         return CustomResponse(response=data).get_success_response()
 
 
@@ -81,6 +80,12 @@ class LeaderBoard(APIView):
     )
     def get(self, request):
         choice = request.query_params.get("option", "peer")
+        # The option is interpolated into a field name, so only the two real
+        # approval fields are accepted (anything else raised FieldError -> 500).
+        if choice not in ("peer", "appraiser"):
+            return CustomResponse(
+                general_message="option must be 'peer' or 'appraiser'"
+            ).get_failure_response()
 
         approval_field = f"{choice}_approved_by"
         logs_with_approval = KarmaActivityLog.objects.filter(
@@ -88,17 +93,14 @@ class LeaderBoard(APIView):
               ) & ~Q(**{approval_field: ''})
         )
 
-        data = defaultdict(lambda: {"count": 0, "muid": None})
-
-        for obj in logs_with_approval:
-            approver_name = getattr(obj, approval_field).full_name
-            if data[approver_name]["muid"] is None:
-                data[approver_name]["muid"] = getattr(obj, approval_field).muid
-            data[approver_name]["count"] += 1
-
+        # One GROUP BY instead of iterating the whole karma log in Python with a
+        # User query per row. Grouped by name, as before (approvers sharing a
+        # name are merged); muid is the smallest of theirs. Highest count first.
         response_data = [
-            {"name": name, "count": info["count"], "muid": info["muid"]}
-            for name, info in data.items()
+            {"name": row["name"], "count": row["count"], "muid": row["muid"]}
+            for row in logs_with_approval.values(name=F(f"{approval_field}__full_name"))
+            .annotate(count=Count("id"), muid=Min(f"{approval_field}__muid"))
+            .order_by("-count", "name")
         ]
 
         paginated_queryset = CommonUtils.get_paginated_queryset(

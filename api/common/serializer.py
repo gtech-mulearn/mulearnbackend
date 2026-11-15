@@ -235,11 +235,13 @@ class UserLeaderboardSerializer(serializers.ModelSerializer):
     def get_full_name(self, obj):
         return obj.full_name
 
+    # Read the prefetched links (BekenAPI prefetches both, with org / ig).
+    # .values_list() on the related manager would run a new query per row.
     def get_organizations(self, obj):
-        return obj.user_organization_link_user.all().values_list("org__title", flat=True)
+        return [link.org.title for link in obj.user_organization_link_user.all()]
 
     def get_interest_groups(self, obj):
-        return obj.user_ig_link_user.all().values_list("ig__name", flat=True)
+        return [link.ig.name for link in obj.user_ig_link_user.all()]
 
 
 

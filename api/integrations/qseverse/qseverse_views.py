@@ -1,5 +1,7 @@
 
 import requests
+
+from utils.utils import EXTERNAL_REQUEST_TIMEOUT
 from django.conf import settings
 from rest_framework.views import APIView
 from utils.response import CustomResponse
@@ -35,7 +37,8 @@ class IssueVerifiableCredentialView(APIView):
                 response = requests.post(
                     f"{BASE_URL}api/issue_vc_app",
                     json=payload,
-                    headers= HEADERS,
+                    headers=HEADERS,
+                timeout=EXTERNAL_REQUEST_TIMEOUT,
                 )
                 response.raise_for_status()
                 return CustomResponse(
@@ -67,6 +70,7 @@ class GetAllConnectedUsersView(APIView):
             response = requests.get(
                 f"{BASE_URL}api/app/connected-users",
                 headers=HEADERS,
+                timeout=EXTERNAL_REQUEST_TIMEOUT,
             )
             response.raise_for_status()
             return CustomResponse(
@@ -100,6 +104,7 @@ class GetConnectedUserView(APIView):
             response = requests.get(
                 f"{BASE_URL}api/app/connected-users/search",
                 headers=HEADERS,
+                timeout=EXTERNAL_REQUEST_TIMEOUT,
                 params={"key": key, "value": value},
             )
             response.raise_for_status()
@@ -135,6 +140,7 @@ class GetQSCredentialsView(APIView):
             response = requests.get(
                 f"{BASE_URL}api/user/credentials",
                 headers=HEADERS,
+                timeout=EXTERNAL_REQUEST_TIMEOUT,
             )
             response.raise_for_status()
             return CustomResponse(

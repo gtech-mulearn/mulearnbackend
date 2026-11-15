@@ -9,7 +9,7 @@ from utils.response import CustomResponse
 from utils.types import OrganizationType
 from . import serializers
 from .register_helper import get_auth_token, verify_google_temp_token, get_auth_token_by_id
-from django.views.decorators.cache import cache_page
+from utils.utils import cache_view_response
 from django.core.cache import cache
 from mu_celery.task import send_email
 from utils.permission import CustomizePermission, JWTUtils
@@ -231,7 +231,9 @@ class UserRegisterValidateAPI(APIView):
 
 
 class RoleAPI(APIView):
-    @method_decorator(cache_page(60 * 10))
+    # Same response for every caller: one fixed key (cache_page keyed on the
+    # query string, so random parameters created unbounded copies).
+    @cache_view_response("register:roles", 60 * 10)
     @extend_schema(tags=['Register'], description="Retrieve Role.",
         responses={200: serializers.RoleSerializer},
     )
@@ -241,7 +243,9 @@ class RoleAPI(APIView):
 
 
 class CollegesAPI(APIView):
-    @method_decorator(cache_page(60 * 10))
+    # Same response for every caller: one fixed key (cache_page keyed on the
+    # query string, so random parameters created unbounded copies).
+    @cache_view_response("register:colleges", 60 * 10)
     @extend_schema(tags=['Register'], description="Retrieve Colleges.",
         responses={200: inline_serializer(
             name='RegisterCollegesResponse',
@@ -260,7 +264,9 @@ class CollegesAPI(APIView):
 
 
 class DepartmentAPI(APIView):
-    @method_decorator(cache_page(60 * 10))
+    # Same response for every caller: one fixed key (cache_page keyed on the
+    # query string, so random parameters created unbounded copies).
+    @cache_view_response("register:departments", 60 * 10)
     @extend_schema(tags=['Register'], description="Retrieve Department.",
         responses={200: serializers.DepartmentSerializer},
     )
@@ -277,7 +283,9 @@ class DepartmentAPI(APIView):
 
 
 class CompanyAPI(APIView):
-    @method_decorator(cache_page(60 * 10))
+    # Same response for every caller: one fixed key (cache_page keyed on the
+    # query string, so random parameters created unbounded copies).
+    @cache_view_response("register:companies", 60 * 10)
     @extend_schema(tags=['Register'], description="Retrieve Company.",
         responses={200: inline_serializer(
             name='RegisterCompaniesResponse',
@@ -409,7 +417,6 @@ class RegisterDataAPI(APIView):
             # Save user first — commits to DB so the auth service can find
             # the user when we request tokens (avoids uncommitted-row problem).
             user = create_user.save()
-            cache.set(f"db_user_{user.muid}", user, timeout=60)
 
             try:
                 if is_google_signup:
@@ -437,7 +444,9 @@ class RegisterDataAPI(APIView):
 
 
 class CountryAPI(APIView):
-    @method_decorator(cache_page(60 * 10))
+    # Same response for every caller: one fixed key (cache_page keyed on the
+    # query string, so random parameters created unbounded copies).
+    @cache_view_response("register:countries", 60 * 10)
     @extend_schema(
         tags=['Register'],
         description="Retrieve Country.",
@@ -468,7 +477,11 @@ class StateAPI(APIView):
         if data is None:
             state = State.objects.filter(country_id=country_id).values("id", "name")
             data = serializers.StateSerializer(state, many=True).data
-            cache.set(cache_key, data, 60 * 10)
+            # The id comes from the request body. Only real ids return rows,
+            # so caching non-empty results only keeps the key space bounded
+            # to existing countries.
+            if data:
+                cache.set(cache_key, data, 60 * 10)
 
         return CustomResponse(
             response={
@@ -492,7 +505,8 @@ class DistrictAPI(APIView):
                 "id", "name"
             )
             data = serializers.DistrictSerializer(district, many=True).data
-            cache.set(cache_key, data, 60 * 10)
+            if data:  # bounded to real state ids, see StateAPI
+                cache.set(cache_key, data, 60 * 10)
 
         return CustomResponse(
             response={
@@ -581,7 +595,8 @@ class SchoolAPI(APIView):
             college_serializer_data = serializers.OrgSerializer(
                 org_queryset, many=True
             ).data
-            cache.set(cache_key, college_serializer_data, 60 * 10)
+            if college_serializer_data:  # bounded to real district ids, see StateAPI
+                cache.set(cache_key, college_serializer_data, 60 * 10)
 
         return CustomResponse(
             response={
@@ -591,7 +606,9 @@ class SchoolAPI(APIView):
 
 
 class CommunityAPI(APIView):
-    @method_decorator(cache_page(60 * 10))
+    # Same response for every caller: one fixed key (cache_page keyed on the
+    # query string, so random parameters created unbounded copies).
+    @cache_view_response("register:communities", 60 * 10)
     @extend_schema(
         tags=['Register'],
         description="Retrieve Community.",
@@ -612,7 +629,9 @@ class CommunityAPI(APIView):
 
 
 class AreaOfInterestAPI(APIView):
-    @method_decorator(cache_page(60 * 10))
+    # Same response for every caller: one fixed key (cache_page keyed on the
+    # query string, so random parameters created unbounded copies).
+    @cache_view_response("register:aois", 60 * 10)
     @extend_schema(
         tags=['Register'],
         description="Retrieve Area Of Interest.",
@@ -655,7 +674,9 @@ class UserEmailVerificationAPI(APIView):
 
 
 class UserCountryAPI(APIView):
-    @method_decorator(cache_page(60 * 10))
+    # Same response for every caller: one fixed key (cache_page keyed on the
+    # query string, so random parameters created unbounded copies).
+    @cache_view_response("register:user_countries", 60 * 10)
     @extend_schema(
         tags=['Register'],
         description="Retrieve User Country.",
