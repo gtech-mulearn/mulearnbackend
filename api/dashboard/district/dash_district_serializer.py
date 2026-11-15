@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from django.db.models import Sum
+from django.db.models import Count, Sum
 from rest_framework import serializers
 
 from db.organization import UserOrganizationLink, Organization
@@ -8,6 +8,9 @@ from db.task import KarmaActivityLog, Level
 from db.user import User
 from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
+
+# How long the zone / district karma ranking is cached (one fixed key each).
+RANKING_TTL = 60 * 15
 
 
 class DistrictDetailsSerializer(serializers.ModelSerializer):
@@ -32,28 +35,42 @@ class DistrictDetailsSerializer(serializers.ModelSerializer):
         )
 
     def get_rank(self, obj):
-        org_karma_dict = (
-            UserOrganizationLink.objects.filter(
-                org__org_type=OrganizationType.COLLEGE.value)
-            .values("org__district")
-            .annotate(total_karma=Sum("user__wallet_user__karma"))
-        ).order_by("-total_karma", "org__created_at")
+        # The ranking is a GROUP BY over every college membership on the
+        # platform. Its key space is one fixed key (all districts at once), so
+        # it is cached for RANKING_TTL and may lag karma by up to that long.
+        from django.core.cache import cache
 
-        rank_dict = {
-            data["org__district"]: data["total_karma"]
-            if data["total_karma"] is not None
-            else 0
-            for data in org_karma_dict
-        }
+        try:
+            ranking = cache.get("dashboard:district_karma_ranking")
+        except Exception:
+            ranking = None
+        if ranking is None:
+            org_karma_dict = (
+                UserOrganizationLink.objects.filter(
+                    org__org_type=OrganizationType.COLLEGE.value)
+                .values("org__district")
+                .annotate(total_karma=Sum("user__wallet_user__karma"))
+            ).order_by("-total_karma", "org__created_at")
 
-        sorted_rank_dict = dict(
-            sorted(rank_dict.items(), key=lambda x: x[1], reverse=True)
-        )
+            rank_dict = {
+                data["org__district"]: data["total_karma"]
+                if data["total_karma"] is not None
+                else 0
+                for data in org_karma_dict
+            }
 
-        if obj.org.district.id in sorted_rank_dict:
-            keys_list = list(sorted_rank_dict.keys())
-            position = keys_list.index(obj.org.district.id)
-            return position + 1
+            # Same order as before: by karma, highest first (stable sort keeps
+            # the query's created_at tie order).
+            ranking = [
+                key for key, _ in sorted(rank_dict.items(), key=lambda x: x[1], reverse=True)
+            ]
+            try:
+                cache.set("dashboard:district_karma_ranking", ranking, RANKING_TTL)
+            except Exception:
+                pass
+
+        if obj.org.district.id in ranking:
+            return ranking.index(obj.org.district.id) + 1
 
     def get_district_lead(self, obj):
         user_org_link = UserOrganizationLink.objects.filter(
@@ -114,17 +131,25 @@ class DistrictStudentLevelStatusSerializer(serializers.ModelSerializer):
         model = Level
         fields = ["level_order", "students_count"]
 
-    def get_students_count(self, obj):
-        district = self.context.get("district")
-        return (
-            User.objects.filter(
-                user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-                user_organization_link_user__org__district=district,
-                user_lvl_link_user__level=obj,
+    def _counts_by_level(self):
+        # One grouped query for all levels. With many=True this serializer
+        # instance is reused for every level, so the result is cached on it;
+        # it used to be one COUNT(DISTINCT) query per level.
+        if getattr(self, "_level_counts", None) is None:
+            district = self.context.get("district")
+            self._level_counts = dict(
+                User.objects.filter(
+                    user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+                    user_organization_link_user__org__district=district,
+                    user_lvl_link_user__level__isnull=False,
+                )
+                .values_list("user_lvl_link_user__level_id")
+                .annotate(students=Count("id", distinct=True))
             )
-            .distinct()
-            .count()
-        )
+        return self._level_counts
+
+    def get_students_count(self, obj):
+        return self._counts_by_level().get(obj.id, 0)
 
 
 class DistrictStudentDetailsSerializer(serializers.Serializer):

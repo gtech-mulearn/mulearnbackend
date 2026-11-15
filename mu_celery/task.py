@@ -6,6 +6,8 @@ from db.user import User
 
 DISCORD_GUILD_ID = config("DISCORD_GUILD_ID")
 DISCORD_BOT_TOKEN = config("DISCORD_BOT_TOKEN")
+# A hung Discord call would otherwise occupy a Celery worker slot forever.
+DISCORD_TIMEOUT = (5, 15)
 
 
 @shared_task
@@ -16,10 +18,14 @@ def send_email(context: dict, subject: str, address: list[str], attachment: str 
 @shared_task
 def onboard_user(access_token: str, user_id: int):
     user = User.objects.get(id=user_id)
-    user_response = requests.get(
-        "https://discord.com/api/users/@me",
-        headers={"Authorization": f"Bearer {access_token}"},
-    )
+    try:
+        user_response = requests.get(
+            "https://discord.com/api/users/@me",
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=DISCORD_TIMEOUT,
+        )
+    except requests.exceptions.RequestException:
+        return {"status": "error", "message": "Failed to get user data"}
     if user_response.status_code != 200:
         return {"status": "error", "message": "Failed to get user data"}
     user_data = user_response.json()
@@ -40,7 +46,12 @@ def onboard_user(access_token: str, user_id: int):
     user.discord_id = discord_user_id
     user.exist_in_guild = True
     user.save()
-    join_response = requests.put(guild_url, json=member_data, headers=bot_headers)
+    try:
+        join_response = requests.put(
+            guild_url, json=member_data, headers=bot_headers, timeout=DISCORD_TIMEOUT
+        )
+    except requests.exceptions.RequestException:
+        return {"status": "error", "message": "Failed to join guild"}
     if (
         join_response.status_code != 201
         and join_response.status_code != 200

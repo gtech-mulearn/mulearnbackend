@@ -1,7 +1,8 @@
 import uuid
-from datetime import timedelta
+from datetime import datetime, time, timedelta, timezone
 
-from django.db.models import Sum
+from django.db.models import Count, F, Q, Sum
+from django.db.models.functions import TruncDate
 from django.db import transaction
 from rest_framework import serializers
 
@@ -15,6 +16,32 @@ from utils.utils import DateTimeUtils
 from .dash_campus_helper import validate_campus_member, assign_ig_campus_lead, ensure_ig_execom_catalog_entries
 from db.events import Event
 from db.learning_circle import LearningCircle, UserCircleLink
+
+def get_college_karma_rank(org):
+    """
+    Position of a college when all colleges are ordered by total member karma.
+
+    This used to pull one (org, user, karma) row for every verified college
+    membership on the platform into Python and sum and sort them there, on every
+    request. It now reads organization.cached_total_karma / cached_member_count,
+    which mu_celery.org_aggregates_cron refreshes every 15 minutes, and counts
+    the colleges that sort ahead (an index range scan on
+    idx_organization_org_type_karma). The rank can therefore lag karma changes
+    by up to 15 minutes. Ties keep the old order: the older college ranks first.
+
+    Returns None for a college with no verified members, as before.
+    """
+    if org.org_type != OrganizationType.COLLEGE.value or not org.cached_member_count:
+        return None
+    ahead = Organization.objects.filter(
+        org_type=OrganizationType.COLLEGE.value,
+        cached_member_count__gt=0,
+    ).filter(
+        Q(cached_total_karma__gt=org.cached_total_karma)
+        | Q(cached_total_karma=org.cached_total_karma, created_at__lt=org.created_at)
+    )
+    return ahead.count() + 1
+
 
 class CampusDetailsPublicSerializer(serializers.ModelSerializer):
     org_id = serializers.ReadOnlyField(source="id")
@@ -69,32 +96,7 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
         ).aggregate(total_karma=Sum("karma"))["total_karma"] or 0
 
     def get_rank(self, obj):
-        # (org, user, karma) collapsed via .distinct() so a user with more than
-        # one org-link row to the same college can't inflate that college's
-        # karma total relative to every other college in this ranking.
-        rows = (
-            UserOrganizationLink.objects.filter(
-                org__org_type=OrganizationType.COLLEGE.value,
-                verified=True,
-            )
-            .values("org", "user", "user__wallet_user__karma")
-            .distinct()
-            .order_by("org__created_at")
-        )
-
-        rank_dict = {}
-        for row in rows:
-            org_id = row["org"]
-            rank_dict[org_id] = rank_dict.get(org_id, 0) + (row["user__wallet_user__karma"] or 0)
-
-        sorted_rank_dict = dict(
-            sorted(rank_dict.items(), key=lambda x: x[1], reverse=True)
-        )
-
-        if obj.id in sorted_rank_dict:
-            keys_list = list(sorted_rank_dict.keys())
-            position = keys_list.index(obj.id)
-            return position + 1
+        return get_college_karma_rank(obj)
 
     def get_social_links(self, obj):
         links = CampusSocialLink.objects.filter(org=obj)
@@ -154,22 +156,29 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
         ]
 
     def get_active_ig_chapters(self, obj):
-        chapters = CampusIGChapter.objects.filter(
-            org=obj, is_active=True
-        ).select_related("ig", "lead")
+        chapters = list(
+            CampusIGChapter.objects.filter(
+                org=obj, is_active=True
+            ).select_related("ig", "lead")
+        )
 
-        result = []
-        for chapter in chapters:
-            member_count = UserIgLink.objects.filter(
-                ig=chapter.ig,
+        # Member counts for every chapter in one grouped query (this was one
+        # COUNT(DISTINCT) query per chapter).
+        member_counts = dict(
+            UserIgLink.objects.filter(
+                ig_id__in=[chapter.ig_id for chapter in chapters],
                 is_active=True,
                 assignment_type=UserIgLink.AssignmentType.LEARNER,
                 user__user_organization_link_user__org=obj,
                 user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
                 user__user_organization_link_user__verified=True,
-            ).values("user").distinct().count()
+            )
+            .values_list("ig_id")
+            .annotate(member_count=Count("user", distinct=True))
+        ) if chapters else {}
 
-            result.append({
+        return [
+            {
                 "ig_chapter_id": chapter.id,
                 "ig_name": chapter.ig.name,
                 "ig_code": chapter.ig.code,
@@ -178,10 +187,10 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
                     "full_name": chapter.lead.full_name,
                     "muid": chapter.lead.muid,
                 } if chapter.lead else None,
-                "member_count": member_count,
-            })
-
-        return result
+                "member_count": member_counts.get(chapter.ig_id, 0),
+            }
+            for chapter in chapters
+        ]
 
     def get_karma_by_cluster(self, obj):
         from django.db.models import OuterRef, Subquery
@@ -337,32 +346,8 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
         ).aggregate(total_karma=Sum("karma"))["total_karma"] or 0
 
     def get_rank(self, obj):
-        # (org, user, karma) collapsed via .distinct() so a user with more than
-        # one org-link row to the same college can't inflate that college's
-        # karma total relative to every other college in this ranking.
-        rows = (
-            UserOrganizationLink.objects.filter(
-                org__org_type=OrganizationType.COLLEGE.value,
-                verified=True,
-            )
-            .values("org", "user", "user__wallet_user__karma")
-            .distinct()
-            .order_by("org__created_at")
-        )
+        return get_college_karma_rank(obj.org)
 
-        rank_dict = {}
-        for row in rows:
-            org_id = row["org"]
-            rank_dict[org_id] = rank_dict.get(org_id, 0) + (row["user__wallet_user__karma"] or 0)
-
-        sorted_rank_dict = dict(
-            sorted(rank_dict.items(), key=lambda x: x[1], reverse=True)
-        )
-
-        if obj.org.id in sorted_rank_dict:
-            keys_list = list(sorted_rank_dict.keys())
-            position = keys_list.index(obj.org.id)
-            return position + 1
     def get_karma_last_7_days(self, obj):
         seven_days_ago = DateTimeUtils.get_current_utc_time() - timedelta(days=7)
         member_user_ids = obj.org.user_organization_link_org.filter(verified=True).values_list("user_id", flat=True).distinct()
@@ -449,15 +434,25 @@ class WeeklyKarmaSerializer(serializers.ModelSerializer):
 
         member_user_ids = instance.user_organization_link_org.filter(verified=True).values_list("user_id", flat=True).distinct()
 
-        for date in date_range:
-            karma_logs = KarmaActivityLog.objects.filter(
+        # One grouped query for the whole week instead of one aggregate per day.
+        # The window is expressed as a datetime range (UTC, same as the
+        # created_at__date lookups it replaces) so an index on created_at is usable.
+        window_start = datetime.combine(date_range[-1], time.min, tzinfo=timezone.utc)
+        window_end = datetime.combine(today + timedelta(days=1), time.min, tzinfo=timezone.utc)
+        karma_by_day = dict(
+            KarmaActivityLog.objects.filter(
                 user_id__in=member_user_ids,
-                created_at__date=date,
+                created_at__gte=window_start,
+                created_at__lt=window_end,
                 appraiser_approved=True,
-            ).aggregate(
-                karma=Sum("karma"),
             )
-            response[str(date)] = karma_logs["karma"] or 0
+            .annotate(day=TruncDate("created_at", tzinfo=timezone.utc))
+            .values_list("day")
+            .annotate(karma=Sum("karma"))
+        )
+
+        for date in date_range:
+            response[str(date)] = karma_by_day.get(date) or 0
 
         return response
 
@@ -659,14 +654,30 @@ class CampusIGChapterListSerializer(serializers.ModelSerializer):
             return obj.co_lead.full_name
         return None
 
+    def _member_counts(self):
+        """{(org_id, ig_id): learners} for every chapter being serialized, built once."""
+        if getattr(self, "_counts", None) is None:
+            instance = self.root.instance
+            chapters = (
+                [instance] if isinstance(instance, CampusIGChapter) else list(instance or [])
+            )
+            rows = UserIgLink.objects.filter(
+                ig_id__in={chapter.ig_id for chapter in chapters},
+                is_active=True,
+                assignment_type=UserIgLink.AssignmentType.LEARNER,
+                user__user_organization_link_user__org_id__in={
+                    chapter.org_id for chapter in chapters
+                },
+                user__user_organization_link_user__verified=True,
+            ).values_list(
+                "user__user_organization_link_user__org_id", "ig_id"
+            ).annotate(member_count=Count("user", distinct=True)) if chapters else []
+            self._counts = {(org_id, ig_id): count for org_id, ig_id, count in rows}
+        return self._counts
+
     def get_campus_ig_member_count(self, obj):
-        return UserIgLink.objects.filter(
-            ig=obj.ig,
-            is_active=True,
-            assignment_type=UserIgLink.AssignmentType.LEARNER,
-            user__user_organization_link_user__org=obj.org,
-            user__user_organization_link_user__verified=True,
-        ).values('user').distinct().count()
+        # One grouped query for the page instead of one COUNT per chapter.
+        return self._member_counts().get((obj.org_id, obj.ig_id), 0)
 
 
 class CampusIGChapterCreateSerializer(serializers.ModelSerializer):
@@ -864,7 +875,7 @@ class CampusLCMemberSerializer(serializers.ModelSerializer):
         return getattr(obj.user.wallet_user, 'karma', 0) if hasattr(obj.user, 'wallet_user') else 0
         
     def get_level(self, obj):
-        level_link = obj.user.user_lvl_link_user.first()
+        level_link = getattr(obj.user, "user_lvl_link_user", None)
         return level_link.level.name if level_link else None
 
 class CampusIGListSerializer(serializers.ModelSerializer):
@@ -891,7 +902,7 @@ class CampusIGMemberSerializer(serializers.ModelSerializer):
         return getattr(obj.user.wallet_user, 'karma', 0) if hasattr(obj.user, 'wallet_user') else 0
         
     def get_level(self, obj):
-        level_link = obj.user.user_lvl_link_user.first()
+        level_link = getattr(obj.user, "user_lvl_link_user", None)
         return level_link.level.name if level_link else None
 
 

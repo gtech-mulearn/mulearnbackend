@@ -61,7 +61,6 @@ class ApiSignatureMiddleware(object):
                 msg=key.encode(),
                 digestmod="SHA256",
             ).hexdigest()
-            print(new_signature)
             if new_signature != signature:
                 return JsonResponse(
                     {
@@ -93,8 +92,12 @@ class UniversalErrorHandlerMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        # Cache the body
-        _ = request.body
+        # Cache the body so log_exception can still print it after a view has
+        # consumed the stream. Multipart uploads are skipped: reading them here
+        # holds the whole file in memory a second time (Django's upload handlers
+        # already buffer or spool it), and a file is of no use in an error log.
+        if not request.META.get("CONTENT_TYPE", "").startswith("multipart/"):
+            _ = request.body
         return self.get_response(request)
 
     def log_exception(self, request, exception):
@@ -131,8 +134,6 @@ class UniversalErrorHandlerMiddleware:
             f"TRACEBACK: {traceback.format_exc()}"
         )
         logger.error(request_info)
-
-        print(request_info)
 
     def generate_error_id(self, exception, request):
         error_info = f"{type(exception).__name__}: {str(exception)}: {request.method}: {request.path}"

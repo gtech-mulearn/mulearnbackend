@@ -360,7 +360,17 @@ class LaunchpadLeaderBoardSerializer(serializers.ModelSerializer):
     org = serializers.CharField(allow_null=True, allow_blank=True)
     district_name = serializers.CharField(allow_null=True, allow_blank=True)
     state = serializers.CharField(allow_null=True, allow_blank=True)
-    launchpad_id = LaunchPadIDSerializer(source="launchpad_user.first", read_only=True)
+    launchpad_id = serializers.SerializerMethodField()
+
+    def get_launchpad_id(self, obj):
+        # Same row `.first()` returned (lowest pk), but taken from the
+        # prefetched list when the view prefetched it: `.first()` always runs a
+        # new query, one per leaderboard row.
+        links = list(obj.launchpad_user.all())
+        link = min(links, key=lambda item: item.pk) if links else None
+        # to_representation, not .data: LaunchPadIDSerializer renders the bare
+        # launchpad id string, and .data cannot wrap a string.
+        return LaunchPadIDSerializer().to_representation(link) if link else None
 
     class Meta:
         model = User

@@ -5,6 +5,8 @@ import jwt
 import pytz
 import requests
 
+from utils.utils import EXTERNAL_REQUEST_TIMEOUT
+
 from db.integrations import Integration
 from mulearnbackend.settings import SECRET_KEY
 from utils.exception import CustomException
@@ -105,21 +107,30 @@ def get_access_token(
 
     AUTH_DOMAIN = f"{decouple.config('AUTH_DOMAIN')}/api/v1/auth/"
 
+    try:
+        if password or email_or_muid:
+            response = requests.post(
+                f"{AUTH_DOMAIN}user-authentication/",
+                data={"emailOrMuid": email_or_muid, "password": password},
+                timeout=EXTERNAL_REQUEST_TIMEOUT,
+            ).json()
+        else:
+            response = requests.post(
+                f"{AUTH_DOMAIN}token-verification/{token}/",
+                timeout=EXTERNAL_REQUEST_TIMEOUT,
+            ).json()
+    except (requests.exceptions.RequestException, ValueError) as e:
+        raise CustomException(
+            "The login service is not responding right now. Please try again."
+        ) from e
+
     if password or email_or_muid:
-        response = requests.post(
-            f"{AUTH_DOMAIN}user-authentication/",
-            data={"emailOrMuid": email_or_muid, "password": password},
-        ).json()
 
         if response.get("statusCode") != 200:
             raise CustomException(
                 "Oops! The username or password didn't match our records. Please double-check and try again."
             )
     else:
-        response = requests.post(
-            f"{AUTH_DOMAIN}token-verification/{token}/",
-        ).json()
-
         if response.get("statusCode") != 200:
             raise CustomException(
                 "Oops! We couldn't find that account. Please double-check your details and try again."
