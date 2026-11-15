@@ -19,9 +19,9 @@ from .dash_ig_serializer import (
     PublicInterestGroupSerializer,
 )
 import json
+from django.core.cache import cache
 import uuid
 from django.utils.decorators import method_decorator
-from django.views.decorators.cache import cache_page
 from api.dashboard.roles.dash_roles_serializer import RoleDashboardSerializer
 from db.task import UserIgLink,UserIgLvlLink, Level
 from db.user import Role, UserMentor, UserRoleLink
@@ -1178,38 +1178,84 @@ def get_ig_list_context(ig_queryset):
     }
 
 
+# Both IG list endpoints take no parameters and return the same payload to every
+# caller. They used cache_page, whose key includes the full query string, so
+# ?x=<anything> stored a new copy of the whole list in Redis (unbounded keys).
+# They now use one fixed key each with the same 10-minute TTL.
+IG_LIST_CACHE_TTL = 60 * 10
+
+
+def _mentor_links_prefetch():
+    """
+    Only active mentor links: that is all the list serializers and
+    get_ig_list_context read from user_ig_link_ig. Prefetching every link
+    (every learner of every IG, with its User) loaded the whole membership
+    table into memory on each rebuild.
+    """
+    from django.db.models import Prefetch
+    from db.task import UserIgLink
+
+    return Prefetch(
+        "user_ig_link_ig",
+        queryset=UserIgLink.objects.filter(
+            assignment_type=UserIgLink.AssignmentType.MENTOR, is_active=True
+        ).select_related("user"),
+    )
+
+
+def _cached_ig_list(key, build):
+    try:
+        data = cache.get(key)
+    except Exception:
+        data = None
+    if data is None:
+        data = build()
+        try:
+            cache.set(key, data, IG_LIST_CACHE_TTL)
+        except Exception:
+            pass
+    return data
+
+
 class InterestGroupListApi(APIView):
-    @method_decorator(cache_page(60 * 10))
     @extend_schema(
         tags=['Dashboard - Ig'],
         description="Retrieve Interest Group List Api.",
         responses={200: InterestGroupSerializer},
     )
     def get(self, request):
+        return CustomResponse(
+            response={"interestGroup": _cached_ig_list("ig:list:dashboard", self._build)}
+        ).get_success_response()
+
+    @staticmethod
+    def _build():
         from utils.types import InterestGroupStatus
         ig = list(
             InterestGroup.objects.filter(status=InterestGroupStatus.ACTIVE.value)
             .select_related("created_by", "updated_by")
-            .prefetch_related("user_ig_link_ig__user")
+            .prefetch_related(_mentor_links_prefetch())
             .annotate(members=Count("user_ig_link_ig"))
         )
 
         context = get_ig_list_context(ig)
         serializer = InterestGroupSerializer(ig, many=True, context=context)
-
-        return CustomResponse(
-            response={"interestGroup": serializer.data}
-        ).get_success_response()
+        return json.loads(json.dumps(serializer.data, default=str))
 
 
 class PublicInterestGroupListApi(APIView):
-    @method_decorator(cache_page(60 * 10))
     @extend_schema(
         tags=['Dashboard - Ig'],
         description="Retrieve Public Interest Group List Api.",
         responses={200: PublicInterestGroupSerializer},
     )
     def get(self, request):
+        return CustomResponse(
+            response={"interestGroups": _cached_ig_list("ig:list:public", self._build)}
+        ).get_success_response()
+
+    @staticmethod
+    def _build():
         from utils.types import InterestGroupStatus
         from django.db.models import Prefetch
         from db.impact_project import ImpactProject, ImpactProjectUserLink
@@ -1218,7 +1264,7 @@ class PublicInterestGroupListApi(APIView):
             InterestGroup.objects.filter(status=InterestGroupStatus.ACTIVE.value)
             .select_related("created_by", "updated_by")
             .prefetch_related(
-                "user_ig_link_ig__user",
+                _mentor_links_prefetch(),
                 Prefetch(
                     "impact_project_ig",
                     queryset=ImpactProject.objects.select_related("created_by", "updated_by").prefetch_related(
@@ -1235,10 +1281,7 @@ class PublicInterestGroupListApi(APIView):
 
         context = get_ig_list_context(ig)
         serializer = PublicInterestGroupSerializer(ig, many=True, context=context)
-
-        return CustomResponse(
-            response={"interestGroups": serializer.data}
-        ).get_success_response()
+        return json.loads(json.dumps(serializer.data, default=str))
 
 class InterestGroupMembershipAPI(APIView):
     authentication_classes = [CustomizePermission]

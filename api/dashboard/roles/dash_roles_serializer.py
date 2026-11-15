@@ -52,14 +52,19 @@ class RoleAssignmentSerializer(serializers.Serializer):
         user_roles_to_create = [
             UserRoleLink(user=user, **validated_data) for user in users
         ]
+        # Evaluated before the insert on purpose: `users` excludes anyone who
+        # already holds the role, so it would be empty once the links exist.
+        user_ids = ",".join(list(users.values_list("id", flat=True)))
         with transaction.atomic():
             UserRoleLink.objects.bulk_create(user_roles_to_create)
-            DiscordWebhooks.general_updates(
-                WebHookCategory.BULK_ROLE.value,
-                WebHookActions.UPDATE.value,
-                validated_data["role"].title,
-                ",".join(list(users.values_list("id", flat=True))),
-            )
+        # Outbound HTTP stays outside the transaction so a slow Discord cannot
+        # hold the row locks and the DB connection open.
+        DiscordWebhooks.general_updates(
+            WebHookCategory.BULK_ROLE.value,
+            WebHookActions.UPDATE.value,
+            validated_data["role"].title,
+            user_ids,
+        )
         return user_roles_to_create, validated_data["role"]
 
 
@@ -81,7 +86,11 @@ class RoleDashboardSerializer(serializers.ModelSerializer):
         ]
 
     def get_members(self, obj):
-        return len(UserRoleLink.objects.filter(role_id=obj.id, verified=True))
+        # RoleAPI annotates the count for the whole page; len(queryset) loaded
+        # every link row of the role (all students, for "Student") to count it.
+        if hasattr(obj, "verified_member_count"):
+            return obj.verified_member_count
+        return UserRoleLink.objects.filter(role_id=obj.id, verified=True).count()
 
     def update(self, instance, validated_data):
         user_id = JWTUtils.fetch_user_id(self.context["request"])

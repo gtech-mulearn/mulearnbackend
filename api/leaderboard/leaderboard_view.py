@@ -19,6 +19,11 @@ from mu_celery.leaderboard_cron import _build_students_leaderboard, STUDENTS_ALL
 
 logger = logging.getLogger(__name__)
 
+# Fixed cache keys for the two parameterless Wadhwani boards.
+WADHWANI_COLLEGE_KEY = "leaderboard:wadhwani:college"
+WADHWANI_ZONAL_KEY = "leaderboard:wadhwani:zonal"
+WADHWANI_TTL = 60 * 15
+
 
 def safe_cache_get(key):
     try:
@@ -73,8 +78,11 @@ def get_or_rebuild_leaderboard(cache_key, builder_fn, timeout=TTL):
     else:
         # Another worker is already rebuilding this board.
         # Wait briefly (up to 3 seconds) for it to complete and read from cache.
-        for _ in range(6):
-            time.sleep(0.5)
+        # Polled every 0.1s rather than 0.5s so a waiting request returns as soon
+        # as the board is written instead of holding its thread for the rest of
+        # a half-second sleep.
+        for _ in range(30):
+            time.sleep(0.1)
             cached = safe_cache_get(cache_key)
             if cached:
                 return json.loads(cached)
@@ -196,6 +204,19 @@ class WadhwaniCollegeLeaderboard(APIView):
             "#cl-entrp-intro",
         ]
 
+        # No parameters, so one fixed key. This is a five-table join with SUM and
+        # COUNT(DISTINCT) on a public endpoint; it is rebuilt at most once per
+        # TTL (behind the same stampede guard as the student boards) and may
+        # therefore lag karma changes by up to 15 minutes.
+        leaderboard_data = get_or_rebuild_leaderboard(
+            WADHWANI_COLLEGE_KEY,
+            lambda: self._build(wadhwani_hashtags),
+            timeout=WADHWANI_TTL,
+        )
+        return CustomResponse(response=leaderboard_data).get_success_response()
+
+    @staticmethod
+    def _build(wadhwani_hashtags):
         wadhwani_task_ids = list(TaskList.objects.filter(
             hashtag__in=wadhwani_hashtags
         ).values_list("id", flat=True))
@@ -226,8 +247,10 @@ class WadhwaniCollegeLeaderboard(APIView):
             .order_by("-total_karma")[:12]
         )
 
-        leaderboard_data = serializers.WadhwaniCollegeLeaderboardSerializer(college_leaderboard, many=True).data
-        return CustomResponse(response=leaderboard_data).get_success_response()
+        # Plain lists/dicts so the result can be stored as JSON.
+        return json.loads(json.dumps(
+            serializers.WadhwaniCollegeLeaderboardSerializer(college_leaderboard, many=True).data
+        ))
 
 
 
@@ -249,6 +272,16 @@ class WadhwaniZonalLeaderboard(APIView):
             "#cl-entrp-intro",
         ]
 
+        # Cached exactly like WadhwaniCollegeLeaderboard above.
+        response_data = get_or_rebuild_leaderboard(
+            WADHWANI_ZONAL_KEY,
+            lambda: self._build(wadhwani_hashtags),
+            timeout=WADHWANI_TTL,
+        )
+        return CustomResponse(response=response_data).get_success_response()
+
+    @staticmethod
+    def _build(wadhwani_hashtags):
         wadhwani_task_ids = list(
             TaskList.objects.filter(hashtag__in=wadhwani_hashtags).values_list("id", flat=True)
         )
@@ -282,8 +315,9 @@ class WadhwaniZonalLeaderboard(APIView):
             .order_by("-total_karma")[:20]
         )
 
-        response_data = serializers.WadhwaniZoneLeaderboardSerializer(zone_leaderboard, many=True).data
-        return CustomResponse(response=response_data).get_success_response()
+        return json.loads(json.dumps(
+            serializers.WadhwaniZoneLeaderboardSerializer(zone_leaderboard, many=True).data
+        ))
 
 
 class IGMentorLeaderboard(APIView):

@@ -1,4 +1,11 @@
+import json
+
+from decouple import config as decouple_config
+from django.core.files.storage import FileSystemStorage
 from django.db import connection
+from rest_framework.renderers import JSONRenderer
+
+from api.leaderboard.leaderboard_view import get_or_rebuild_leaderboard
 from rest_framework.views import APIView
 
 from utils.response import CustomResponse
@@ -28,7 +35,6 @@ class Leaderboard(APIView):
         SELECT 
         u.id,
         u.full_name, 
-        u.profile_pic,
         SUM(kal.karma) AS total_karma,
         COALESCE(org.title, comm.title) AS org,
         COALESCE(org.dis, d.name) AS dis,
@@ -70,10 +76,32 @@ class Leaderboard(APIView):
             GROUP BY u.id
             ORDER BY total_karma DESC, time_;
             """
-        with connection.cursor() as cursor:
-            cursor.execute(query)
-            results = cursor.fetchall()
-            column_names = [desc[0] for desc in cursor.description]
+        def build():
+            with connection.cursor() as cursor:
+                cursor.execute(query)
+                results = cursor.fetchall()
+                column_names = [desc[0] for desc in cursor.description]
 
-            list_of_dicts = [dict(zip(column_names, row)) for row in results]
-            return CustomResponse(response=list_of_dicts).get_success_response()
+            fs = FileSystemStorage()
+            domain = decouple_config("BE_DOMAIN_NAME")
+            rows = []
+            for row in results:
+                item = dict(zip(column_names, row))
+                # profile_pic is not a column (User.profile_pic is a property
+                # that checks for the uploaded file), so selecting u.profile_pic
+                # made this endpoint fail with "Unknown column" on every call.
+                # Resolved here the same way the property does.
+                path = f"user/profile/{item['id']}.png"
+                pic = f"{domain}{fs.url(path)}" if fs.exists(path) else None
+                rows.append({
+                    "id": item["id"],
+                    "full_name": item["full_name"],
+                    "profile_pic": pic,
+                    **{k: v for k, v in item.items() if k not in ("id", "full_name")},
+                })
+            return json.loads(JSONRenderer().render(rows))
+
+        # No parameters: one fixed key. The query scans and groups all of
+        # user_organization_link twice, so it runs at most once per 10 minutes.
+        data = get_or_rebuild_leaderboard("top100:leaderboard", build, timeout=60 * 10)
+        return CustomResponse(response=data).get_success_response()

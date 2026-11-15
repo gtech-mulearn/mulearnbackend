@@ -21,7 +21,7 @@ class CollegeApi(APIView):
     )
     def get(self, request, college_code=None):
         if college_code:
-            colleges = College.objects.filter(id=college_code)
+            colleges = College.objects.filter(id=college_code).select_related("org")
         else:
             colleges = College.objects.all().select_related("org")
 

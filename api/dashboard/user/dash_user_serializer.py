@@ -71,11 +71,14 @@ class UserSerializer(serializers.ModelSerializer):
     #     if not UserInterests.objects.filter(user=obj).exists():
     #         return "Please select your interests"
     #     return None
+    # Read the rows the view prefetched. Calling .values_list() on the related
+    # manager builds a new query and throws the prefetch away, so each of these
+    # used to cost one extra query on top of the wasted prefetch.
     def get_user_domains(self, obj):
-        return obj.user_domains.values_list("domain_name", flat=True)
+        return [domain.domain_name for domain in obj.user_domains.all()]
 
     def get_user_endgoals(self, obj):
-        return obj.user_endgoals.values_list("endgoal_name", flat=True)
+        return [endgoal.endgoal_name for endgoal in obj.user_endgoals.all()]
 
     def get_roles(self, obj):
         return [
@@ -84,16 +87,18 @@ class UserSerializer(serializers.ModelSerializer):
         ]
 
     def get_dynamic_type(self, obj):
-        dynamic_types = {
-            dynamic_role.type
-            for dynamic_role in DynamicRole.objects.filter(
-                role__title__in=self.get_roles(obj)
-            )
-        }.union(
-            {dynamic_user.type for dynamic_user in DynamicUser.objects.filter(user=obj)}
-        )
+        # Built from one cached {type: access lists} map (invalidated on every
+        # dynamic-management write) instead of two queries per call. Covers
+        # every type stored in the tables, exactly like the old queries did.
+        from utils.permission import get_all_dynamic_access
 
-        return sorted(dynamic_type for dynamic_type in dynamic_types if dynamic_type is not None)
+        roles = set(self.get_roles(obj))
+        return sorted(
+            dynamic_type
+            for dynamic_type, access in get_all_dynamic_access().items()
+            if dynamic_type is not None
+            and (roles.intersection(access["roles"]) or obj.id in access["users"])
+        )
 
     def get_company(self, obj):
         roles = self.get_roles(obj)

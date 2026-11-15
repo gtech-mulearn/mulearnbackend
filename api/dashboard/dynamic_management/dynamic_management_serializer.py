@@ -3,7 +3,7 @@ import uuid
 from rest_framework import serializers
 from django.db.models import Q
 from db.user import Role, DynamicRole, DynamicUser, User
-from utils.permission import JWTUtils
+from utils.permission import JWTUtils, invalidate_dynamic_access
 from utils.utils import DateTimeUtils
 from utils.types import ManagementType
 
@@ -28,7 +28,9 @@ class DynamicRoleCreateSerializer(serializers.ModelSerializer):
         validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
         validated_data['created_by_id'] = user_id
         validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
-        return DynamicRole.objects.create(**validated_data)
+        dynamic_role = DynamicRole.objects.create(**validated_data)
+        invalidate_dynamic_access(dynamic_role.type)
+        return dynamic_role
 
     def validate(self, data):
         if DynamicRole.objects.filter(type=data['type'], role=data['role']).exists():
@@ -78,6 +80,7 @@ class DynamicRoleUpdateSerializer(serializers.ModelSerializer):
         instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.role_id = new_role or instance.role_id
         instance.save()
+        invalidate_dynamic_access(instance.type)
         return instance
 
     def validate_new_role(self, value):
@@ -87,6 +90,7 @@ class DynamicRoleUpdateSerializer(serializers.ModelSerializer):
 
     def destroy(self, obj):
         obj.delete()
+        invalidate_dynamic_access(obj.type)
 
 
 class DynamicUserCreateSerializer(serializers.ModelSerializer):
@@ -108,7 +112,9 @@ class DynamicUserCreateSerializer(serializers.ModelSerializer):
         validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
         validated_data['created_by_id'] = user_id
         validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
-        return DynamicUser.objects.create(**validated_data)
+        dynamic_user = DynamicUser.objects.create(**validated_data)
+        invalidate_dynamic_access(dynamic_user.type)
+        return dynamic_user
 
     def validate(self, data):
         if DynamicUser.objects.filter(type=data['type'], user=data['user']).exists():
@@ -165,6 +171,7 @@ class DynamicUserUpdateSerializer(serializers.ModelSerializer):
         instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.user = new_user or instance.user
         instance.save()
+        invalidate_dynamic_access(instance.type)
         return instance
 
     def validate_new_user(self, value):
@@ -175,6 +182,7 @@ class DynamicUserUpdateSerializer(serializers.ModelSerializer):
 
     def destroy(self, obj):
         obj.delete()
+        invalidate_dynamic_access(obj.type)
 
 
 class RoleDropDownSerializer(serializers.ModelSerializer):

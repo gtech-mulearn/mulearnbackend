@@ -13,7 +13,7 @@ from openpyxl import load_workbook
 from tempfile import NamedTemporaryFile
 from io import BytesIO
 from django.http import FileResponse
-from django.db.models import Q
+from django.db.models import Count, Q
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 
@@ -27,7 +27,8 @@ class RoleAPI(APIView):
         responses={200: dash_roles_serializer.RoleDashboardSerializer},
     )
     def get(self, request):
-        roles_queryset = Role.objects.all()
+        # created_by / updated_by names are read for every row.
+        roles_queryset = Role.objects.select_related("created_by", "updated_by")
 
         queryset = CommonUtils.get_paginated_queryset(
             roles_queryset,
@@ -50,9 +51,20 @@ class RoleAPI(APIView):
             },
         )
 
-        serializer = dash_roles_serializer.RoleDashboardSerializer(
-            queryset.get("queryset"), many=True
+        # Verified member counts for the page in one grouped query. Done after
+        # pagination so the paginator's COUNT stays a plain COUNT(*).
+        page = list(queryset.get("queryset"))
+        member_counts = dict(
+            UserRoleLink.objects.filter(
+                role_id__in=[role.id for role in page], verified=True
+            )
+            .values_list("role_id")
+            .annotate(total=Count("id"))
         )
+        for role in page:
+            role.verified_member_count = member_counts.get(role.id, 0)
+
+        serializer = dash_roles_serializer.RoleDashboardSerializer(page, many=True)
 
         return CustomResponse().paginated_response(
             data=serializer.data, pagination=queryset.get("pagination")

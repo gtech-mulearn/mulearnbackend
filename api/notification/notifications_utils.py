@@ -63,6 +63,20 @@ def invalidate_unread_count(user_id: str) -> None:
         logger.warning("invalidate_unread_count: cache.delete failed for user=%s", user_id, exc_info=True)
 
 
+def invalidate_unread_counts(user_ids) -> None:
+    """
+    invalidate_unread_count for many users in one Redis round trip (DEL with
+    many keys) instead of one round trip per recipient. Same never-raise rule.
+    """
+    keys = [_UNREAD_COUNT_CACHE_KEY.format(user_id=user_id) for user_id in user_ids]
+    if not keys:
+        return
+    try:
+        cache.delete_many(keys)
+    except Exception:
+        logger.warning("invalidate_unread_counts: cache.delete_many failed for %d users", len(keys), exc_info=True)
+
+
 class NotificationUtils:
     """
     Utility class for Notification

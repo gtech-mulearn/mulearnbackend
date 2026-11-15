@@ -11,25 +11,31 @@ from Crypto.Util.Padding import unpad
 from db.integrations import Integration
 from utils.exception import CustomException
 from utils.types import IntegrationType
-from utils.utils import send_template_mail
+from utils.utils import EXTERNAL_REQUEST_TIMEOUT, send_template_mail
 
 
 def send_data_to_kkem(kkem_link):
     BASE_URL = kkem_link.integration.base_url
 
-    response = requests.post(
-        url=f"{BASE_URL}/MuLearn/api/update/muLearnId",
-        data=json.dumps(
-            {
-                "mu_id": kkem_link.user.muid,
-                "jsid": int(kkem_link.integration_value),
-                "email_id": kkem_link.user.email,
-            }
-        ),
-        headers={"Authorization": f"Bearer {kkem_link.integration.token}"},
-    )
-
-    response_data = response.json()
+    # Called inside the registration transaction, so it must not be able to
+    # hang: a timeout bounds how long the row locks are held. Failure raises
+    # CustomException, the same path as an invalid jsid (the caller rolls back).
+    try:
+        response = requests.post(
+            url=f"{BASE_URL}/MuLearn/api/update/muLearnId",
+            data=json.dumps(
+                {
+                    "mu_id": kkem_link.user.muid,
+                    "jsid": int(kkem_link.integration_value),
+                    "email_id": kkem_link.user.email,
+                }
+            ),
+            headers={"Authorization": f"Bearer {kkem_link.integration.token}"},
+            timeout=EXTERNAL_REQUEST_TIMEOUT,
+        )
+        response_data = response.json()
+    except (requests.exceptions.RequestException, ValueError) as e:
+        raise CustomException("Could not reach KKEM. Please try again.") from e
 
     if not response_data["request_status"]:
         raise CustomException("Invalid jsid")
