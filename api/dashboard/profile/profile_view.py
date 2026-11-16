@@ -611,6 +611,13 @@ class SocialsAPI(APIView):
         )
 
         if serializer.is_valid():
+            if serializer.instance is None:
+                # Accounts created outside registration have no socials row;
+                # without one, save() falls into create() with no user and
+                # fails on the NOT NULL user_id.
+                serializer.instance = Socials.objects.create(
+                    user_id=user_id, created_by_id=user_id, updated_by_id=user_id
+                )
             serializer.save()
 
             return CustomResponse(
