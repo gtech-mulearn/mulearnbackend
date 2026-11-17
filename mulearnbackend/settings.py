@@ -355,6 +355,15 @@ PUSH_ENABLED = decouple_config("PUSH_ENABLED", default=True, cast=bool)
 
 DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
 
+# Public base URL of the R2 bucket (custom domain). Images are uploaded by the
+# media worker (mulearn-media-worker), which returns a key; the backend only
+# stores that key and builds the public URL from it (see utils/media_keys.py).
+# Upload modules (module -> R2 folder) are defined in utils/media_modules.py.
+# No R2 credentials are needed here.
+# Required (no default): without it image URLs would silently become relative
+# paths that 404, so a missing value must stop startup instead.
+R2_PUBLIC_BASE_URL = decouple_config("R2_PUBLIC_BASE_URL")
+
 import socket
 
 hostname, _, ips = socket.gethostbyname_ex(socket.gethostname())

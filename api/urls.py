@@ -19,6 +19,7 @@ urlpatterns = [
     path('donate/', include('api.donate.urls')),
     path('calendar/', include('api.calendar.urls')),
     path('muComics/', include('api.muComics.urls')),
+    path('media/', include('api.media.urls')),
 ]
 
 if settings.DEBUG:

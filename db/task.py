@@ -5,6 +5,7 @@ from django.db import models
 from decouple import config as decouple_config
 
 from db.organization import Organization
+from utils import media_keys
 
 from django.conf import settings
 from .user import User
@@ -41,9 +42,13 @@ class InterestGroup(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     name = models.CharField(max_length=75, unique=True)
     code = models.CharField(max_length=10, unique=True)
-    # Legacy short emoji/code icon, superseded by the icon_image file upload
-    # below. Kept nullable for backward compatibility with existing rows.
-    icon = models.CharField(max_length=10, blank=True, null=True)
+    # R2 object keys (issued by the media worker) for cover_image/icon_image below. NULL means no image
+    # uploaded since this migration shipped — see the properties' local-disk
+    # fallback for images uploaded before it.
+    # Schema: db-scripts alter-1.92 adds these columns and drops the legacy
+    # `icon` column; run it together with deploying this code.
+    cover_image_key = models.CharField(max_length=255, blank=True, null=True)
+    icon_image_key = models.CharField(max_length=255, blank=True, null=True)
     category =models.CharField(max_length=20,default="others",blank=False,null=False)
     status = models.CharField(
         max_length=20,
@@ -91,19 +96,30 @@ class InterestGroup(models.Model):
         managed = False
         db_table = "interest_group"
 
-    @property
-    def cover_image(self):
+    def legacy_image_path(self, image_type):
+        """
+        MEDIA_ROOT-relative path of an image uploaded before the R2 keys
+        existed ("cover" or "icon"). Those files are still on local disk
+        under the old fixed path; they are not moved by the migration.
+        """
+        return f"interest_group/{image_type}/{self.id}.png"
+
+    def _image_url(self, key, image_type):
+        if key:
+            return media_keys.public_url(key)
         fs = FileSystemStorage()
-        path = f"interest_group/cover/{self.id}.png"
+        path = self.legacy_image_path(image_type)
         if fs.exists(path):
             return f"{decouple_config('BE_DOMAIN_NAME')}{fs.url(path)}"
+        return None
+
+    @property
+    def cover_image(self):
+        return self._image_url(self.cover_image_key, "cover")
 
     @property
     def icon_image(self):
-        fs = FileSystemStorage()
-        path = f"interest_group/icon/{self.id}.png"
-        if fs.exists(path):
-            return f"{decouple_config('BE_DOMAIN_NAME')}{fs.url(path)}"
+        return self._image_url(self.icon_image_key, "icon")
 
 
 class Level(models.Model):
