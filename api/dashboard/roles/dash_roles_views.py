@@ -317,16 +317,18 @@ class UserRoleLinkManagement(APIView):
                 user__pk__in=request.data.get("users"),
                 role=role,
             )
-            number = user_role_links.count()
-
-            DiscordWebhooks.general_updates(
-                WebHookCategory.BULK_ROLE.value,
-                WebHookActions.DELETE.value,
-                role.title,
-                ",".join(list(user_role_links.values_list("user_id", flat=True))),
-            )
+            user_ids = list(user_role_links.values_list("user_id", flat=True))
+            number = len(user_ids)
 
             user_role_links.delete()
+            # After the delete, in chunks: the sync used to go out first,
+            # so a failed delete still stripped the Discord roles, and past ~53
+            # users the single message was too long to reach Discord at all.
+            DiscordWebhooks.bulk_role_updates(
+                WebHookActions.DELETE.value,
+                role.title,
+                user_ids,
+            )
 
             return CustomResponse(
                 general_message=(
@@ -629,11 +631,10 @@ class UserRoleBulkAssignAPI(APIView):
                     }
                 )
             for role, user_set in users_by_role.items():
-                DiscordWebhooks.general_updates(
-                    WebHookCategory.BULK_ROLE.value,
+                DiscordWebhooks.bulk_role_updates(
                     WebHookActions.UPDATE.value,
                     role,
-                    ",".join(user_set),
+                    user_set,
                 )
         else:
             error_rows.append(user_roles_serializer.errors)
