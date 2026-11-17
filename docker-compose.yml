@@ -31,3 +31,18 @@ services:
     env_file:
       - .env
     command: celery -A mulearnbackend.celery worker -l info
+  # Runs CELERY_BEAT_SCHEDULE (crons, push engagement, scheduled campaigns).
+  # Exactly ONE beat per deployment: the pod compose file must not add one,
+  # or every scheduled task would run once per pod.
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: celery-beat
+    image: mulearnbackend-celery
+    restart: always
+    volumes:
+      - /var/log/mulearnbackend:/var/log/mulearnbackend
+    env_file:
+      - .env
+    command: celery -A mulearnbackend.celery beat -l info --schedule /tmp/celerybeat-schedule
