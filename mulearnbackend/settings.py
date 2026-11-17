@@ -48,7 +48,6 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     # custom apps
-    "debug_toolbar",
     "utils.apps.UtilsConfig",
     "api.apps.ApiConfig",
     "corsheaders",
@@ -61,10 +60,19 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "debug_toolbar.middleware.DebugToolbarMiddleware",
     "django.middleware.common.CommonMiddleware",
     "mulearnbackend.middlewares.UniversalErrorHandlerMiddleware",
 ]
+
+# The debug toolbar instruments every request (SQL capture, panels, template
+# hooks), so it is only loaded in development. Same position in the middleware
+# chain as before.
+if DEBUG:
+    INSTALLED_APPS.insert(INSTALLED_APPS.index("utils.apps.UtilsConfig"), "debug_toolbar")
+    MIDDLEWARE.insert(
+        MIDDLEWARE.index("django.middleware.common.CommonMiddleware"),
+        "debug_toolbar.middleware.DebugToolbarMiddleware",
+    )
 
 ROOT_URLCONF = "mulearnbackend.urls"
 CORS_ALLOW_ALL_ORIGINS = True
@@ -180,6 +188,10 @@ CACHES = {
 
 CELERY_BROKER_URL = f"redis://{REDIS_HOST}:{REDIS_PORT}/2"
 CELERY_RESULT_BACKEND = f"redis://{REDIS_HOST}:{REDIS_PORT}/2"
+# No caller ever reads a task result (.get()/AsyncResult), so storing one per
+# task only fills Redis for the default 24h. A task that does need its result
+# can opt back in with @shared_task(ignore_result=False).
+CELERY_TASK_IGNORE_RESULT = True
 
 # Use the Redis cache as the default cache
 CACHES["default"] = CACHES["redis"]
@@ -203,6 +215,9 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 LOG_PATH = decouple_config("LOGGER_DIR_PATH")
+# Level for the catch-all root logger. It used to be DEBUG, which wrote every
+# debug line from every library to root.log synchronously on the request path.
+LOG_LEVEL = decouple_config("LOG_LEVEL", default="WARNING").upper()
 
 LOGGING = {
     "version": 1,
@@ -244,14 +259,9 @@ LOGGING = {
             "level": "ERROR",
             "propagate": True,
         },
-        "django.db.backends": {
-            "handlers": ["sql_log"],
-            "level": "DEBUG",
-            "propagate": True,
-        },
         "": {
             "handlers": ["root_log"],
-            "level": "DEBUG",
+            "level": LOG_LEVEL,
             "propagate": True,
         },
     },
@@ -262,6 +272,16 @@ LOGGING = {
         },
     },
 }
+
+# Per-query SQL logging is a development aid (it is what the "verify with the
+# sql_log handler" note in CLAUDE.md refers to). Django only emits these records
+# when DEBUG is on, so the logger is only attached then.
+if DEBUG:
+    LOGGING["loggers"]["django.db.backends"] = {
+        "handlers": ["sql_log"],
+        "level": "DEBUG",
+        "propagate": False,
+    }
 
 # Internationalization
 # https://docs.djangoproject.com/en/4.1/topics/i18n/
@@ -325,6 +345,13 @@ NOTIFICATION_BROADCAST_THRESHOLD = decouple_config("NOTIFICATION_BROADCAST_THRES
 
 # TTL for the cached unread notification count (seconds).
 NOTIFICATION_UNREAD_COUNT_CACHE_TTL = decouple_config("NOTIFICATION_UNREAD_COUNT_CACHE_TTL", default=60, cast=int)
+
+# Push notifications (docs/push-notifications.md). FIREBASE_CREDENTIALS is the
+# Firebase service-account JSON (or a path to it); empty disables push without
+# breaking anything. PUSH_ENABLED is a deploy-level switch on top of the admin
+# kill switch.
+FIREBASE_CREDENTIALS = decouple_config("FIREBASE_CREDENTIALS", default="")
+PUSH_ENABLED = decouple_config("PUSH_ENABLED", default=True, cast=bool)
 
 DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
 
@@ -394,5 +421,18 @@ CELERY_BEAT_SCHEDULE = {
     'refresh-leaderboards-cron': {
         'task': 'mu_celery.leaderboard_cron.refresh_leaderboards',
         'schedule': crontab(hour='0,12', minute=0),  # 00:00 and 12:00 UTC
+    },
+    # Push notifications (docs/push-notifications.md).
+    'push-engagement-hourly': {
+        'task': 'mu_celery.push_tasks.run_engagement',
+        'schedule': crontab(minute=5),
+    },
+    'push-dispatch-due-campaigns': {
+        'task': 'mu_celery.push_tasks.dispatch_due_campaigns',
+        'schedule': crontab(minute='*'),
+    },
+    'push-purge-logs-daily': {
+        'task': 'mu_celery.push_tasks.purge_push_logs',
+        'schedule': crontab(hour=1, minute=40),
     },
 }

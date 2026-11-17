@@ -1,4 +1,4 @@
-import debug_toolbar
+from django.conf import settings
 from django.urls import path, include
 
 # app_name will help us do a reverse look-up  latter.
@@ -12,6 +12,7 @@ urlpatterns = [
     path('protected/', include('api.protected.urls')),
     path('hackathon/', include('api.hackathon.urls')),
     path('notification/', include('api.notification.urls')),
+    path('push/', include('api.push.urls')),
     path('public/', include('api.common.urls')),
     path('top100/', include('api.top100_coders.urls')),
     path('launchpad/', include('api.launchpad.urls')),
@@ -19,5 +20,9 @@ urlpatterns = [
     path('calendar/', include('api.calendar.urls')),
     path('muComics/', include('api.muComics.urls')),
     path('media/', include('api.media.urls')),
-    path("__debug__/", include(debug_toolbar.urls)),
 ]
+
+if settings.DEBUG:
+    import debug_toolbar
+
+    urlpatterns.append(path("__debug__/", include(debug_toolbar.urls)))

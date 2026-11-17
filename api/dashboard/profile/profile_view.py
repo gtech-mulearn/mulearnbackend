@@ -334,13 +334,18 @@ class UserProfileAPI(APIView):
                     queryset=UserIgLink.objects.select_related("ig"),
                 ),
             )
-            .select_related("wallet_user", "user_lvl_link_user")
+            # Everything the serializer reads through a one-to-one: level name
+            # and is_public each cost a separate query without these.
+            .select_related(
+                "wallet_user", "user_lvl_link_user__level", "user_settings_user"
+            )
             .get(muid=user_muid)
         )
 
         if muid:
-            user_settings = UserSettings.objects.filter(user_id=user).first()
-            if not user_settings.is_public:
+            # Already loaded by select_related above.
+            user_settings = getattr(user, "user_settings_user", None)
+            if not user_settings or not user_settings.is_public:
                 return CustomResponse(
                     general_message="Private Profile"
                 ).get_failure_response()
@@ -453,23 +458,17 @@ class ShareUserProfileAPI(APIView):
             user_uuid = JWTUtils.fetch_user_id(request)
             data = f"{settings.FR_DOMAIN_NAME}/profile/{user_uuid}"
 
-            qr = qrcode.QRCode(
-                version=1,
-                error_correction=qrcode.constants.ERROR_CORRECT_H,
-                box_size=10,
-                border=4,
-            )
-            qr.add_data(data)
-            qr.make(fit=True)
-
-            img = qr.make_image(fill_color="black", back_color="white")
-
+            # (A first QR image used to be rendered here and then discarded;
+            # only the logo version below is saved.)
             logo_url = (
                 f"{settings.FR_DOMAIN_NAME}/favicon.ico/"  # Replace with your logo URL
             )
-            logo_response = requests.get(logo_url)
+            try:
+                logo_response = requests.get(logo_url, timeout=(3, 10))
+            except requests.exceptions.RequestException:
+                logo_response = None
 
-            if logo_response.status_code == 200:
+            if logo_response is not None and logo_response.status_code == 200:
                 logo_image = Image.open(BytesIO(logo_response.content))
             else:
                 return CustomResponse(
@@ -551,12 +550,14 @@ class UserRankAPI(APIView):
         responses={200: profile_serializer.UserRankSerializer},
     )
     def get(self, request, muid):
-        user = User.objects.filter(muid=muid).first()
+        user = User.objects.filter(muid=muid).select_related("wallet_user").first()
 
         if user is None:
             return CustomResponse(general_message="Invalid muid").get_failure_response()
 
-        roles = [role.role.title for role in UserRoleLink.objects.filter(user=user)]
+        roles = list(
+            UserRoleLink.objects.filter(user=user).values_list("role__title", flat=True)
+        )
 
         serializer = profile_serializer.UserRankSerializer(
             user, many=False, context={"roles": roles}
@@ -610,6 +611,13 @@ class SocialsAPI(APIView):
         )
 
         if serializer.is_valid():
+            if serializer.instance is None:
+                # Accounts created outside registration have no socials row;
+                # without one, save() falls into create() with no user and
+                # fails on the NOT NULL user_id.
+                serializer.instance = Socials.objects.create(
+                    user_id=user_id, created_by_id=user_id, updated_by_id=user_id
+                )
             serializer.save()
 
             return CustomResponse(
@@ -892,23 +900,20 @@ class UserLevelFeedAPI(APIView):
                     "user_karma": 0,
                 }
             ).get_success_response()
-        user_karma = (
-            KarmaActivityLog.objects.select_related("task")
-            .filter(
-                user_id=user_id,
-                appraiser_approved=True,
-                task__level_id=user_level.get("level_id"),
-            )
-            .annotate(total_karma=Sum("karma"))
-            .values("total_karma")
-            .first()
-        )
+        # aggregate(), not annotate(): annotating each log row with Sum("karma")
+        # groups by row, so .first() returned one row's karma instead of the
+        # total earned at this level.
+        user_karma = KarmaActivityLog.objects.filter(
+            user_id=user_id,
+            appraiser_approved=True,
+            task__level_id=user_level.get("level_id"),
+        ).aggregate(total_karma=Sum("karma"))
         return CustomResponse(
             response={
                 "level_order": user_level.get("level__level_order"),
                 "level_name": user_level.get("level__name"),
                 "level_karma": user_level.get("level__karma"),
-                "user_karma": user_karma.get("total_karma", 0) if user_karma else 0,
+                "user_karma": user_karma.get("total_karma") or 0,
             }
         ).get_success_response()
 

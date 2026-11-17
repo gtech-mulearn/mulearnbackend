@@ -15,6 +15,7 @@ from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.permissions import BasePermission
 
 from mulearnbackend.settings import SECRET_KEY
+from utils.permission import _decoded_payload, _payload_cache_get, _payload_cache_set
 from utils.utils import DateTimeUtils
 
 class LaunchpadJWTPermission(BasePermission):
@@ -60,10 +61,7 @@ class LaunchpadJWTPermission(BasePermission):
 class LaunchpadJWTUtils:
     @staticmethod
     def fetch_user_type(request):
-        token = authentication.get_authorization_header(request).decode("utf-8").split()
-        payload = jwt.decode(
-            token[1], settings.SECRET_KEY, algorithms=["HS256"], verify=True
-        )
+        payload = _decoded_payload(request)
         user_type = payload.get("user_type")
         if user_type is None:
             raise Exception(
@@ -73,10 +71,7 @@ class LaunchpadJWTUtils:
 
     @staticmethod
     def fetch_user_id(request):
-        token = authentication.get_authorization_header(request).decode("utf-8").split()
-        payload = jwt.decode(
-            token[1], settings.SECRET_KEY, algorithms=["HS256"], verify=True
-        )
+        payload = _decoded_payload(request)
         user_id = payload.get("id")
         if user_id is None:
             raise Exception(
@@ -89,7 +84,8 @@ class LaunchpadJWTUtils:
         token_prefix = "Bearer"
         secret_key = SECRET_KEY
         try:
-            auth_header = get_authorization_header(request).decode("utf-8")
+            raw_header = get_authorization_header(request)
+            auth_header = raw_header.decode("utf-8")
             if not auth_header or not auth_header.startswith(token_prefix):
                 raise UnauthorizedAccessException("Invalid token header")
 
@@ -97,7 +93,12 @@ class LaunchpadJWTUtils:
             if not token:
                 raise UnauthorizedAccessException("Empty Token")
 
-            payload = jwt.decode(token, secret_key, algorithms=["HS256"], verify=True)
+            # Same signing key and algorithm as utils/permission.py, so the
+            # per-request decoded-payload cache is shared with it.
+            payload = _payload_cache_get(request, raw_header)
+            if payload is None:
+                payload = jwt.decode(token, secret_key, algorithms=["HS256"], verify=True)
+                _payload_cache_set(request, raw_header, payload)
 
             user_id = payload.get("id")
             expiry = datetime.strptime(payload.get("expiry"), "%Y-%m-%d %H:%M:%S%z")

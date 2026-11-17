@@ -624,37 +624,20 @@ class GlobalCountAPI(APIView):
         })},
     )
     def get(self, request):
-        members_count = User.objects.all().count()
-        org_type_counts = (
-            Organization.objects.filter(
-                org_type__in=[
-                    OrganizationType.COLLEGE.value,
-                    OrganizationType.COMPANY.value,
-                    OrganizationType.COMMUNITY.value,
-                ]
-            )
-            .values("org_type")
-            .annotate(org_count=Coalesce(Count("org_type"), 0))
+        # Same five counts as the landing-stats websocket, served from the same
+        # short-lived cache (see LandingStats in common_consumer.py) instead of
+        # five full-table aggregates per anonymous request.
+        from api.common.common_consumer import landing_stats
+
+        data = landing_stats.snapshot(
+            [
+                "members",
+                "org_type_counts",
+                "enablers_mentors_count",
+                "ig_count",
+                "learning_circle_count",
+            ]
         )
-
-        enablers_mentors_count = (
-            UserRoleLink.objects.filter(
-                role__title__in=[RoleType.MENTOR.value, RoleType.ENABLER.value]
-            )
-            .values("role__title")
-            .annotate(role_count=Coalesce(Count("role__title"), 0))
-        )
-
-        interest_groups_count = InterestGroup.objects.all().count()
-        learning_circles_count = LearningCircle.objects.all().count()
-
-        data = {
-            "members": members_count,
-            "org_type_counts": org_type_counts,
-            "enablers_mentors_count": enablers_mentors_count,
-            "ig_count": interest_groups_count,
-            "learning_circle_count": learning_circles_count,
-        }
         return CustomResponse(response=data).get_success_response()
 
 
@@ -671,14 +654,21 @@ class GTASANDSHOREAPI(APIView):
         })},
     )
     def get(self, request):
-        response = requests.get('https://devfolio.vez.social/rank')
-        if response.status_code == 200:
-            # Save JSON response to a local file
-            with open('response.json', 'w') as json_file:
-                json.dump(response.json(), json_file)
+        # The last good response is kept in response.json as a fallback when the
+        # ranking service is down. It used to be written and then read back on
+        # every request; now the live data is used directly and the file is
+        # only read when the service fails.
+        data = None
+        try:
+            response = requests.get('https://devfolio.vez.social/rank', timeout=(3, 10))
+            if response.status_code == 200:
+                data = response.json()
+        except (requests.exceptions.RequestException, ValueError):
+            data = None
 
-            with open('response.json', 'r') as file:
-                data = json.load(file)
+        if data is not None:
+            with open('response.json', 'w') as json_file:
+                json.dump(data, json_file)
         else:
             with open('response.json', 'r') as file:
                 data = json.load(file)
@@ -903,11 +893,29 @@ class BekenAPI(APIView):
         responses={200: UserLeaderboardSerializer},
     )
     def get(self, request):
-        user_info = User.objects.exclude(
-            user_role_link_user__role__title__in=[RoleType.ENABLER.value, RoleType.MENTOR.value]).order_by(
-            '-wallet_user__karma')[:100]
-        data = UserLeaderboardSerializer(user_info, many=True)
-        return CustomResponse(response=data.data).get_success_response()
+        # Public, no parameters: one fixed cache key, rebuilt at most every five
+        # minutes behind the leaderboard stampede guard.
+        from api.leaderboard.leaderboard_view import get_or_rebuild_leaderboard
+
+        data = get_or_rebuild_leaderboard(
+            "leaderboard:public:top100", self._build, timeout=60 * 5
+        )
+        return CustomResponse(response=data).get_success_response()
+
+    @staticmethod
+    def _build():
+        # select_related / prefetch_related cover everything the serializer
+        # reads; without them this was 3 queries per row (301 for the page).
+        user_info = (
+            User.objects.exclude(
+                user_role_link_user__role__title__in=[RoleType.ENABLER.value, RoleType.MENTOR.value])
+            .select_related("wallet_user")
+            .prefetch_related(
+                "user_organization_link_user__org", "user_ig_link_user__ig"
+            )
+            .order_by('-wallet_user__karma')[:100]
+        )
+        return json.loads(json.dumps(UserLeaderboardSerializer(user_info, many=True).data))
 
 
 class LcCollegeAPI(APIView):

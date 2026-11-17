@@ -1,6 +1,7 @@
 import uuid
 
 from decouple import config as decouple_config
+from django.core.cache import cache
 from django.db import transaction
 from django.db.models import F, Sum, Q, Case, When, Value, CharField, Exists, OuterRef
 from rest_framework import serializers
@@ -23,7 +24,6 @@ from utils.permission import JWTUtils
 from utils.types import (
     OrganizationType,
     RoleType,
-    MainRoles,
     WebHookActions,
     WebHookCategory,
     UnitType,
@@ -54,9 +54,19 @@ class UserCoverPicSerializer(serializers.ModelSerializer):
         fields = ["cover_pic"]
 
 
-def get_karma_breakdown(user_id):
-    base_qs = KarmaActivityLog.objects.filter(user_id=user_id, appraiser_approved=True)
+def _rollup(rows, fields):
+    """Sum karma over `rows` grouped by `fields`, highest karma first."""
+    totals = {}
+    for row in rows:
+        key = tuple(row[field] for field in fields)
+        totals[key] = totals.get(key, 0) + (row["karma"] or 0)
+    return [
+        dict(zip(fields, key), karma=karma)
+        for key, karma in sorted(totals.items(), key=lambda item: -item[1])
+    ]
 
+
+def get_karma_breakdown(user_id):
     is_intern_creator = Exists(
         UserRoleLink.objects.filter(
             user=OuterRef("task__created_by"),
@@ -64,7 +74,6 @@ def get_karma_breakdown(user_id):
             is_active=True,
         )
     )
-    base_qs = base_qs.annotate(is_intern_creator=is_intern_creator)
 
     # Priority order: Event > IG > Intern > General enablement (catch-all).
     # A task linked to an event is always bucketed as "event", even if the
@@ -81,49 +90,116 @@ def get_karma_breakdown(user_id):
         default=Value("general"),
         output_field=CharField(),
     )
-    base_qs = base_qs.annotate(bucket=bucket)
 
-    events = list(
-        base_qs.filter(bucket="event")
+    # One query, grouped by every dimension the five breakdowns below need, then
+    # rolled up in Python. This used to be five separate aggregate queries over
+    # the same rows; a user's approved log is small, so the grouped result is too.
+    rows = list(
+        KarmaActivityLog.objects.filter(user_id=user_id, appraiser_approved=True)
+        .annotate(is_intern_creator=is_intern_creator)
+        .annotate(bucket=bucket)
         .values(
+            "bucket",
             event_id=F("task__event_fk_id"),
             event_title=F("task__event_fk__title"),
             event_type=F("task__event_fk__event_type"),
+            ig_id=F("task__ig_id"),
+            ig_name=F("task__ig__name"),
+            ig_code=F("task__ig__code"),
+            category=F("task__type__title"),
+            level_id=F("task__level_id"),
+            level_name=F("task__level__name"),
         )
         .annotate(karma=Sum("karma"))
-        .order_by("-karma")
-    )
-    ig = list(
-        base_qs.filter(bucket="ig")
-        .values(ig_id=F("task__ig_id"), ig_name=F("task__ig__name"), ig_code=F("task__ig__code"))
-        .annotate(karma=Sum("karma"))
-        .order_by("-karma")
-    )
-    intern_karma = (
-        base_qs.filter(bucket="intern").aggregate(total=Sum("karma"))["total"] or 0
-    )
-    general = list(
-        base_qs.filter(bucket="general")
-        .values(category=F("task__type__title"))
-        .annotate(karma=Sum("karma"))
-        .order_by("-karma")
-    )
-    # Level breakdown cross-cuts all the buckets above — it sums karma by the
-    # difficulty level tagged on the task itself, independent of whether the
-    # task is an event/ig/intern/general task.
-    level = list(
-        base_qs.values(level_id=F("task__level_id"), level_name=F("task__level__name"))
-        .annotate(karma=Sum("karma"))
-        .order_by("-karma")
     )
 
+    def in_bucket(name):
+        return [row for row in rows if row["bucket"] == name]
+
     return {
-        "events": events,
-        "ig": ig,
-        "intern": {"karma": intern_karma},
-        "general": general,
-        "level": level,
+        "events": _rollup(in_bucket("event"), ("event_id", "event_title", "event_type")),
+        "ig": _rollup(in_bucket("ig"), ("ig_id", "ig_name", "ig_code")),
+        "intern": {"karma": sum(row["karma"] or 0 for row in in_bucket("intern"))},
+        "general": _rollup(in_bucket("general"), ("category",)),
+        # Level breakdown cross-cuts all the buckets above — it sums karma by the
+        # difficulty level tagged on the task itself, independent of whether the
+        # task is an event/ig/intern/general task.
+        "level": _rollup(rows, ("level_id", "level_name")),
     }
+
+
+ACTIVE_USER_COUNT_CACHE_KEY = "profile:active_user_count"
+ACTIVE_USER_COUNT_CACHE_TTL = 60 * 5
+
+
+def get_active_user_count():
+    """
+    Total number of (non-suspended) users, used as the percentile denominator.
+
+    A COUNT over the whole user table per profile view; it only moves when
+    someone registers, so one fixed cache key with a short TTL is enough and no
+    invalidation is needed (the percentile is at most a few minutes behind).
+    """
+    try:
+        count = cache.get(ACTIVE_USER_COUNT_CACHE_KEY)
+    except Exception:
+        count = None
+    if count is None:
+        count = User.objects.all().count()
+        try:
+            cache.set(ACTIVE_USER_COUNT_CACHE_KEY, count, ACTIVE_USER_COUNT_CACHE_TTL)
+        except Exception:
+            pass
+    return count
+
+
+def get_karma_rank(user, roles):
+    """
+    Rank of `user` by karma within their peer group (mentors, enablers, or
+    everyone else), or None when the user is not in that group.
+
+    Ordering is karma desc, then wallet.updated_at desc, then created_at asc.
+    This used to load the user_id of every wallet at or above the user's karma
+    into Python and call list.index(); for a low-karma user that is most of the
+    wallet table. The same position is now computed by counting the wallets
+    that sort strictly ahead.
+    """
+    wallet = user.wallet_user
+    ahead = (
+        Q(karma__gt=wallet.karma)
+        | Q(karma=wallet.karma, updated_at__gt=wallet.updated_at)
+        | Q(
+            karma=wallet.karma,
+            updated_at=wallet.updated_at,
+            created_at__lt=wallet.created_at,
+        )
+    )
+
+    for role in (RoleType.MENTOR.value, RoleType.ENABLER.value):
+        if role in roles:
+            group = Wallet.objects.filter(
+                user__user_role_link_user__verified=True,
+                user__user_role_link_user__role__title=role,
+            )
+            if not group.filter(pk=wallet.pk).exists():
+                return None
+            return group.filter(ahead).values("user_id").distinct().count() + 1
+
+    # Everyone else: all wallets except those of enablers and mentors.
+    staff_links = UserRoleLink.objects.filter(
+        role__title__in=[RoleType.ENABLER.value, RoleType.MENTOR.value]
+    )
+    if staff_links.filter(user_id=user.id).exists():
+        return None
+    # Counted as (all wallets ahead) - (staff wallets ahead) rather than with a
+    # NOT EXISTS per wallet: the first count is a plain range scan on the karma
+    # index, and the second starts from the few thousand staff role links and
+    # looks each wallet up by its unique user_id.
+    everyone_ahead = Wallet.objects.filter(ahead).count()
+    staff_ahead = Wallet.objects.filter(
+        ahead, user_id__in=staff_links.values("user_id")
+    ).count()
+    return everyone_ahead - staff_ahead + 1
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
@@ -139,6 +215,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
     lead_enabler_verified = serializers.SerializerMethodField()
     college_id = serializers.SerializerMethodField()
     college_code = serializers.SerializerMethodField()
+    company_id = serializers.SerializerMethodField()
+    company_name = serializers.SerializerMethodField()
     rank = serializers.SerializerMethodField()
     karma_distribution = serializers.SerializerMethodField()
     interest_groups = serializers.SerializerMethodField()
@@ -158,6 +236,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "lead_enabler_verified",
             "college_id",
             "college_code",
+            "company_id",
+            "company_name",
             "org_district_id",
             "karma",
             "rank",
@@ -172,25 +252,35 @@ class UserProfileSerializer(serializers.ModelSerializer):
         )
 
     def _get_user_org_link(self, obj, org_type):
-        if not getattr(self, "user_org_link", None):
-            self.user_org_link = obj.user_organization_link_user.filter(
-                org__org_type=org_type
-            ).order_by("-created_at", "-id").first()
-        return self.user_org_link
+        # Cached per user and org type: a person can hold a college and a
+        # company link at once (a Student who is also a Mentor), and one
+        # serializer instance serves every row under many=True.
+        cache = self.__dict__.setdefault("_user_org_links", {})
+        key = (id(obj), org_type)
+        if key not in cache:
+            # Filter and order the prefetched links in Python. Calling
+            # .filter().order_by() on the related manager discards the prefetch
+            # (and its select_related("org")) and runs two more queries.
+            links = [
+                link
+                for link in obj.user_organization_link_user.all()
+                if link.org.org_type == org_type
+            ]
+            links.sort(key=lambda link: (link.created_at, link.id), reverse=True)
+            cache[key] = links[0] if links else None
+        return cache[key]
 
-    def _get_org_type(self, obj):
-        roles = self.get_roles(obj)
-        return (
-            OrganizationType.COMPANY.value
-            if MainRoles.MENTOR.value in roles
-            else OrganizationType.COLLEGE.value
-        )
+    def _college_link(self, obj):
+        return self._get_user_org_link(obj, OrganizationType.COLLEGE.value)
+
+    def _company_link(self, obj):
+        return self._get_user_org_link(obj, OrganizationType.COMPANY.value)
 
     def get_percentile(self, obj):
         users_count_lt_user_karma = Wallet.objects.filter(
             karma__lt=obj.wallet_user.karma
         ).count()
-        user_count = User.objects.all().count()
+        user_count = get_active_user_count()
         return (
             0
             if user_count == 0
@@ -218,99 +308,83 @@ class UserProfileSerializer(serializers.ModelSerializer):
             for link in role_links
         ]
 
+    # college_* is always the person's college, whatever their roles. It used
+    # to switch to the company for anyone with the Mentor role, so a mentor's
+    # college_id was a company id (opening it as a campus gave "campus not
+    # found") and a Student who was also a Mentor lost their college.
     def get_college_id(self, obj):
-        org_type = self._get_org_type(obj)
-        user_org_link = self._get_user_org_link(obj, org_type)
-        return user_org_link.org.id if user_org_link else None
-
-    def get_org_district_id(self, obj):
-        org_type = self._get_org_type(obj)
-        user_org_link = self._get_user_org_link(obj, org_type)
-        return (
-            user_org_link.org.district.id
-            if user_org_link and hasattr(user_org_link.org, "district")
-            else None
-        )
+        link = self._college_link(obj)
+        return link.org.id if link else None
 
     def get_college_code(self, obj):
-        org_type = self._get_org_type(obj)
-        if org_type == OrganizationType.COLLEGE.value:
-            user_org_link = self._get_user_org_link(obj, org_type)
-            return user_org_link.org.code if user_org_link else None
-        return None
+        link = self._college_link(obj)
+        return link.org.code if link else None
+
+    def get_company_id(self, obj):
+        link = self._company_link(obj)
+        return link.org.id if link else None
+
+    def get_company_name(self, obj):
+        link = self._company_link(obj)
+        return link.org.title if link else None
+
+    def get_org_district_id(self, obj):
+        # The college's district (it seeds the college picker), else the
+        # company's. district_id is already on the org row; going through
+        # org.district loaded the District just to read its primary key.
+        link = self._college_link(obj) or self._company_link(obj)
+        return link.org.district_id if link else None
 
     def get_rank(self, obj):
-        roles = self.get_roles(obj)
-        user_karma = obj.wallet_user.karma
-        if RoleType.MENTOR.value in roles:
-            ranks = Wallet.objects.filter(
-                user__user_role_link_user__verified=True,
-                user__user_role_link_user__role__title=RoleType.MENTOR.value,
-                karma__gte=user_karma,
-            ).order_by("-karma", "-updated_at", "created_at").distinct()
-        elif RoleType.ENABLER.value in roles:
-            ranks = Wallet.objects.filter(
-                user__user_role_link_user__verified=True,
-                user__user_role_link_user__role__title=RoleType.ENABLER.value,
-                karma__gte=user_karma,
-            ).order_by("-karma", "-updated_at", "created_at").distinct()
-        else:
-            ranks = (
-                Wallet.objects.filter(karma__gte=user_karma)
-                .exclude(
-                    Q(
-                        user__user_role_link_user__role__title__in=[
-                            RoleType.ENABLER.value,
-                            RoleType.MENTOR.value,
-                        ]
-                    )
-                )
-                .order_by("-karma", "-updated_at", "created_at")
-                .distinct()
-            )
-        ranks = list(ranks.values_list("user_id", flat=True))
-        try:
-            return ranks.index(obj.id) + 1
-        except ValueError:
-            return None
+        return get_karma_rank(obj, self.get_roles(obj))
 
     def get_karma_distribution(self, obj):
         return get_karma_breakdown(obj.id)
 
     def get_interest_groups(self, obj):
-        
-        # Get user's currently selected IGs
-        selected_ig_ids = set(
-            UserIgLink.objects.filter(user=obj, is_active=True, assignment_type=UserIgLink.AssignmentType.LEARNER).values_list('ig_id', flat=True)
-        )
+        # The user's currently selected IGs, from the links the view prefetched.
+        selected_ig_ids = {
+            link.ig_id
+            for link in obj.user_ig_link_user.all()
+            if link.is_active
+            and link.assignment_type == UserIgLink.AssignmentType.LEARNER
+        }
+        if not selected_ig_ids:
+            return []
 
         # Get level entries only for IGs the user currently has selected
-        user_ig_levels = UserIgLvlLink.objects.filter(user=obj, ig_id__in=selected_ig_ids).select_related('ig', 'level')
+        user_ig_levels = list(
+            UserIgLvlLink.objects.filter(
+                user=obj, ig_id__in=selected_ig_ids
+            ).select_related('ig', 'level')
+        )
 
-        interest_groups = []
-        for ig_level_link in user_ig_levels:
-            # Calculate IG-specific karma
-            total_ig_karma = (
-                KarmaActivityLog.objects.filter(
-                    task__ig=ig_level_link.ig, user=obj, appraiser_approved=True
-                )
-                .aggregate(Sum("karma"))
-                .get("karma__sum") or 0
+        # IG-specific karma for all of those IGs in one grouped query (this was
+        # one aggregate query per interest group).
+        karma_by_ig = dict(
+            KarmaActivityLog.objects.filter(
+                user=obj,
+                appraiser_approved=True,
+                task__ig_id__in=[link.ig_id for link in user_ig_levels],
             )
-            
-            interest_groups.append({
+            .values_list("task__ig_id")
+            .annotate(total=Sum("karma"))
+        ) if user_ig_levels else {}
+
+        return [
+            {
                 "id": ig_level_link.ig.id,
                 "name": ig_level_link.ig.name,
-                "karma": total_ig_karma,
+                "karma": karma_by_ig.get(ig_level_link.ig_id) or 0,
                 "selected": ig_level_link.ig.id in selected_ig_ids,
                 "level": {
                     "count": ig_level_link.level.level_order,
                     "unit": UnitType.LEVEL.value
                 }
-            })
-        
-        return interest_groups
-    
+            }
+            for ig_level_link in user_ig_levels
+        ]
+
     def get_lead_enabler_verified(self, obj):
         role_links = getattr(obj, "prefetched_roles", obj.user_role_link_user.all())
         for link in role_links:
@@ -331,27 +405,45 @@ class UserLevelSerializer(serializers.ModelSerializer):
         model = Level
         fields = ("name", "tasks", "karma")
 
+    # With many=True DRF reuses this one serializer instance for every level, so
+    # the three lookups below are cached on it and run once per request instead
+    # of once (or twice) per level.
     def _get_completed_tasks(self, user_id):
-        if getattr(self, "completed_tasks", None):
-            return self.completed_tasks
-        self.completed_tasks = list(
-            KarmaActivityLog.objects.filter(user=user_id, appraiser_approved=True)
-            .select_related("task__id")
-            .values_list("task__id", flat=True)
-        )
+        if getattr(self, "completed_tasks", None) is None:
+            self.completed_tasks = set(
+                KarmaActivityLog.objects.filter(
+                    user=user_id, appraiser_approved=True
+                ).values_list("task_id", flat=True)
+            )
         return self.completed_tasks
+
+    def _get_user_ig_names(self, user_id):
+        if getattr(self, "user_ig_names", None) is None:
+            self.user_ig_names = set(
+                UserIgLink.objects.filter(user__id=user_id).values_list(
+                    "ig__name", flat=True
+                )
+            )
+        return self.user_ig_names
+
+    def _get_tasks_by_level(self):
+        if getattr(self, "tasks_by_level", None) is None:
+            self.tasks_by_level = {}
+            # Ordered like the old per-level query read them (through the
+            # level_id index, so by primary key within a level).
+            for task in TaskList.objects.filter(level__isnull=False).select_related(
+                "ig", "channel"
+            ).order_by("level_id", "id"):
+                self.tasks_by_level.setdefault(task.level_id, []).append(task)
+        return self.tasks_by_level
 
     def get_tasks(self, obj):
         user_id = self.context.get("user_id")
-        user_igs = (
-            UserIgLink.objects.filter(user__id=user_id)
-            .select_related("ig")
-            .values_list("ig__name", flat=True)
-        )
-        tasks = TaskList.objects.filter(level=obj).select_related("ig","channel")
+        tasks = self._get_tasks_by_level().get(obj.id, [])
 
         if obj.level_order > 4:
-            tasks = tasks.filter(ig__name__in=user_igs)
+            user_igs = self._get_user_ig_names(user_id)
+            tasks = [task for task in tasks if task.ig and task.ig.name in user_igs]
 
         completed_tasks = self._get_completed_tasks(user_id)
         return [
@@ -396,46 +488,16 @@ class UserRankSerializer(ModelSerializer):
         return ["Learner"] if len(roles) == 0 else roles
 
     def get_rank(self, obj):
-        roles = self.get_role(obj)
-        user_karma = obj.wallet_user.karma
-        if RoleType.MENTOR.value in roles:
-            ranks = Wallet.objects.filter(
-                user__user_role_link_user__verified=True,
-                user__user_role_link_user__role__title=RoleType.MENTOR.value,
-                karma__gte=user_karma,
-            ).order_by("-karma", "-updated_at", "created_at").distinct()
-        elif RoleType.ENABLER.value in roles:
-            ranks = Wallet.objects.filter(
-                user__user_role_link_user__verified=True,
-                user__user_role_link_user__role__title=RoleType.ENABLER.value,
-                karma__gte=user_karma,
-            ).order_by("-karma", "-updated_at", "created_at").distinct()
-        else:
-            ranks = (
-                Wallet.objects.filter(karma__gte=user_karma)
-                .exclude(
-                    Q(
-                        user__user_role_link_user__role__title__in=[
-                            RoleType.ENABLER.value,
-                            RoleType.MENTOR.value,
-                        ]
-                    )
-                )
-                .order_by("-karma", "-updated_at", "created_at")
-                .distinct()
-            )
-
-        ranks = list(ranks.values_list("user_id", flat=True))
-        try:
-            return ranks.index(obj.id) + 1
-        except ValueError:
-            return None
+        return get_karma_rank(obj, self.get_role(obj))
 
     def get_karma(self, obj):
         return total_karma.karma if (total_karma := obj.wallet_user) else None
 
     def get_interest_groups(self, obj):
-        return [ig_link.ig.name for ig_link in UserIgLink.objects.filter(user=obj)]
+        return [
+            ig_link.ig.name
+            for ig_link in UserIgLink.objects.filter(user=obj).select_related("ig")
+        ]
 
 
 # is public true then pass the qrcode vice versa delete the image
@@ -677,9 +739,14 @@ class LinkSocials(ModelSerializer):
                     )
 
                 else:
-                    KarmaActivityLog.objects.filter(
+                    karma_log = KarmaActivityLog.objects.filter(
                         task_id=task.id, user_id=user_id
-                    ).first().delete()
+                    ).first()
+                    if karma_log is None:
+                        # Nothing was awarded for this link, so there's
+                        # nothing to take back.
+                        return
+                    karma_log.delete()
                 Wallet.objects.filter(user_id=user_id).update(
                     karma=F("karma") + karma_value, updated_by_id=user_id
                 )

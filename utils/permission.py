@@ -7,6 +7,7 @@ from datetime import datetime
 # pyrefly: ignore [missing-import]
 import jwt
 from django.conf import settings
+from django.core.cache import cache
 from django.http import HttpRequest
 from rest_framework import authentication
 from rest_framework.authentication import get_authorization_header
@@ -136,13 +137,42 @@ def _with_renamed_role_titles(roles):
     return roles + [r for r in extra if r not in roles]
 
 
-class JWTUtils:
-    @staticmethod
-    def fetch_role(request):
-        token = authentication.get_authorization_header(request).decode("utf-8").split()
+def _payload_cache_get(request, header):
+    """
+    Return the JWT payload already decoded for this request, or None.
+
+    A view typically calls is_jwt_authenticated plus two or three fetch_*
+    helpers, each of which used to verify the same token again. The decoded
+    payload is kept on the underlying HttpRequest (the DRF Request wraps it, so
+    both see the same cache) and is keyed on the raw header, so a request whose
+    Authorization header changes is decoded afresh.
+    """
+    cached = getattr(getattr(request, "_request", request), "_jwt_payload_cache", None)
+    if cached is not None and cached[0] == header:
+        return cached[1]
+    return None
+
+
+def _payload_cache_set(request, header, payload):
+    getattr(request, "_request", request)._jwt_payload_cache = (header, payload)
+
+
+def _decoded_payload(request):
+    header = authentication.get_authorization_header(request)
+    payload = _payload_cache_get(request, header)
+    if payload is None:
+        token = header.decode("utf-8").split()
         payload = jwt.decode(
             token[1], settings.SECRET_KEY, algorithms=["HS256"], verify=True
         )
+        _payload_cache_set(request, header, payload)
+    return payload
+
+
+class JWTUtils:
+    @staticmethod
+    def fetch_role(request):
+        payload = _decoded_payload(request)
         roles = payload.get("roles")
         if roles is None:
             raise Exception(
@@ -152,10 +182,7 @@ class JWTUtils:
 
     @staticmethod
     def fetch_user_id(request):
-        token = authentication.get_authorization_header(request).decode("utf-8").split()
-        payload = jwt.decode(
-            token[1], settings.SECRET_KEY, algorithms=["HS256"], verify=True
-        )
+        payload = _decoded_payload(request)
         user_id = payload.get("id")
         if user_id is None:
             raise Exception(
@@ -165,10 +192,7 @@ class JWTUtils:
 
     @staticmethod
     def fetch_muid(request):
-        token = authentication.get_authorization_header(request).decode("utf-8").split()
-        payload = jwt.decode(
-            token[1], settings.SECRET_KEY, algorithms=["HS256"], verify=True
-        )
+        payload = _decoded_payload(request)
         muid = payload.get("muid")
         if muid is None:
             raise Exception(
@@ -181,7 +205,8 @@ class JWTUtils:
         token_prefix = "Bearer"
         secret_key = SECRET_KEY
         try:
-            auth_header = get_authorization_header(request).decode("utf-8")
+            raw_header = get_authorization_header(request)
+            auth_header = raw_header.decode("utf-8")
             if not auth_header or not auth_header.startswith(token_prefix):
                 raise UnauthorizedAccessException("Invalid token header")
 
@@ -189,7 +214,10 @@ class JWTUtils:
             if not token:
                 raise UnauthorizedAccessException("Empty Token")
 
-            payload = jwt.decode(token, secret_key, algorithms=["HS256"], verify=True)
+            payload = _payload_cache_get(request, raw_header)
+            if payload is None:
+                payload = jwt.decode(token, secret_key, algorithms=["HS256"], verify=True)
+                _payload_cache_set(request, raw_header, payload)
 
             user_id = payload.get("id")
             expiry = datetime.strptime(payload.get("expiry"), "%Y-%m-%d %H:%M:%S%z")
@@ -251,16 +279,84 @@ def role_required(roles):
     return decorator
 
 
+# Who may use a dynamic management type changes only when an admin edits it, but
+# it was read from the database (two queries) on every guarded request. The key
+# space is the set of management types passed to the decorator in code, so it is
+# small and fixed. Writes in api/dashboard/dynamic_management call
+# invalidate_dynamic_access(); the TTL only bounds staleness if one is missed.
+DYNAMIC_ACCESS_CACHE_TTL = 60 * 5
+
+
+def _dynamic_access_cache_key(type):
+    return f"dynamic_access:{type}"
+
+
+def get_dynamic_access(type):
+    key = _dynamic_access_cache_key(type)
+    try:
+        access = cache.get(key)
+    except Exception:
+        access = None
+    if access is None:
+        access = {
+            "roles": list(
+                DynamicRole.objects.filter(type=type).values_list('role__title', flat=True)
+            ),
+            "users": list(
+                DynamicUser.objects.filter(type=type).values_list('user__id', flat=True)
+            ),
+        }
+        try:
+            cache.set(key, access, DYNAMIC_ACCESS_CACHE_TTL)
+        except Exception:
+            # The cache is an optimisation; access checks must work without Redis.
+            pass
+    return access
+
+
+_ALL_DYNAMIC_ACCESS_CACHE_KEY = "dynamic_access:__all__"
+
+
+def get_all_dynamic_access():
+    """
+    {type: {"roles": [...], "users": [...]}} for every type present in
+    dynamic_role / dynamic_user. One fixed key; used where all types are needed
+    at once (the user's dynamic_type list on /dashboard/user/info/).
+    """
+    try:
+        access = cache.get(_ALL_DYNAMIC_ACCESS_CACHE_KEY)
+    except Exception:
+        access = None
+    if access is None:
+        access = {}
+        for type, title in DynamicRole.objects.values_list("type", "role__title"):
+            access.setdefault(type, {"roles": [], "users": []})["roles"].append(title)
+        for type, user_id in DynamicUser.objects.values_list("type", "user_id"):
+            access.setdefault(type, {"roles": [], "users": []})["users"].append(user_id)
+        try:
+            cache.set(_ALL_DYNAMIC_ACCESS_CACHE_KEY, access, DYNAMIC_ACCESS_CACHE_TTL)
+        except Exception:
+            pass
+    return access
+
+
+def invalidate_dynamic_access(type):
+    try:
+        cache.delete_many([_dynamic_access_cache_key(type), _ALL_DYNAMIC_ACCESS_CACHE_KEY])
+    except Exception:
+        pass
+
+
 def dynamic_role_required(type):
     def decorator(view_func):
         def wrapped_view_func(obj, request, *args, **kwargs):
-            dynamic_roles = DynamicRole.objects.filter(type=type).values_list('role__title', flat=True)
-            roles = set(dynamic_roles)
+            access = get_dynamic_access(type)
+            roles = set(access["roles"])
             for role in JWTUtils.fetch_role(request):
                 if role in roles:
                     response = view_func(obj, request, *args, **kwargs)
                     return response
-            dynamic_users = DynamicUser.objects.filter(type=type).values_list('user__id', flat=True)
+            dynamic_users = access["users"]
             user = JWTUtils.fetch_user_id(request)
             if user in dynamic_users:
                 response = view_func(obj, request, *args, **kwargs)
@@ -283,15 +379,14 @@ class RoleRequired:
     """
 
     def __init__(self, roles: list):
-        self.roles = roles
+        # If a RoleType enum is provided, use its value instead. Done once here
+        # rather than rewriting the list on every request.
+        self.roles = [
+            role.value if isinstance(role, RoleType) else role for role in roles
+        ]
 
     def __call__(self, view_func):
         def wrapped_view_func(obj, request: HttpRequest, *args, **kwargs):
-            # If a RoleType enum is provided, use its value instead
-            for index, role in enumerate(self.roles):
-                if isinstance(role, RoleType):
-                    self.roles[index] = role.value
-
             # Check if the user has one of the allowed roles
             for jwt_role in JWTUtils.fetch_role(request):
                 if jwt_role in self.roles:

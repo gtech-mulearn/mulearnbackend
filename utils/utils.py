@@ -69,6 +69,14 @@ class CommonUtils:
         if sort_fields is None:
             sort_fields = {}
 
+        if not isinstance(queryset, QuerySet):
+            # A few views build their rows in Python (or serve them from a
+            # cache) and pass a list. Search and sort are then applied in Python
+            # with the same meaning; pagination output is identical.
+            return CommonUtils._paginate_list(
+                list(queryset), request, search_fields, sort_fields, is_pagination
+            )
+
         try:
             page = int(request.query_params.get("pageIndex", 1))
         except ValueError:
@@ -154,6 +162,80 @@ class CommonUtils:
         return queryset
 
     @staticmethod
+    def _lookup(item, path):
+        """Resolve "a__b" on a dict or an object, None when any step is missing."""
+        value = item
+        for part in path.split("__"):
+            if value is None:
+                return None
+            value = value.get(part) if isinstance(value, dict) else getattr(value, part, None)
+        return value
+
+    @staticmethod
+    def _paginate_list(items, request, search_fields, sort_fields, is_pagination):
+        """List counterpart of get_paginated_queryset (same parameters and output)."""
+        try:
+            page = int(request.query_params.get("pageIndex", 1))
+        except ValueError:
+            page = 1
+        try:
+            per_page = int(request.query_params.get("perPage", 10))
+        except ValueError:
+            per_page = 10
+        per_page = max(1, min(per_page, MAX_PAGE_SIZE))
+
+        if search_query := request.query_params.get("search"):
+            needle = search_query.casefold()
+            items = [
+                item
+                for item in items
+                if any(
+                    (value := CommonUtils._lookup(item, field)) is not None
+                    and needle in str(value).casefold()
+                    for field in search_fields
+                )
+            ]
+
+        if sort_by := request.query_params.get("sortBy"):
+            descending = sort_by.startswith("-")
+            sort_mapped = sort_fields.get(sort_by[1:] if descending else sort_by)
+            if sort_mapped:
+                fields = sort_mapped if isinstance(sort_mapped, (list, tuple)) else [sort_mapped]
+                # Stable sorts applied last-field-first give a multi-key order;
+                # None sorts first ascending, like MySQL.
+                for field in reversed(fields):
+                    field_desc = descending != field.startswith("-")
+                    name = field.lstrip("-")
+                    items.sort(
+                        key=lambda item: (
+                            (value := CommonUtils._lookup(item, name)) is not None,
+                            value if value is not None else 0,
+                        ),
+                        reverse=field_desc,
+                    )
+
+        if not is_pagination:
+            return items
+
+        paginator = Paginator(items, per_page)
+        try:
+            page_obj = paginator.page(page)
+        except PageNotAnInteger:
+            page_obj = paginator.page(1)
+        except EmptyPage:
+            page_obj = paginator.page(paginator.num_pages)
+        return {
+            "queryset": page_obj,
+            "pagination": {
+                "count": paginator.count,
+                "totalPages": paginator.num_pages,
+                "isNext": page_obj.has_next(),
+                "isPrev": page_obj.has_previous(),
+                "nextPage": page_obj.next_page_number() if page_obj.has_next() else None,
+            },
+        }
+
+    @staticmethod
     def generate_csv(queryset: QuerySet, csv_name: str) -> HttpResponse:
         response = HttpResponse(content_type="text/csv")
         response["Content-Disposition"] = f'attachment; filename="{csv_name}.csv"'
@@ -183,6 +265,45 @@ class CommonUtils:
         compressed_response["Content-Encoding"] = "gzip"
 
         return compressed_response
+
+
+def cache_view_response(key: str, timeout: int):
+    """
+    Cache a parameterless GET view's success envelope under one fixed key.
+
+    Replacement for cache_page on endpoints whose response does not depend on
+    the request. cache_page keys on the full URL including the query string,
+    so every ?x=<random> stored another full copy (an unbounded key space in
+    Redis). Only 200 responses are cached; the cached value is the rendered
+    JSON, so the response bytes are identical to an uncached call. A cache
+    outage falls back to running the view.
+    """
+    from functools import wraps
+    from rest_framework.renderers import JSONRenderer
+    from rest_framework.response import Response
+    import json as _json
+    from django.core.cache import cache as _cache
+
+    def decorator(view_method):
+        @wraps(view_method)
+        def wrapper(view, request, *args, **kwargs):
+            try:
+                cached = _cache.get(key)
+            except Exception:
+                cached = None
+            if cached is not None:
+                return Response(data=cached, status=200)
+            response = view_method(view, request, *args, **kwargs)
+            if getattr(response, "status_code", None) == 200 and hasattr(response, "data"):
+                try:
+                    _cache.set(key, _json.loads(JSONRenderer().render(response.data)), timeout)
+                except Exception:
+                    pass
+            return response
+
+        return wrapper
+
+    return decorator
 
 
 class ImageUploadUtils:
@@ -428,6 +549,50 @@ class _CustomHTTPHandler:
         )
 
 
+# (connect, read) seconds for outbound calls to partner APIs made on the request
+# path. Without a timeout a slow partner holds the worker thread (and any open
+# DB transaction) indefinitely.
+EXTERNAL_REQUEST_TIMEOUT = (5, 30)
+
+
+class _ExternalResponse:
+    """A requests.Response whose JSON body has been parsed once, up front."""
+
+    def __init__(self, response, payload):
+        self._response = response
+        self._payload = payload
+        self.status_code = response.status_code
+        self.content = response.content
+
+    def json(self):
+        return self._payload
+
+
+def external_json_request(method, url, service_name, **kwargs):
+    """
+    requests.<method>(url, ...) with a timeout and error handling.
+
+    Returns (response, None) on success, where response.json() returns the
+    already-parsed body, or (None, failure CustomResponse) when the service
+    cannot be reached, times out, or does not return JSON.
+    """
+    from utils.response import CustomResponse
+
+    kwargs.setdefault("timeout", EXTERNAL_REQUEST_TIMEOUT)
+    try:
+        response = requests.request(method, url, **kwargs)
+        payload = response.json()
+    except requests.exceptions.Timeout:
+        return None, CustomResponse(
+            general_message=f"{service_name} did not respond in time. Please try again."
+        ).get_failure_response()
+    except (requests.exceptions.RequestException, ValueError):
+        return None, CustomResponse(
+            general_message=f"Could not get a valid response from {service_name}."
+        ).get_failure_response()
+    return _ExternalResponse(response, payload), None
+
+
 class DiscordWebhooks:
     @staticmethod
     def general_updates(category, action, *values) -> str:
@@ -445,7 +610,9 @@ class DiscordWebhooks:
         if url:
             data = {"content": content}
             try:
-                requests.post(url, json=data, timeout=30)
+                # (connect, read). This runs on the request thread, so a slow
+                # Discord must not hold a worker for the old 30 seconds.
+                requests.post(url, json=data, timeout=(3, 5))
             except requests.exceptions.RequestException:
                 pass
 

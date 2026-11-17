@@ -246,14 +246,81 @@ class NotificationService:
         # New unread rows landed — the cached unread_count for every
         # recipient is now stale. Bounded to this batch's recipient list,
         # same size class as the bulk_create itself.
-        from api.notification.notifications_utils import invalidate_unread_count
-        for uid in recipient_ids:
-            invalidate_unread_count(uid)
+        from api.notification.notifications_utils import invalidate_unread_counts
+        invalidate_unread_counts(recipient_ids)
 
         logger.info(
             "_write_notifications: type=%s attempted=%d",
             notif_type, len(rows)
         )
+
+        cls._enqueue_push(
+            notif_type    = notif_type,
+            category      = category,
+            recipient_ids = recipient_ids,
+            rendered      = rendered,
+            context       = context,
+            entity_type   = entity_type,
+            entity_id     = entity_id,
+            dedupe_key    = dedupe_key,
+            redirect_url  = redirect_url,
+        )
+
+    @classmethod
+    def _enqueue_push(
+        cls,
+        notif_type:    str,
+        category:      str,
+        recipient_ids: list,
+        rendered:      dict,
+        context:       dict,
+        entity_type:   Optional[str],
+        entity_id:     Optional[str],
+        dedupe_key:    Optional[str],
+        redirect_url:  Optional[str],
+    ) -> None:
+        """
+        Also send this notification as a mobile push, when its type allows PUSH
+        (TypeMeta.eligible) and push is on for it (api.push.config). Queued to
+        Celery: never sends inside the request, and never lets a push problem
+        affect the in-app notification that was just written.
+
+        The payload carries the same fields the app's notification feed uses
+        (type, entity_type, entity_id, redirect_url), so tapping the push opens
+        the same screen as tapping the notification.
+
+        Broadcast-path notifications (very large audiences) are not pushed from
+        here; admins reach large audiences with push campaigns instead.
+        """
+        try:
+            from api.push.config import get_config, push_allowed_for_type
+            from api.push.fcm import is_configured
+
+            if not is_configured():
+                return
+            meta = TYPE_META.get(notif_type)
+            if not meta or not push_allowed_for_type(get_config(), notif_type, meta.eligible):
+                return
+            text = render_template(notif_type, "PUSH", context) or rendered
+            from mu_celery.push_tasks import send_activity_push
+
+            send_activity_push.delay(
+                notif_type,
+                category,
+                [str(uid) for uid in recipient_ids],
+                text["title"],
+                text["body"],
+                None,
+                dedupe_key or f"{notif_type}:{uuid.uuid4()}",
+                {
+                    "type": notif_type,
+                    "entity_type": entity_type or "",
+                    "entity_id": entity_id or "",
+                    "redirect_url": redirect_url or "",
+                },
+            )
+        except Exception:
+            logger.exception("_enqueue_push: failed for type=%s", notif_type)
 
     @classmethod
     def _write_broadcast(

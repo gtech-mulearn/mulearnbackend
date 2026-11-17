@@ -15,7 +15,6 @@ from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType, WebHookActions, WebHookCategory
 from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks, send_template_mail
 from . import dash_user_serializer
-from django.core.cache import cache
 from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
 from rest_framework import serializers as s
 
@@ -32,7 +31,6 @@ class UserInfoAPI(APIView):
     )
     def get(self, request):
         user_muid = JWTUtils.fetch_muid(request)
-        user_id = JWTUtils.fetch_user_id(request)
         user = (
             User.objects.prefetch_related(
                 "user_domains", "user_endgoals", "user_role_link_user__role"
@@ -40,18 +38,10 @@ class UserInfoAPI(APIView):
             .filter(muid=user_muid)
             .first()
         )
-        if user is not None:
-            cache.set(f"db_user_{user_id}", user, timeout=60)
         if user is None:
             return CustomResponse(
                 general_message="No user data available"
             ).get_failure_response()
-
-        try:
-            cache.set(f"db_user_{user_muid}", user, timeout=60)
-        except Exception:
-            # Cache is an optimization; user info should still return when Redis is unavailable.
-            pass
 
         response = dash_user_serializer.UserSerializer(user, many=False).data
 
@@ -117,9 +107,6 @@ class UserGetPatchDeleteAPI(APIView):
         )
         if serializer.is_valid():
             serializer.save()
-            cache.delete(f"db_user_{user_id}")
-
-            cache.delete(f"db_user_{user.muid}")
 
             DiscordWebhooks.general_updates(
                 WebHookCategory.USER.value, WebHookActions.UPDATE.value, user_id
@@ -592,12 +579,6 @@ class UserAddOrgAPI(APIView):
                 return CustomResponse(
                     general_message="organisation linked successfully"
                 ).get_success_response()
-
-            try:
-                cache.delete(f"db_user_{user_id}")
-                cache.delete(f"db_user_{user.muid}")
-            except Exception:
-                pass
 
             return CustomResponse(
                 general_message="organisation linked successfully",
