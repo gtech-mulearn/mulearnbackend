@@ -346,6 +346,13 @@ NOTIFICATION_BROADCAST_THRESHOLD = decouple_config("NOTIFICATION_BROADCAST_THRES
 # TTL for the cached unread notification count (seconds).
 NOTIFICATION_UNREAD_COUNT_CACHE_TTL = decouple_config("NOTIFICATION_UNREAD_COUNT_CACHE_TTL", default=60, cast=int)
 
+# Push notifications (docs/push-notifications.md). FIREBASE_CREDENTIALS is the
+# Firebase service-account JSON (or a path to it); empty disables push without
+# breaking anything. PUSH_ENABLED is a deploy-level switch on top of the admin
+# kill switch.
+FIREBASE_CREDENTIALS = decouple_config("FIREBASE_CREDENTIALS", default="")
+PUSH_ENABLED = decouple_config("PUSH_ENABLED", default=True, cast=bool)
+
 DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
 
 import socket
@@ -405,5 +412,18 @@ CELERY_BEAT_SCHEDULE = {
     'refresh-leaderboards-cron': {
         'task': 'mu_celery.leaderboard_cron.refresh_leaderboards',
         'schedule': crontab(hour='0,12', minute=0),  # 00:00 and 12:00 UTC
+    },
+    # Push notifications (docs/push-notifications.md).
+    'push-engagement-hourly': {
+        'task': 'mu_celery.push_tasks.run_engagement',
+        'schedule': crontab(minute=5),
+    },
+    'push-dispatch-due-campaigns': {
+        'task': 'mu_celery.push_tasks.dispatch_due_campaigns',
+        'schedule': crontab(minute='*'),
+    },
+    'push-purge-logs-daily': {
+        'task': 'mu_celery.push_tasks.purge_push_logs',
+        'schedule': crontab(hour=1, minute=40),
     },
 }
