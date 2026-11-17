@@ -1,5 +1,7 @@
 import csv
 import datetime
+import logging
+import time
 import re
 import gzip
 import io
@@ -593,11 +595,35 @@ def external_json_request(method, url, service_name, **kwargs):
     return _ExternalResponse(response, payload), None
 
 
+logger = logging.getLogger(__name__)
+
+# The bot reads one Discord message per sync, and a message holds 2,000 characters. 40 user ids
+# (36 characters each, plus commas) keep a bulk-role message near 1,500, with room for the title.
+BULK_ROLE_CHUNK = 40
+WEBHOOK_ATTEMPTS = 3
+WEBHOOK_MAX_WAIT = 5.0  # seconds; this runs on the request thread
+
+
+def _retry_after(response) -> float:
+    try:
+        return float(response.json().get("retry_after", 1.0))
+    except (ValueError, AttributeError, TypeError):
+        try:
+            return float(response.headers.get("Retry-After", 1.0))
+        except (TypeError, ValueError):
+            return 1.0
+
+
 class DiscordWebhooks:
     @staticmethod
-    def general_updates(category, action, *values) -> str:
+    def general_updates(category, action, *values) -> bool:
         """
-        Modify channels and category in Discord
+        Send a sync message to the Discord bot's webhook channel. Returns True if Discord took it.
+
+        A rejected or failed post is logged as an error. It used to be dropped silently: the
+        status was never checked, so a message Discord refused (over 2,000 characters, or rate
+        limited) never reached the bot while the dashboard reported success. A 429 is
+        retried after the wait Discord asks for, bounded, because this runs on the request thread.
                 Args:
         category(str): Category of webhook
         action(str): action of webhook
@@ -607,15 +633,44 @@ class DiscordWebhooks:
         for value in values:
             content = f"{content}<|=|>{value}"
         url = config("DISCORD_WEBHOOK_LINK", default="")
-        if url:
-            data = {"content": content}
+        if not url:
+            return False
+        for attempt in range(1, WEBHOOK_ATTEMPTS + 1):
             try:
                 # (connect, read). This runs on the request thread, so a slow
                 # Discord must not hold a worker for the old 30 seconds.
-                requests.post(url, json=data, timeout=(3, 5))
+                response = requests.post(url, json={"content": content}, timeout=(3, 5))
             except requests.exceptions.RequestException:
-                pass
+                logger.exception("Discord sync %s %s failed to send", category, action)
+                return False
+            if 200 <= response.status_code < 300:
+                return True
+            if response.status_code == 429 and attempt < WEBHOOK_ATTEMPTS:
+                time.sleep(min(_retry_after(response), WEBHOOK_MAX_WAIT))
+                continue
+            logger.error("Discord sync %s %s rejected: HTTP %s %s", category, action,
+                         response.status_code, response.text[:200])
+            return False
+        return False
 
+    @staticmethod
+    def bulk_role_updates(action, role_title, user_ids) -> bool:
+        """
+        `bulk-role` sync for any number of users, sent as messages of at most BULK_ROLE_CHUNK ids.
+
+        All ids used to go into one message; past about 53 users it exceeded Discord's
+        2,000-character limit, so bulk assigns and removals never reached Discord.
+        Returns True if every chunk was accepted. A durable queue should replace this later.
+        """
+        from utils.types import WebHookCategory  # utils.types imports nothing from this module
+
+        ids = [str(user_id) for user_id in user_ids if user_id]
+        accepted = True
+        for start in range(0, len(ids), BULK_ROLE_CHUNK):
+            chunk = ",".join(ids[start:start + BULK_ROLE_CHUNK])
+            accepted = DiscordWebhooks.general_updates(
+                WebHookCategory.BULK_ROLE.value, action, role_title, chunk) and accepted
+        return accepted
 
 class ImportCSV:
     def read_excel_file(self, file_obj):

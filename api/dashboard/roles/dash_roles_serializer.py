@@ -5,7 +5,7 @@ from rest_framework import serializers
 from db.user import Role, User, UserRoleLink, UserMentor, MentorApplication
 from utils.permission import JWTUtils
 from utils.utils import DateTimeUtils, DiscordWebhooks
-from utils.types import WebHookActions, WebHookCategory, RoleType, InternGuild
+from utils.types import WebHookActions, RoleType, InternGuild
 from django.db.models import Q
 from django.db import transaction
 from db.user import MentorApplication
@@ -54,13 +54,13 @@ class RoleAssignmentSerializer(serializers.Serializer):
         ]
         # Evaluated before the insert on purpose: `users` excludes anyone who
         # already holds the role, so it would be empty once the links exist.
-        user_ids = ",".join(list(users.values_list("id", flat=True)))
+        user_ids = list(users.values_list("id", flat=True))
         with transaction.atomic():
             UserRoleLink.objects.bulk_create(user_roles_to_create)
         # Outbound HTTP stays outside the transaction so a slow Discord cannot
-        # hold the row locks and the DB connection open.
-        DiscordWebhooks.general_updates(
-            WebHookCategory.BULK_ROLE.value,
+        # hold the row locks and the DB connection open. Chunked: one message
+        # for every user exceeded Discord's limit past ~53 users.
+        DiscordWebhooks.bulk_role_updates(
             WebHookActions.UPDATE.value,
             validated_data["role"].title,
             user_ids,
