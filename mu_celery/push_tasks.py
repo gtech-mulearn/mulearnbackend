@@ -9,10 +9,12 @@ Load rules:
   returns retry_after; the task re-queues the same chunk with that countdown.
 """
 import logging
+import random
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone as dt_timezone
 
 from celery import shared_task
+from django.db import transaction
 from django.db.models import F
 
 from api.push import audience as push_audience
@@ -35,18 +37,19 @@ def _chunk_size():
 # ── Activity (an in-app notification that also goes out as push) ────────────
 
 @shared_task(ignore_result=True)
-def send_activity_push(notif_type, category, user_ids, title, body, route, dedupe_key, data=None):
+def send_activity_push(notif_type, category, user_ids, title, body, route, dedupe_key, data=None, variant=None):
     size = _chunk_size()
     for i in range(0, len(user_ids), size):
         chunk = user_ids[i:i + size]
         result = sender.deliver(
             chunk, "activity", notif_type,
-            sender.Message(title=title, body=body, route=route, data=data or {}),
+            sender.Message(title=title, body=body, route=route, data=data or {}, variant=variant),
             dedupe_key, category=category, defer_in_quiet_hours=True,
         )
         if result.retry_after:
             send_activity_push.apply_async(
                 (notif_type, category, chunk, title, body, route, dedupe_key, data),
+                kwargs={"variant": variant},
                 countdown=result.retry_after,
             )
             continue
@@ -56,7 +59,8 @@ def send_activity_push(notif_type, category, user_ids, title, body, route, dedup
             by_eta[eta.replace(minute=0, second=0, microsecond=0)].append(uid)
         for eta, uids in by_eta.items():
             send_activity_push.apply_async(
-                (notif_type, category, uids, title, body, route, dedupe_key, data), eta=eta,
+                (notif_type, category, uids, title, body, route, dedupe_key, data),
+                kwargs={"variant": variant}, eta=eta,
             )
 
 
@@ -96,6 +100,11 @@ def engagement_chunk(user_ids, now_iso):
     chosen = engine.select(candidates, history, config, now)
     if not chosen:
         return
+    engine.apply_variants(
+        chosen, config,
+        engine.recent_variant_keys(list(chosen), now, engine.ROTATION_LOOKBACK_DAYS),
+        random.Random(),
+    )
     result = sender.deliver(
         list(chosen), "engagement", "ENGAGEMENT",
         per_user=lambda uid: (chosen[uid].message, chosen[uid].dedupe_key),
@@ -126,7 +135,10 @@ def start_campaign(campaign_id):
         id=campaign_id, status__in=["draft", "scheduled"]
     ).update(status="sending", updated_at=_now())
     if claimed:
-        send_campaign_chunk.delay(campaign_id, None)
+        # Queue only once `sending` is committed: a worker that ran earlier
+        # would see draft/scheduled and exit, leaving the campaign stuck.
+        # Under autocommit this runs immediately.
+        transaction.on_commit(lambda: send_campaign_chunk.delay(campaign_id, None))
     return bool(claimed)
 
 

@@ -6,19 +6,22 @@ run (hourly, mu_celery.push_tasks.run_engagement):
      queueing one chunk task each, staggered.
   2. Per chunk (engagement_chunk): each rule runs ONE set-based query for the
      whole chunk and returns candidates; select() keeps each user's single
-     best candidate; sender.deliver() applies preferences, quiet hours, caps
-     and sends.
+     best candidate; apply_variants() picks each one's copy version (rotated
+     so nobody gets the same line twice in a row); sender.deliver() applies
+     preferences, quiet hours, caps and sends.
 
 Load spreading: non-urgent rules only consider users whose stable nudge hour
 (policy.nudge_hour) equals their local hour now, so each run touches about
 1/10 of learners. Urgent rules (a meeting or event about to start) consider
 everyone in the chunk but only match the few with something imminent.
 """
+import random
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Optional
 
+from api.push import config as push_config
 from api.push import policy
 from api.push.sender import Message
 
@@ -29,6 +32,13 @@ ROUTES = {
     "COMEBACK": "/tasks",
 }
 
+# How far back rotation looks for the versions a person already got. Longer
+# than the fatigue lookback on purpose: a weekly meeting nudge needs about a
+# month to cycle through its versions, and the day-30 comeback push comes 16
+# to 27 days after the earlier tiers of the same absence. Delivery log rows
+# are kept 90 days, so the history is there.
+ROTATION_LOOKBACK_DAYS = 35
+
 
 @dataclass
 class Candidate:
@@ -37,6 +47,8 @@ class Candidate:
     urgent: bool
     message: Message
     dedupe_key: str
+    # Placeholder values for this person (config.RULE_PLACEHOLDERS[rule]).
+    values: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -62,10 +74,65 @@ def unopened_streak(opened_flags: list) -> int:
 
 
 def _fmt(template: str, **values) -> str:
+    """Fill placeholders; a template that can't be filled is sent as written."""
     try:
         return template.format(**values)
-    except (KeyError, IndexError, ValueError):
+    except (KeyError, IndexError, ValueError, AttributeError, TypeError):
         return template
+
+
+# ── Copy versions ────────────────────────────────────────────────────────────
+
+def pick_variant(variants: list, recent: list, rng: random.Random) -> dict:
+    """A random version the person hasn't had in their last len-1 nudges of
+    this rule (recent: keys, newest first), so they see every version before
+    any repeats."""
+    if len(variants) == 1:
+        return variants[0]
+    blocked = set(recent[:max(1, len(variants) - 1)])
+    return rng.choice([v for v in variants if v.get("key") not in blocked] or variants)
+
+
+def render_variant(rule: str, variant: dict, values: dict) -> tuple:
+    """(title, body) filled with values. COMEBACK has a second body for when
+    there are no new tasks. Never raises: an unfillable field is sent raw."""
+    body = variant.get("body") or ""
+    if rule == "COMEBACK" and not values.get("count"):
+        body = variant.get("body_no_tasks") or body
+    return _fmt(variant.get("title") or "", **values), _fmt(body, **values)
+
+
+def recent_variant_keys(user_ids: list, now: datetime, lookback_days: int) -> dict:
+    """{(user_id, rule): [version key, ...newest first]} from sent nudges, in
+    one query."""
+    from db.push import PushDeliveryLog
+
+    if not user_ids:
+        return {}
+    out = defaultdict(list)
+    for uid, variant in PushDeliveryLog.objects.filter(
+        user_id__in=user_ids, source="engagement", status="sent", variant__isnull=False,
+        created_at__gte=now - timedelta(days=lookback_days),
+    ).order_by("user_id", "-created_at").values_list("user_id", "variant"):
+        parts = variant.split(":", 1)
+        if len(parts) == 2 and all(parts):
+            out[(uid, parts[0])].append(parts[1])
+    return dict(out)
+
+
+def apply_variants(chosen: dict, config: dict, recent: dict, rng: random.Random) -> None:
+    """Give each chosen candidate a rotated copy version, in place."""
+    for uid, c in chosen.items():
+        variants = push_config.rule_variants(c.rule, config["rules"][c.rule])
+        v = pick_variant(variants, recent.get((uid, c.rule), []), rng)
+        c.message.title, c.message.body = render_variant(c.rule, v, c.values)
+        c.message.variant = f"{c.rule}:{v.get('key')}"
+
+
+def _first_message(rule: str, cfg: dict, values: dict, route: str) -> Message:
+    """The default version's text; apply_variants replaces it for the send."""
+    title, body = render_variant(rule, push_config.rule_variants(rule, cfg)[0], values)
+    return Message(title=title, body=body, route=route)
 
 
 # ── Pure selection ───────────────────────────────────────────────────────────
@@ -138,12 +205,10 @@ def _meeting_soon(user_ids, now, cfg, tz_of):
     ).values_list("user_id", "circle_id"):
         m = meetings[circle_id]
         local = m.meet_time.astimezone(policy.zone(tz_of.get(uid)))
-        msg = Message(
-            title=_fmt(cfg["title"], circle=m.circle_id.title),
-            body=_fmt(cfg["body"], meeting=m.title, time=_clock(local)),
-            route=ROUTES["MEETING_SOON"].format(id=m.id),
-        )
-        out[uid].append(Candidate("MEETING_SOON", int(cfg["weight"]), True, msg, f"MEETING_SOON:{m.id}"))
+        values = {"circle": m.circle_id.title, "meeting": m.title, "time": _clock(local)}
+        msg = _first_message("MEETING_SOON", cfg, values, ROUTES["MEETING_SOON"].format(id=m.id))
+        out[uid].append(Candidate("MEETING_SOON", int(cfg["weight"]), True, msg, f"MEETING_SOON:{m.id}",
+                                  values=values))
     return out
 
 
@@ -158,13 +223,10 @@ def _event_soon(user_ids, now, cfg, tz_of):
     for uid, event_id, title, starts in rows:
         local = starts.astimezone(policy.zone(tz_of.get(uid)))
         day = "today" if local.date() == now.astimezone(local.tzinfo).date() else "tomorrow"
-        when = f"{day} at {_clock(local)}"
-        msg = Message(
-            title=_fmt(cfg["title"], event=title),
-            body=_fmt(cfg["body"], when=when),
-            route=ROUTES["EVENT_SOON"].format(id=event_id),
-        )
-        out[uid].append(Candidate("EVENT_SOON", int(cfg["weight"]), True, msg, f"EVENT_SOON:{event_id}"))
+        values = {"event": title, "when": f"{day} at {_clock(local)}"}
+        msg = _first_message("EVENT_SOON", cfg, values, ROUTES["EVENT_SOON"].format(id=event_id))
+        out[uid].append(Candidate("EVENT_SOON", int(cfg["weight"]), True, msg, f"EVENT_SOON:{event_id}",
+                                  values=values))
     return out
 
 
@@ -191,11 +253,10 @@ def _streak_rescue(user_ids, now, cfg, tz_of):
             continue
         n = streak_days(days[uid], today)
         if n >= int(cfg["min_streak_days"]):
-            msg = Message(
-                title=_fmt(cfg["title"], days=n), body=cfg["body"], route=ROUTES["STREAK_RESCUE"]
-            )
+            values = {"days": n, "days_plus_one": n + 1}
+            msg = _first_message("STREAK_RESCUE", cfg, values, ROUTES["STREAK_RESCUE"])
             out[uid].append(Candidate("STREAK_RESCUE", int(cfg["weight"]), False, msg,
-                                      f"STREAK_RESCUE:{today.isoformat()}"))
+                                      f"STREAK_RESCUE:{today.isoformat()}", values=values))
     return out
 
 
@@ -227,10 +288,10 @@ def _comeback(user_ids, now, cfg, tz_of, last_seen):
     out = defaultdict(list)
     for uid, (tier, seen) in away.items():
         count = sum(1 for ig in igs[uid] for c in new_tasks.get(ig, []) if c > seen)
-        body = _fmt(cfg["body_with_tasks"], count=count) if count else cfg["body_default"]
-        msg = Message(title=cfg["title"], body=body, route=ROUTES["COMEBACK"])
+        values = {"count": count, "days": int((now - seen).total_seconds() // 86400)}
+        msg = _first_message("COMEBACK", cfg, values, ROUTES["COMEBACK"])
         out[uid].append(Candidate("COMEBACK", int(cfg["weight"]), False, msg,
-                                  f"COMEBACK:{tier}:{seen:%Y%m%d}"))
+                                  f"COMEBACK:{tier}:{seen:%Y%m%d}", values=values))
     return out
 
 

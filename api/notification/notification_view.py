@@ -9,15 +9,15 @@ from rest_framework import status
 
 from db.notification import Notification, BroadcastNotification, BroadcastNotificationRead
 from db.events import EventConnection, EventInterest
-from utils.permission import CustomizePermission, JWTUtils, role_required
+from utils.permission import CustomizePermission, JWTUtils, verified_role_required
 from utils.response import CustomResponse
-from utils.types import RoleType
+from utils.types import TEAM_ROLES
 from utils.utils import DateTimeUtils
 from .audience import Audience
 from .notifications_utils import get_unread_count, invalidate_unread_count
 from .service import NotificationService
 from .types import NotificationType
-from . import serializers
+from . import audit, serializers
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers as s
 
@@ -642,47 +642,91 @@ def get_merged_feed_queryset(
 class BroadcastNotificationDeleteAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @extend_schema(tags=['Notification'], description="Delete a broadcast notification. Admin only.")
-    @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Notification'], description="Delete a broadcast notification. Verified team (Admins, Fellows, Associates).")
+    @verified_role_required(list(TEAM_ROLES))
     def delete(self, request, broadcast_id):
         try:
             broadcast = BroadcastNotification.objects.get(id=broadcast_id)
         except BroadcastNotification.DoesNotExist:
             return CustomResponse(general_message='Broadcast notification not found').get_failure_response()
-        broadcast.delete()
+        actor_id = JWTUtils.fetch_user_id(request)
+        old = audit.snapshot_broadcast(broadcast)
+        label = serializers.BroadcastNotificationAdminSerializer(broadcast).data['target_details']['name']
+        with transaction.atomic():
+            broadcast.delete()
+            audit.record(
+                audit.AuditSpec(
+                    action='NOTIF_BROADCAST_DELETE', actor_id=actor_id,
+                    old_data=old, audience_label=label, title=old['title'],
+                ),
+                entity_name='broadcast_notification', entity_id=old['id'],
+            )
         return CustomResponse(general_message='Broadcast notification deleted successfully').get_success_response()
 
 
 class BroadcastNotificationDeleteAllAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @extend_schema(tags=['Notification'], description="Delete all broadcast notifications. Admin only.")
-    @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Notification'], description="Delete all broadcast notifications. Verified team (Admins, Fellows, Associates).")
+    @verified_role_required(list(TEAM_ROLES))
     def delete(self, request):
         broadcasts = BroadcastNotification.objects.all()
         if not broadcasts.exists():
             return CustomResponse(general_message='No broadcast notifications to delete').get_failure_response()
-        count = broadcasts.count()
-        broadcasts.delete()
+        actor_id = JWTUtils.fetch_user_id(request)
+        items = [
+            {'id': str(b.id), 'title': b.title, 'target_type': b.target_type}
+            for b in broadcasts.order_by('-created_at')[:audit.DELETE_ALL_ITEM_CAP]
+        ]
+        with transaction.atomic():
+            count = broadcasts.count()
+            broadcasts.delete()
+            audit.record(
+                audit.AuditSpec(
+                    action='NOTIF_BROADCAST_DEL_ALL', actor_id=actor_id,
+                    old_data={
+                        'count': count, 'items': items,
+                        'truncated': count > audit.DELETE_ALL_ITEM_CAP,
+                    },
+                ),
+                entity_name='broadcast_notification', entity_id='all',
+            )
         return CustomResponse(general_message=f'All {count} broadcast notification(s) deleted successfully').get_success_response()
 
 
 class BroadcastNotificationListAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @extend_schema(tags=['Notification'], description="Admin only. List all broadcast notifications.")
-    @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Notification'], description="Verified team (Admins, Fellows, Associates). List all broadcast notifications.")
+    @verified_role_required(list(TEAM_ROLES))
     def get(self, request):
-        broadcasts = BroadcastNotification.objects.select_related('created_by').all()
-        data = serializers.BroadcastNotificationAdminSerializer(broadcasts, many=True).data
-        return CustomResponse(response=data).get_success_response()
+        # '-id' breaks created_at ties, so offset pages never skip or repeat a row.
+        broadcasts = BroadcastNotification.objects.select_related('created_by').order_by('-created_at', '-id')
+        params = request.query_params
+        if 'page' not in params and 'page_size' not in params:
+            data = serializers.BroadcastNotificationAdminSerializer(broadcasts, many=True).data
+            return CustomResponse(response=data).get_success_response()
+
+        try:
+            page      = max(1, int(params.get('page', 1)))
+            page_size = min(100, max(1, int(params.get('page_size', 20))))
+        except ValueError:
+            page, page_size = 1, 20
+        offset = (page - 1) * page_size
+        rows = broadcasts[offset: offset + page_size]
+        return CustomResponse(response={
+            'count':     broadcasts.count(),
+            'page':      page,
+            'page_size': page_size,
+            'results':   serializers.BroadcastNotificationAdminSerializer(rows, many=True).data,
+        }).get_success_response()
 
 
 class BroadcastNotificationCreateAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @extend_schema(tags=['Notification'], description="Admin only. Create a new global broadcast announcement.")
-    @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Notification'], description="Verified team (Admins, Fellows, Associates). Create a new global broadcast announcement.")
+    @verified_role_required(list(TEAM_ROLES))
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         write_serializer = serializers.BroadcastNotificationWriteSerializer(data=request.data)
@@ -696,16 +740,26 @@ class BroadcastNotificationCreateAPI(APIView):
         if not creator:
             return CustomResponse(general_message='User not found').get_failure_response()
 
-        broadcast = BroadcastNotification.objects.create(
-            title=write_serializer.validated_data['title'],
-            description=write_serializer.validated_data['description'],
-            url=write_serializer.validated_data.get('url'),
-            target_type='global',
-            target_id=None,
-            created_by=creator,
-            created_at=DateTimeUtils.get_current_utc_time(),
-            expires_at=write_serializer.validated_data['expires_at'],
-        )
+        with transaction.atomic():
+            broadcast = BroadcastNotification.objects.create(
+                title=write_serializer.validated_data['title'],
+                description=write_serializer.validated_data['description'],
+                url=write_serializer.validated_data.get('url'),
+                target_type='global',
+                target_id=None,
+                created_by=creator,
+                created_at=DateTimeUtils.get_current_utc_time(),
+                expires_at=write_serializer.validated_data['expires_at'],
+            )
+            audit.record(
+                audit.AuditSpec(
+                    action='NOTIF_BROADCAST_CREATE', actor_id=user_id,
+                    new_data=audit.snapshot_broadcast(broadcast),
+                    audience_label='Global (All Users)',
+                    title=broadcast.title,
+                ),
+                entity_name='broadcast_notification', entity_id=str(broadcast.id),
+            )
         return CustomResponse(
             general_message='Broadcast notification created successfully.',
             response=serializers.BroadcastNotificationAdminSerializer(broadcast).data,
@@ -715,8 +769,8 @@ class BroadcastNotificationCreateAPI(APIView):
 class BroadcastNotificationUpdateAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @extend_schema(tags=['Notification'], description="Admin only. Partially update a broadcast notification.")
-    @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Notification'], description="Verified team (Admins, Fellows, Associates). Partially update a broadcast notification.")
+    @verified_role_required(list(TEAM_ROLES))
     def patch(self, request, broadcast_id):
         try:
             broadcast = BroadcastNotification.objects.get(id=broadcast_id)
@@ -729,7 +783,29 @@ class BroadcastNotificationUpdateAPI(APIView):
         if not write_serializer.is_valid():
             return CustomResponse(general_message=write_serializer.errors).get_failure_response()
 
-        write_serializer.save()
+        actor_id = JWTUtils.fetch_user_id(request)
+        before = audit.snapshot_broadcast(broadcast)
+        with transaction.atomic():
+            write_serializer.save()
+            after = audit.snapshot_broadcast(broadcast)
+            changed = [
+                k for k in write_serializer.validated_data
+                if before.get(k) != after.get(k)
+            ]
+            # A save that re-sends identical values changed nothing, so it
+            # leaves no log entry.
+            if changed:
+                audit.record(
+                    audit.AuditSpec(
+                        action='NOTIF_BROADCAST_UPDATE', actor_id=actor_id,
+                        old_data={k: before[k] for k in changed},
+                        new_data={k: after[k] for k in changed},
+                        audience_label=serializers.BroadcastNotificationAdminSerializer(
+                            broadcast).data['target_details']['name'],
+                        title=before['title'],
+                    ),
+                    entity_name='broadcast_notification', entity_id=before['id'],
+                )
         return CustomResponse(
             general_message='Broadcast notification updated successfully.',
             response=serializers.BroadcastNotificationAdminSerializer(broadcast).data,
@@ -750,8 +826,8 @@ class BroadcastNotificationUpdateAPI(APIView):
 class AdminBroadcastDispatchAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @extend_schema(tags=['Notification'], description="Admin only. Dispatch a global notification broadcast.")
-    @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Notification'], description="Verified team (Admins, Fellows, Associates). Dispatch a global notification broadcast.")
+    @verified_role_required(list(TEAM_ROLES))
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         serializer = serializers.AdminBroadcastDispatchSerializer(data=request.data)
@@ -770,6 +846,18 @@ class AdminBroadcastDispatchAPI(APIView):
             actor_id     = user_id,
             redirect_url = data.get('redirect_url'),
             expires_at   = expires_at,
+            audit        = audit.AuditSpec(
+                "NOTIF_BROADCAST_SEND",
+                user_id,
+                new_data={
+                    "title": data['title'],
+                    "description": data['description'],
+                    "redirect_url": data.get('redirect_url'),
+                    "expires_in_days": data.get('expires_in_days', 7),
+                },
+                audience_label="Everyone",
+                title=data['title'],
+            ),
         )
 
         return CustomResponse(

@@ -3,7 +3,8 @@
 
 Learner endpoints are cheap by design: device registration is one upsert and
 writes last_seen_at at most once an hour; nothing here sends a push inline.
-Admin endpoints require the Admins role.
+Admin endpoints need a verified team role (Admins, Fellows, Associates);
+changing engine settings needs a verified Admin.
 """
 from datetime import datetime, timedelta, timezone as dt_timezone
 
@@ -11,6 +12,8 @@ from django.db import IntegrityError, transaction
 from django.db.models import Count, Q
 from rest_framework.views import APIView
 
+from api.notification import audit
+from api.notification.audit import AuditSpec
 from api.push import audience as push_audience
 from api.push import config as push_config
 from api.push import fcm
@@ -21,9 +24,9 @@ from db.push import (
     UserPushDevice,
     UserPushPreference,
 )
-from utils.permission import CustomizePermission, JWTUtils, role_required
+from utils.permission import CustomizePermission, JWTUtils, verified_role_required
 from utils.response import CustomResponse
-from utils.types import RoleType
+from utils.types import TEAM_ROLES, RoleType
 
 SEEN_WRITE_INTERVAL = timedelta(hours=1)
 PLATFORMS = {c.value for c in UserPushDevice.Platform}
@@ -190,10 +193,14 @@ GLOBAL_LIMITS = {
 }
 
 
+class _ConfigError(Exception):
+    """A settings change failed validation; the whole PATCH is rolled back."""
+
+
 class AdminConfigAPI(APIView):
     permission_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value])
+    @verified_role_required(list(TEAM_ROLES))
     def get(self, request):
         config = push_config.get_config()
         from api.notification.types import TYPE_META
@@ -210,55 +217,86 @@ class AdminConfigAPI(APIView):
             "types": types,
         })
 
-    @role_required([RoleType.ADMIN.value])
+    @verified_role_required([RoleType.ADMIN.value])
     def patch(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        data = request.data
+        try:
+            with transaction.atomic():
+                self._apply_patch(request.data, user_id)
+        except _ConfigError as e:
+            return _fail(str(e))
+        return self.get(request)
+
+    @staticmethod
+    def _apply_patch(data, user_id):
+        """Validate and save every section, or raise _ConfigError (nothing kept)."""
+        old, new = {}, {}
+
+        def save(key, patch, drop=()):
+            before = _stored(key)
+            merged = {k: v for k, v in {**before, **patch}.items() if k not in drop}
+            if merged == before:
+                return
+            old[key] = before
+            push_config.set_config(key, merged, user_id)
+            new[key] = _stored(key)
+
         if "global" in data:
             patch = data["global"]
             if not isinstance(patch, dict):
-                return _fail("global must be an object.")
+                raise _ConfigError("global must be an object.")
             clean = {}
             for k, v in patch.items():
                 if k == "kill_switch":
                     if not isinstance(v, bool):
-                        return _fail("kill_switch must be true or false.")
+                        raise _ConfigError("kill_switch must be true or false.")
                     clean[k] = v
                 elif k == "default_timezone":
                     if not _valid_tz(v):
-                        return _fail("default_timezone must be an IANA name.")
+                        raise _ConfigError("default_timezone must be an IANA name.")
                     clean[k] = v
                 elif k in GLOBAL_LIMITS:
                     lo, hi = GLOBAL_LIMITS[k]
                     if not isinstance(v, int) or not lo <= v <= hi:
-                        return _fail(f"{k} must be a whole number from {lo} to {hi}.")
+                        raise _ConfigError(f"{k} must be a whole number from {lo} to {hi}.")
                     clean[k] = v
                 else:
-                    return _fail(f"Unknown setting: {k}.")
-            stored = _stored("global")
-            push_config.set_config("global", {**stored, **clean}, user_id)
+                    raise _ConfigError(f"Unknown setting: {k}.")
+            save("global", clean)
         if "rules" in data:
             rules = data["rules"]
             if not isinstance(rules, dict):
-                return _fail("rules must be an object.")
+                raise _ConfigError("rules must be an object.")
             for key, patch in rules.items():
                 default = push_config.DEFAULT_RULES.get(key)
                 if default is None or not isinstance(patch, dict):
-                    return _fail(f"Unknown rule: {key}.")
+                    raise _ConfigError(f"Unknown rule: {key}.")
                 for k, v in patch.items():
-                    if k not in default:
-                        return _fail(f"Unknown setting for {key}: {k}.")
-                    if type(v) is not type(default[k]):
-                        return _fail(f"{key}.{k} has the wrong type.")
-                stored = _stored(f"rule:{key}")
-                push_config.set_config(f"rule:{key}", {**stored, **patch}, user_id)
+                    if k == "variants":
+                        error = push_config.validate_variants(key, v)
+                        if error:
+                            raise _ConfigError(error)
+                    elif k in push_config.legacy_copy_keys(key):
+                        # Single copy from before versions; still honoured.
+                        if not isinstance(v, str):
+                            raise _ConfigError(f"{key}.{k} must be text.")
+                    elif k not in default:
+                        raise _ConfigError(f"Unknown setting for {key}: {k}.")
+                    elif type(v) is not type(default[k]):
+                        raise _ConfigError(f"{key}.{k} has the wrong type.")
+                # Saved versions replace any old single copy.
+                drop = push_config.LEGACY_COPY_KEYS if "variants" in patch else ()
+                save(f"rule:{key}", patch, drop)
         if "types" in data:
             types = data["types"]
             if not isinstance(types, dict) or not all(isinstance(v, bool) for v in types.values()):
-                return _fail("types must map notification types to true or false.")
-            stored = _stored("types")
-            push_config.set_config("types", {**stored, **types}, user_id)
-        return self.get(request)
+                raise _ConfigError("types must map notification types to true or false.")
+            save("types", types)
+        if new:
+            audit.record(
+                AuditSpec("PUSH_CONFIG_UPDATE", user_id, new_data=new, old_data=old),
+                entity_name="push_config", entity_id="config",
+            )
 
 
 def _stored(key):
@@ -287,12 +325,12 @@ def _route_ok(route):
 class AdminCampaignAPI(APIView):
     permission_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value])
+    @verified_role_required(list(TEAM_ROLES))
     def get(self, request):
         rows = PushCampaign.objects.select_related("created_by").order_by("-created_at")[:100]
         return _ok({"campaigns": [_campaign_dict(c) for c in rows]})
 
-    @role_required([RoleType.ADMIN.value])
+    @verified_role_required(list(TEAM_ROLES))
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         d = request.data
@@ -320,22 +358,38 @@ class AdminCampaignAPI(APIView):
                 return _fail("scheduled_at must include a time zone.")
             if when < _now() - timedelta(minutes=1):
                 return _fail("scheduled_at is in the past.")
-        campaign = PushCampaign.objects.create(
-            title=title, body=body, route=route, audience=aud,
-            status="scheduled" if when else "draft",
-            scheduled_at=when,
-            respect_quiet_hours=bool(d.get("respect_quiet_hours", True)),
-            target_count=push_audience.count(aud),
-            created_by_id=user_id,
-        )
+        respect_quiet_hours = bool(d.get("respect_quiet_hours", True))
+        with transaction.atomic():
+            campaign = PushCampaign.objects.create(
+                title=title, body=body, route=route, audience=aud,
+                status="scheduled" if when else "draft",
+                scheduled_at=when,
+                respect_quiet_hours=respect_quiet_hours,
+                target_count=push_audience.count(aud),
+                created_by_id=user_id,
+            )
+            audit.record(
+                AuditSpec(
+                    "PUSH_CAMPAIGN_CREATE", user_id,
+                    new_data={
+                        "title": title, "body": body, "route": route, "audience": aud,
+                        "scheduled_at": when.isoformat() if when else None,
+                        "respect_quiet_hours": respect_quiet_hours,
+                    },
+                    audience_size=campaign.target_count,
+                    title=campaign.title,
+                ),
+                entity_name="push_campaign", entity_id=campaign.id,
+            )
         return _ok(_campaign_dict(campaign), "Campaign saved.")
 
 
 class AdminCampaignActionAPI(APIView):
     permission_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value])
+    @verified_role_required(list(TEAM_ROLES))
     def post(self, request, campaign_id, action):
+        user_id = JWTUtils.fetch_user_id(request)
         campaign = PushCampaign.objects.filter(id=campaign_id).first()
         if not campaign:
             return _fail("Campaign not found.", 404)
@@ -344,15 +398,33 @@ class AdminCampaignActionAPI(APIView):
                 return _fail("Push is not configured on this server (FIREBASE_CREDENTIALS).")
             from mu_celery.push_tasks import start_campaign
 
-            if not start_campaign(campaign.id):
-                return _fail(f"This campaign is already {campaign.status}.")
+            # The chunk task is queued on commit, so a failed log write rolls
+            # back the status and nothing is ever queued.
+            with transaction.atomic():
+                if not start_campaign(campaign.id):
+                    return _fail(f"This campaign is already {campaign.status}.")
+                audit.record(
+                    AuditSpec(
+                        "PUSH_CAMPAIGN_SEND", user_id,
+                        audience_size=campaign.target_count, title=campaign.title,
+                    ),
+                    entity_name="push_campaign", entity_id=campaign.id,
+                )
             return _ok({"status": "sending"}, "Sending started.")
         if action == "cancel":
-            n = PushCampaign.objects.filter(
-                id=campaign.id, status__in=["draft", "scheduled", "sending"]
-            ).update(status="cancelled")
-            if not n:
-                return _fail(f"This campaign is already {campaign.status}.")
+            with transaction.atomic():
+                n = PushCampaign.objects.filter(
+                    id=campaign.id, status__in=["draft", "scheduled", "sending"]
+                ).update(status="cancelled")
+                if not n:
+                    return _fail(f"This campaign is already {campaign.status}.")
+                audit.record(
+                    AuditSpec(
+                        "PUSH_CAMPAIGN_CANCEL", user_id,
+                        audience_size=campaign.target_count, title=campaign.title,
+                    ),
+                    entity_name="push_campaign", entity_id=campaign.id,
+                )
             return _ok({"status": "cancelled"}, "Campaign cancelled.")
         return _fail("Unknown action.", 404)
 
@@ -362,7 +434,7 @@ class AdminTestAPI(APIView):
 
     permission_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value])
+    @verified_role_required(list(TEAM_ROLES))
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         title = (request.data.get("title") or "Test push").strip()[:100]
@@ -370,7 +442,19 @@ class AdminTestAPI(APIView):
         route = (request.data.get("route") or "").strip() or None
         if not _route_ok(route):
             return _fail("Link must be an app path like /events or /tasks.")
+        base = {"title": title, "body": body, "route": route}
+
+        def log(outcome):
+            audit.record(
+                AuditSpec(
+                    "PUSH_TEST_SEND", user_id,
+                    new_data={**base, "outcome": outcome}, title=title,
+                ),
+                entity_name="push_test", entity_id=user_id,
+            )
+
         if not fcm.is_configured():
+            log({"error": "not configured"})
             return _fail("Push is not configured on this server (FIREBASE_CREDENTIALS).")
         from api.push import sender
 
@@ -379,6 +463,7 @@ class AdminTestAPI(APIView):
             sender.Message(title=title, body=body, route=route),
             f"TEST:{_now():%Y%m%d%H%M%S}",
         )
+        log(result.as_dict())
         if result.sent:
             return _ok(result.as_dict(), "Test push sent to your devices.")
         return _fail("No push was sent: register this account on a phone first "
@@ -388,7 +473,7 @@ class AdminTestAPI(APIView):
 class AdminStatsAPI(APIView):
     permission_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value])
+    @verified_role_required(list(TEAM_ROLES))
     def get(self, request):
         days = min(max(int(request.query_params.get("days", 14) or 14), 1), 90)
         since = _now() - timedelta(days=days)
@@ -398,7 +483,17 @@ class AdminStatsAPI(APIView):
             .annotate(n=Count("id"), opened=Count("id", filter=Q(opened_at__isnull=False)))
             .order_by("source", "kind", "status")
         )
+        variants = (
+            PushDeliveryLog.objects.filter(
+                created_at__gte=since, status="sent", variant__isnull=False
+            )
+            .values("variant")
+            .annotate(sent=Count("id"), opened=Count("id", filter=Q(opened_at__isnull=False)))
+            .order_by("variant")
+        )
         devices = UserPushDevice.objects.filter(is_active=True).aggregate(
             devices=Count("id"), users=Count("user_id", distinct=True)
         )
-        return _ok({"days": days, "devices": devices, "rows": list(rows)})
+        return _ok({
+            "days": days, "devices": devices, "rows": list(rows), "variants": list(variants),
+        })
