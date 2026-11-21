@@ -15,6 +15,7 @@ from db.achievement import UserStreak
 from utils.utils import CommonUtils
 from utils.karma import notify_karma_change
 from api.notification.types import NotificationType
+from api.dashboard.intern.monthly_review.leave import leave_days_by_review
 from .serializers import (
     ManageInternWeeklyReviewSerializer,
     ManageInternTimesheetSerializer,
@@ -93,7 +94,9 @@ class InternTimesheetReviewAPI(APIView):
     # they count as soon as the intern submits them. The former PATCH
     # (approve/reject) has been removed; its streak/karma logic now runs on
     # submit (api/dashboard/intern/timesheet/streak.py).
-    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
+    # Plain interns are excluded: this returns any intern's timesheet by id.
+    # Interns read their own through intern/timesheets/.
+    @role_required([RoleType.ADMIN.value, RoleType.INTERN_LEAD.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
         description="Retrieve a single intern timesheet (read-only).",
@@ -246,7 +249,9 @@ class InternWeeklyReviewListAPI(APIView):
 class InternTimesheetListAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
+    # Plain interns are excluded: this lists every intern's timesheets.
+    # Interns read their own through intern/timesheets/.
+    @role_required([RoleType.ADMIN.value, RoleType.INTERN_LEAD.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
         description=(
@@ -348,7 +353,8 @@ class InternMonthlyReviewListAPI(APIView):
         description=(
             "List intern monthly reviews, newest month first. Optional filters: "
             "`status` (PENDING/APPROVED/REJECTED), `year`, `month` (1-12), `muid` (exact). "
-            "`search` matches name, muid and team."
+            "`search` matches name, muid and team. `leave_days` is the intern's approved "
+            "leave days (WFH included) in the review month, worked out from leave requests."
         ),
         parameters=[
             OpenApiParameter(name='status', description='Review status', required=False, type=str),
@@ -389,7 +395,11 @@ class InternMonthlyReviewListAPI(APIView):
             {'created_at': 'created_at', 'year': 'year', 'month': 'month', 'status': 'status'}
         )
 
-        serializer = ManageInternMonthlyReviewSerializer(paginated_queryset.get("queryset"), many=True)
+        # One leave query for the whole page instead of one per review.
+        page = list(paginated_queryset.get("queryset"))
+        serializer = ManageInternMonthlyReviewSerializer(
+            page, many=True, context={'leave_days': leave_days_by_review(page)}
+        )
         return CustomResponse(
             response={
                 "data": serializer.data,
