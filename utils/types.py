@@ -62,6 +62,15 @@ class RoleType(Enum):
         return f"{ig_code} IGLead"
 
 
+# Roles allowed to send announcements and pushes. Always enforced with
+# verified_role_required (checks the database), never role_required alone.
+TEAM_ROLES: tuple[str, ...] = (
+    RoleType.ADMIN.value,
+    RoleType.FELLOW.value,
+    RoleType.ASSOCIATE.value,
+)
+
+
 class OrganizationType(Enum):
     COLLEGE = "College"
     COMPANY = "Company"

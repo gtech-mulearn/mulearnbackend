@@ -90,6 +90,9 @@ class PushDeliveryLog(models.Model):
     source = models.CharField(max_length=12, choices=Source.choices)
     # Notification type for activity pushes, rule key for engagement.
     kind = models.CharField(max_length=50)
+    # Copy version sent, "<RULE_OR_TYPE>:<key>" (alter 1.94); null when the
+    # push had one fixed text.
+    variant = models.CharField(max_length=40, blank=True, null=True)
     campaign_id = models.CharField(max_length=36, blank=True, null=True)
     dedupe_key = models.CharField(max_length=160)
     status = models.CharField(max_length=20, choices=Status.choices)

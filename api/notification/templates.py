@@ -1,4 +1,5 @@
 import logging
+import random
 
 logger = logging.getLogger(__name__)
 
@@ -373,6 +374,67 @@ TEMPLATES: dict[tuple, dict] = {
         "body":  "{body}",
     },
 
+
+    # ── PUSH copy (activity pushes) ───────────────────────────────────────────
+    # Each type has rotating versions; one is picked at random per push and
+    # its "<TYPE>:<key>" goes to push_delivery_log.variant. Title <= 40,
+    # body <= 100. Only the placeholders the producer passes may be used.
+    ("KARMA_AWARDED", "PUSH"): {
+        "variants": [
+            {"key": "yes", "title": '+{karma} karma ✅', "body": "That's for {reason}. Keep going."},
+            {"key": "earned", "title": 'You earned {karma} karma', "body": '{reason} is done and counted. Nice work.'},
+            {"key": "landed", "title": '{karma} karma, landed', "body": 'For {reason}. On to the next one.'},
+        ],
+    },
+
+    ("LC_JOIN_APPROVED", "PUSH"): {
+        "variants": [
+            {"key": "in", "title": "You're in! Welcome to {lc_name} 🎉", "body": 'Say hi in the group before the next meetup.'},
+            {"key": "yes", "title": '{lc_name} said yes', "body": "You're a member now. Check when the circle meets next."},
+            {"key": "seat", "title": 'A seat at {lc_name} is yours', "body": 'Open the circle to see the next meetup.'},
+        ],
+    },
+
+    ("LC_JOIN_REJECTED", "PUSH"): {
+        "variants": [
+            {"key": "about", "title": 'About your {lc_name} request', "body": "It didn't work out this time. Other circles are open, take a look."},
+            {"key": "request", "title": 'Your request to {lc_name}', "body": "It wasn't approved this time. You can join another circle or start your own."},
+            {"key": "update", "title": 'Update on {lc_name}', "body": "This one didn't work out. Other circles are learning the same thing."},
+        ],
+    },
+
+    ("LC_INVITE", "PUSH"): {
+        "variants": [
+            {"key": "invite", "title": "You're invited to {lc_name}", "body": "Someone thinks you'd fit right in. Take a look."},
+            {"key": "saved", "title": '{lc_name} saved you a seat', "body": 'Open the invite to join the circle.'},
+            {"key": "join", "title": 'Join {lc_name}? 👀', "body": "You've got an invite. Learning's better with company."},
+        ],
+    },
+
+    ("LC_MEETING_SCHEDULED", "PUSH"): {
+        "variants": [
+            {"key": "new", "title": '{lc_name}: new meetup', "body": 'Next one is on {meet_time}. Add it to your calendar.'},
+            {"key": "date", "title": 'New date for {lc_name}', "body": '{meet_time}. Bring questions, leave with answers.'},
+            {"key": "on", "title": '{lc_name} is meeting up 📅', "body": '{meet_time}. See you there.'},
+        ],
+    },
+
+    ("EVENT_CANCELLED", "PUSH"): {
+        "variants": [
+            {"key": "cancelled", "title": '{event_title} is cancelled', "body": "Sorry about this. We'll let you know about the next one."},
+            {"key": "change", "title": 'Change of plans: {event_title}', "body": "This event won't go ahead. Check Events for what's next."},
+            {"key": "update", "title": 'Update on {event_title}', "body": 'It has been cancelled. Sorry for the change.'},
+        ],
+    },
+
+    ("JOB_APPLICATION_STATUS", "PUSH"): {
+        "variants": [
+            {"key": "update", "title": 'Update on your application', "body": '{job_title}: your application is now {status}.'},
+            {"key": "status", "title": '{job_title}: {status}', "body": 'Open the app to see the details.'},
+            {"key": "moved", "title": 'News on {job_title}', "body": "Your application moved to {status}. Tap to see what's next."},
+        ],
+    },
+
 }
 
 # Copy all IN_APP entries to WEBSOCKET automatically.
@@ -392,7 +454,9 @@ for (_type, _target), _tmpl in list(TEMPLATES.items()):
 #   - context is missing a required placeholder key        → SKIPPED: TEMPLATE_ERROR
 # ─────────────────────────────────────────────────────────────────────────────
 
-def render_template(notif_type: str, target: str, context: dict) -> dict | None:
+def render_template(
+    notif_type: str, target: str, context: dict, rng: random.Random | None = None
+) -> dict | None:
     """
     Renders the title and body for a given (type, target) using context variables.
 
@@ -400,9 +464,12 @@ def render_template(notif_type: str, target: str, context: dict) -> dict | None:
         notif_type: NotificationType value e.g. "LC_JOIN_APPROVED"
         target:     Render target e.g. "IN_APP", "WEBSOCKET", "PUSH", "EMAIL"
         context:    Dict of variables from the producer e.g. {"lc_name": "Web Dev"}
+        rng:        Random source for picking a version (tests pass a seeded one)
 
     Returns:
         {"title": "...", "body": "..."} on success
+        {"title", "body", "variant": "<TYPE>:<key>"} when the template has
+        rotating versions: one is picked at random
         None if no template found or context key is missing
     """
     template = TEMPLATES.get((notif_type, target))
@@ -410,13 +477,21 @@ def render_template(notif_type: str, target: str, context: dict) -> dict | None:
         return None
 
     try:
+        variants = template.get("variants")
+        if variants:
+            chosen = (rng or random).choice(variants)
+            return {
+                "title":   chosen["title"].format(**context),
+                "body":    chosen["body"].format(**context),
+                "variant": f"{notif_type}:{chosen['key']}",
+            }
         return {
             "title": template["title"].format(**context),
             "body":  template["body"].format(**context),
         }
-    except KeyError as missing_key:
+    except (KeyError, IndexError, ValueError) as err:
         logger.warning(
-            "render_template: missing context key %s for type=%s target=%s context=%s",
-            missing_key, notif_type, target, context,
+            "render_template: bad template or context (%r) for type=%s target=%s context=%s",
+            err, notif_type, target, context,
         )
         return None

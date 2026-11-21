@@ -250,6 +250,16 @@ class SystemActionLog(models.Model):
         IG_EVENT_REJECT = 'IG_EVENT_REJECT', 'IG Event Reject'
         IMPACT_PROJECT_PUBLISH = 'IMPACT_PROJECT_PUBLISH', 'Impact Project Publish'
         COMPANY_DEACTIVATED   = 'COMPANY_DEACTIVATED',   'Company Deactivated'
+        NOTIF_BROADCAST_CREATE = 'NOTIF_BROADCAST_CREATE', 'Created announcement'
+        NOTIF_BROADCAST_SEND = 'NOTIF_BROADCAST_SEND', 'Sent announcement to everyone'
+        NOTIF_BROADCAST_UPDATE = 'NOTIF_BROADCAST_UPDATE', 'Edited announcement'
+        NOTIF_BROADCAST_DELETE = 'NOTIF_BROADCAST_DELETE', 'Deleted announcement'
+        NOTIF_BROADCAST_DEL_ALL = 'NOTIF_BROADCAST_DEL_ALL', 'Deleted all announcements'
+        PUSH_CAMPAIGN_CREATE = 'PUSH_CAMPAIGN_CREATE', 'Created push campaign'
+        PUSH_CAMPAIGN_SEND = 'PUSH_CAMPAIGN_SEND', 'Sent push campaign'
+        PUSH_CAMPAIGN_CANCEL = 'PUSH_CAMPAIGN_CANCEL', 'Cancelled push campaign'
+        PUSH_TEST_SEND = 'PUSH_TEST_SEND', 'Sent test push'
+        PUSH_CONFIG_UPDATE = 'PUSH_CONFIG_UPDATE', 'Changed push settings'
 
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     action_type = models.CharField(max_length=25, choices=ActionType.choices)

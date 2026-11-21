@@ -19,7 +19,7 @@ from utils.utils import DateTimeUtils
 from .exception import UnauthorizedAccessException
 from .response import CustomResponse
 
-from db.user import DynamicRole, DynamicUser
+from db.user import DynamicRole, DynamicUser, UserRoleLink
 from utils.types import RoleType
 
 
@@ -273,6 +273,60 @@ def role_required(roles):
                 general_message="You do not have the required role to access this page."
             ).get_failure_response()
             return res
+
+        return wrapped_view_func
+
+    return decorator
+
+
+# Endpoints that act on every user (announcements, pushes) require, besides the
+# token's roles, a VERIFIED, active role link in the database. Answers are cached briefly.
+# invalidate_verified_roles() should be called when a link's `verified` or
+# `is_active` changes or a link is deleted, but no caller does so yet: the 60 s TTL
+# is the bound on how long a stale answer lasts.
+VERIFIED_ROLES_CACHE_TTL = 60
+
+
+def _verified_roles_cache_key(user_id):
+    return f"verified_roles:{user_id}"
+
+
+def verified_role_titles(user_id: str) -> frozenset[str]:
+    key = _verified_roles_cache_key(user_id)
+    try:
+        titles = cache.get(key)
+    except Exception:
+        titles = None
+    if titles is None:
+        titles = frozenset(
+            UserRoleLink.objects.filter(
+                user_id=user_id, verified=True, is_active=True
+            ).values_list("role__title", flat=True)
+        )
+        try:
+            cache.set(key, titles, VERIFIED_ROLES_CACHE_TTL)
+        except Exception:
+            pass
+    return titles
+
+
+def invalidate_verified_roles(user_id: str) -> None:
+    try:
+        cache.delete(_verified_roles_cache_key(user_id))
+    except Exception:
+        pass
+
+
+def verified_role_required(roles):
+    def decorator(view_func):
+        def wrapped_view_func(obj, request, *args, **kwargs):
+            if any(role in roles for role in JWTUtils.fetch_role(request)):
+                verified = verified_role_titles(JWTUtils.fetch_user_id(request))
+                if any(role in roles for role in verified):
+                    return view_func(obj, request, *args, **kwargs)
+            return CustomResponse(
+                general_message="You do not have the required role to access this page."
+            ).get_failure_response()
 
         return wrapped_view_func
 

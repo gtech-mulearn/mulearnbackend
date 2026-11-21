@@ -16,13 +16,15 @@ The mobile app gets real push notifications. They come from three sources, and a
   - an admin kill switch stops all sending at once.
 - A failed push never affects the in-app notification it came from: the push is queued after the in-app rows are written, and any error is only logged.
 
-## Data (db-scripts `alter-1.93.sql`)
+## Data (db-scripts `alter-1.93.sql` + `alter-1.94.sql`)
+
+`alter-1.93.sql` creates the tables below. `alter-1.94.sql` adds `push_delivery_log.variant` and appends the ten notification and push action types (`NOTIF_*`, `PUSH_*`) to `system_action_log.action_type`, which the activity log needs.
 
 | Table | Purpose |
 |---|---|
 | `user_push_device` | One row per FCM token. Columns: user, platform, app version, time zone, `is_active`, `last_seen_at` (app opens, throttled to one update per hour), failure count. A token moves to whoever registers it last, so a shared phone never pushes to the previous account. |
 | `user_push_preference` | Per user. Columns: push on/off, nudges on/off, muted categories, quiet hours (local), time zone. If a user has no row, the defaults apply. |
-| `push_delivery_log` | One row per decision: sent, failed, or skipped (with the reason). Also `opened_at`, reported by the app. Caps, cooldowns, fatigue and admin stats are computed from it. Rows older than 90 days are purged daily. Unique on (user, dedupe_key), so retries never double-send. |
+| `push_delivery_log` | One row per decision: sent, failed, or skipped (with the reason). Also `opened_at`, reported by the app, and `variant`, the copy version that was sent (see Copy versions). Caps, cooldowns, fatigue and admin stats are computed from it. Rows older than 90 days are purged daily. Unique on (user, dedupe_key), so retries never double-send. |
 | `push_campaign` | Admin pushes: title, body, deep link, audience, schedule, status and counters. |
 | `push_config` | Admin-tunable settings as JSON per key: `global` plus one per engagement rule. The code holds the defaults; a stored row overrides only the keys it sets. |
 
@@ -64,13 +66,39 @@ Each rule's on/off switch, thresholds, cooldown and copy can be edited in `push_
 |---|---|---|---|
 | POST | `devices/` | signed in | Register or refresh a token: `{token, platform, app_version, timezone}` |
 | DELETE | `devices/` | signed in | Unregister on sign-out: `{token}` |
-| POST | `opened/` | signed in | `{delivery_id}`. Marks a push opened (feeds the fatigue check) |
+| POST | `opened/` | signed in | `{dedupe_key}`. Marks the caller's push opened (feeds the fatigue check) |
 | GET/PATCH | `preferences/` | signed in | Push and nudges switches, muted categories, quiet hours |
-| GET/PATCH | `admin/config/` | Admins | Kill switch, caps, rate, quiet-hour defaults, per-rule settings, push on/off per notification type |
-| GET/POST | `admin/campaigns/` | Admins | List / create (draft or scheduled) |
-| POST | `admin/campaigns/<id>/send/`, `.../cancel/` | Admins | Send now / cancel |
-| POST | `admin/test/` | Admins | Send a test push to the admin's own devices |
-| GET | `admin/stats/` | Admins | Last 14 days: sent, skipped by reason, opened, per source and rule |
+| GET/PATCH | `admin/config/` | Admins only (settings changes) | Kill switch, caps, rate, quiet-hour defaults, per-rule settings, push on/off per notification type |
+| GET/POST | `admin/campaigns/` | verified Admin, Fellow, Associate | List / create (draft or scheduled) |
+| POST | `admin/campaigns/<id>/send/`, `.../cancel/` | verified Admin, Fellow, Associate | Send now / cancel |
+| POST | `admin/test/` | verified Admin, Fellow, Associate | Send a test push to the admin's own devices |
+| GET | `admin/stats/` | verified Admin, Fellow, Associate | Last 14 days (`?days=`, up to 90): sent, skipped by reason, opened, per source and rule, plus `variants`: sent and opened per copy version |
+
+Who can use the admin endpoints: everything under `admin/` is for verified Admins, Fellows and Associates, checked against the database (a token that says Fellow but has no verified Fellow link is refused). The one exception is `admin/config/`, where changing settings is Admin-only; reading it is open to the team. Every change an admin makes (campaigns, test sends, settings) is written to the activity log, which the team reads at `GET /api/v1/notification/activity-log/` (filters: `action`, `actor`, `from`, `to`; paginated, newest first, ties broken by id). An announcement edit that re-sends identical values is saved but not logged.
+
+### Activity log items
+
+Each row is a `system_action_log` row. The writer (`api/notification/audit.py`, `record`) stores the team details under `new_data._audit`: `roles`, `audience_size`, `audience_label` and `title`, the subject's name (the campaign or announcement title, the title being sent, or the test push title; for an edit, the title before the change; `null` for delete-all and settings changes). Each item in the response has:
+
+| Field | What |
+|---|---|
+| `id`, `action`, `label` | Row id, action type, human label ("Sent push campaign") |
+| `actor` | `{full_name, muid}` |
+| `roles` | The actor's verified team roles at the time |
+| `title` | `new_data.title`, else `old_data.title`, else `_audit.title`. Delete-all shows "N announcements", settings changes show "Push settings" |
+| `entity_name`, `entity_id` | What the row is about: `broadcast_notification` (an id, or `all`), `notification` (send to everyone written as personal rows), `push_campaign`, `push_test` (the actor's id) or `push_config` (`config`) |
+| `campaign` | For `push_campaign` rows, the campaign's live `{status, target_count, sent_count, skipped_count, failed_count}`, read from `push_campaign` in one query per page, because the counts keep changing after the send is logged. `null` for other rows and for a campaign that no longer exists |
+| `audience_size`, `audience_label` | Head count (campaigns: `target_count`; send to everyone: the recipient count) or a label |
+| `created_at` | ISO time |
+| `old_data`, `new_data` | What changed, for a details view (`new_data` without `_audit`) |
+
+## Copy versions
+
+Both nudges and activity pushes carry several versions of their text, so people do not see the same wording every time. A version is `{key, title, body}`: the key is `^[a-z0-9_]{1,16}$` and unique within its rule or type, the title is at most 40 characters and the body at most 100, and a rule has 1 to 10 versions. Each push records the version it used as `push_delivery_log.variant`, `"<RULE_OR_TYPE>:<key>"` (at most 40 characters), so the format is the same for both.
+
+- **Nudges** (`api/push/engine.py`): versions live in the rule's settings. Rotation is per person, over the nudges of that rule the person was sent in the last 35 days (`engine.ROTATION_LOOKBACK_DAYS`, separate from `fatigue_lookback_days`): a version they had in their last `len-1` of those is skipped, so within that window every version is seen before any repeats. 35 days covers five weekly meeting nudges and all four comeback tiers of one absence (days 3, 7, 14 and 30). A version last sent more than 35 days ago can come up again. An old copy override that has only a title or body keeps the default version's other half.
+- **Activity pushes** (`api/notification/templates.py`): the `(TYPE, "PUSH")` templates for karma awarded, learning-circle join approved, rejected, invite and meeting scheduled, event cancelled and job application status each hold three versions. One is picked at random per send (no history is kept), and `variant` is passed through `send_activity_push` to the sender. If a version cannot be filled from the producer's context, the push falls back to the in-app text with no variant.
+- **Stats**: `admin/stats/` returns `variants: [{variant, sent, opened}]`, counted over `status="sent"` rows with a variant in the same window, ordered by `variant`. Open rate per version is `opened / sent`.
 
 ## Scheduling (Celery beat)
 
@@ -81,6 +109,10 @@ Each rule's on/off switch, thresholds, cooldown and copy can be edited in `push_
 | `purge_push_logs` | Daily |
 
 `docker-compose` gains a `celery-beat` service. Until now, no beat scheduler process was defined, so `CELERY_BEAT_SCHEDULE` entries only ran where something else ran beat.
+
+## Deploying
+
+Deploy the Celery workers together with the web servers, or before them. New code enqueues `send_activity_push` with a `variant=` keyword. A worker still on the old code does not accept it, so the task fails and that push is lost. Workers on the new code accept enqueues from old web servers too, because `variant` defaults to `None`.
 
 ## Configuration (environment)
 

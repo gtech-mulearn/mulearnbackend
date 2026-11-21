@@ -35,6 +35,8 @@ class Message:
     route: Optional[str] = None
     # Extra string data for the app (never secrets).
     data: dict = field(default_factory=dict)
+    # Copy version, "<RULE_OR_TYPE>:<key>", logged for per-version open rates.
+    variant: Optional[str] = None
 
 
 @dataclass
@@ -167,7 +169,7 @@ def deliver(
             result.skipped[decision.status] += 1
             skip_rows.append(_log_row(uid, source, kind, campaign_id,
                                       f"{key}~{decision.status}:{now:%Y%m%d%H}",
-                                      decision.status, msg, 0))
+                                      decision.status, msg, 0, variant=msg.variant))
 
     if skip_rows:
         PushDeliveryLog.objects.bulk_create(skip_rows, ignore_conflicts=True, batch_size=1000)
@@ -187,12 +189,14 @@ def deliver(
         return result
 
     # Group users whose message is identical so one FCM call covers them all.
+    # The version is part of the key so each row logs the one its user got.
     groups = defaultdict(list)
     for uid, (msg, key) in to_send.items():
-        groups[(msg.title, msg.body, msg.route or "", key, tuple(sorted(msg.data.items())))].append(uid)
+        groups[(msg.title, msg.body, msg.route or "", key, tuple(sorted(msg.data.items())),
+                msg.variant)].append(uid)
 
     rows, ok_users, dead_tokens, soft_fail_tokens = [], set(), [], []
-    for (title, body, route, key, data_items), uids in groups.items():
+    for (title, body, route, key, data_items, variant), uids in groups.items():
         title = policy.truncate(title, 100)
         body = policy.truncate(body, 240)
         data = {"route": route, "kind": kind, "source": source, "dedupe_key": key, **dict(data_items)}
@@ -216,7 +220,7 @@ def deliver(
             status = "sent" if uid in ok_users else "failed"
             rows.append(_log_row(uid, source, kind, campaign_id,
                                  key, status, policy_msg(title, body, route),
-                                 len(tokens_by_user.get(uid, []))))
+                                 len(tokens_by_user.get(uid, [])), variant=variant))
             if status == "sent":
                 result.sent += 1
             else:
@@ -240,7 +244,7 @@ def policy_msg(title: str, body: str, route: str) -> Message:
     return Message(title=title, body=body, route=route or None)
 
 
-def _log_row(user_id, source, kind, campaign_id, dedupe_key, status, msg, device_count):
+def _log_row(user_id, source, kind, campaign_id, dedupe_key, status, msg, device_count, variant=None):
     from db.push import PushDeliveryLog
 
     return PushDeliveryLog(
@@ -248,6 +252,7 @@ def _log_row(user_id, source, kind, campaign_id, dedupe_key, status, msg, device
         user_id=user_id,
         source=source,
         kind=kind[:50],
+        variant=variant[:40] if variant else None,
         campaign_id=campaign_id,
         dedupe_key=dedupe_key[:160],
         status=status,
