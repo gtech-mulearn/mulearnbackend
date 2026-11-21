@@ -26,7 +26,9 @@ def test_none_returns_no_entries(selection):
 
 
 def test_a_list_returns_exactly_those_entries():
-    chosen = select_schedules(SCHEDULE, " refresh-leaderboards-cron , intern-daily-status-cron,,intern-daily-status-cron, ")
+    chosen = select_schedules(
+        SCHEDULE, " refresh-leaderboards-cron , intern-daily-status-cron,,intern-daily-status-cron, "
+    )
     assert chosen == {
         "refresh-leaderboards-cron": SCHEDULE["refresh-leaderboards-cron"],
         "intern-daily-status-cron": SCHEDULE["intern-daily-status-cron"],
