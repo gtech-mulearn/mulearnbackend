@@ -4,6 +4,7 @@ Some legacy tests flush every table of the database they run against, so pytest
 must only ever run against SQLite or a local database whose name starts with
 ``test_``. See docs/architecture/12-testing-and-quality-gates.md.
 """
+
 import pytest
 
 LOCAL_HOSTS = {"", "localhost", "127.0.0.1", "mysql", "db"}
