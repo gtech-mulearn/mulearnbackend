@@ -1,5 +1,6 @@
 import uuid
 
+from django.conf import settings
 from django.db import models
 
 from .user import User
@@ -133,9 +134,11 @@ class InternMonthlyReview(models.Model):
     reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='intern_monthly_reviews_reviewed', db_column='reviewed_by')
     reviewed_at = models.DateTimeField(null=True, blank=True)
     review_note = models.CharField(max_length=300, null=True, blank=True)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='intern_monthly_review_created', db_column='created_by')
+    # Audit columns: deleting the user who last touched a review (e.g. the lead
+    # who approved it) must not delete the intern's review.
+    created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), related_name='intern_monthly_review_created', db_column='created_by')
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='intern_monthly_review_updated', db_column='updated_by')
+    updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), related_name='intern_monthly_review_updated', db_column='updated_by')
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
