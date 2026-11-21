@@ -16,14 +16,15 @@ from .serializers import (
     month_tasks,
     task_snapshot,
 )
+from .leave import approved_leave_days, leave_days_by_review
 from .window import get_monthly_review_window, window_for_month
 
 LIST_SEARCH_FIELDS = ['status', 'team']
 LIST_SORT_FIELDS = {'year': 'year', 'month': 'month', 'status': 'status', 'created_at': 'created_at'}
 
 
-def _current_window():
-    return get_monthly_review_window(DateTimeUtils.get_ist_today())
+def _current_window(today=None):
+    return get_monthly_review_window(today or DateTimeUtils.get_ist_today())
 
 
 def _month_label(window):
@@ -51,7 +52,10 @@ def _paginated_reviews(request, user_id):
     paginated_queryset = CommonUtils.get_paginated_queryset(
         reviews, request, LIST_SEARCH_FIELDS, LIST_SORT_FIELDS
     )
-    serializer = InternMonthlyReviewHistorySerializer(paginated_queryset.get("queryset"), many=True)
+    page = list(paginated_queryset.get("queryset"))
+    serializer = InternMonthlyReviewHistorySerializer(
+        page, many=True, context={'leave_days': leave_days_by_review(page)}
+    )
     return CustomResponse(
         response={
             "data": serializer.data,
@@ -70,13 +74,16 @@ class InternMonthlyReviewPrefillAPI(APIView):
             "Monthly review form data: whether the submission window is open (IST), "
             "which month it is for, that month's tasks, and the intern's existing "
             "review for that month, if any. When the window is closed, the next "
-            "window is returned with window_open=false."
+            "window is returned with window_open=false. `leave_days` is the intern's "
+            "approved leave days (WFH included) in that month up to today; it is shown "
+            "on the form only and is not sent back on submit."
         ),
-        responses={200: OpenApiResponse(description="Window state and month task snapshot.")},
+        responses={200: OpenApiResponse(description="Window state, month task snapshot and leave days so far.")},
     )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        window = _current_window()
+        today = DateTimeUtils.get_ist_today()
+        window = _current_window(today)
 
         existing = (
             InternMonthlyReview.objects
@@ -88,6 +95,9 @@ class InternMonthlyReviewPrefillAPI(APIView):
         return CustomResponse(response={
             **window.to_dict(),
             "existing_review": existing,
+            "leave_days": approved_leave_days(
+                user_id, window.period_start, min(today, window.period_end)
+            ),
             "tasks": [task_snapshot(t, status_key='status') for t in month_tasks(user_id, window)],
         }).get_success_response()
 
@@ -119,7 +129,8 @@ class InternMonthlyReviewAPI(APIView):
             "Submit the monthly review. Only accepted while the window is open (last 2 days "
             "of the month + first 2 days of the next, IST); the server decides which month "
             "it is for. If this month's review was rejected, submitting again replaces it "
-            "and sends it back for review. Returns 409 if a pending or approved review exists."
+            "and sends it back for review. Returns 409 if a pending or approved review exists. "
+            "leave_days is not accepted; responses show approved leave days for the month."
         ),
         request=InternMonthlyReviewSerializer,
         responses={

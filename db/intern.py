@@ -125,7 +125,9 @@ class InternMonthlyReview(models.Model):
     # task_remarks: {rating, learnings, challenges_faced, next_month_plan}
     task_remarks = models.JSONField(null=True, blank=True)
     blockers = models.TextField(null=True, blank=True)
-    leave_days = models.SmallIntegerField(default=0)
+    # No leave_days column: the API works it out on read from APPROVED
+    # InternLeaveRequest rows clipped to the month
+    # (api/dashboard/intern/monthly_review/leave.py).
     suggestions = models.TextField(null=True, blank=True)
     status = models.CharField(max_length=15, default='PENDING')
     reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='intern_monthly_reviews_reviewed', db_column='reviewed_by')

@@ -3,6 +3,8 @@ from rest_framework import serializers
 from db.intern import InternMonthlyReview, InternTask
 from utils.types import InternSubmissionStatus, InternTaskStatus
 
+from .leave import review_leave_days
+
 # Free-text answers the intern gives; stored together in task_remarks.
 REMARK_TEXT_FIELDS = ('learnings', 'challenges_faced', 'next_month_plan')
 REMARK_LABELS = {
@@ -63,7 +65,11 @@ class InternMonthlyReviewSerializer(serializers.ModelSerializer):
     next_month_plan = serializers.CharField(required=False, allow_blank=True, allow_null=True, write_only=True, max_length=2000)
     blockers = serializers.CharField(required=False, allow_blank=True, allow_null=True, max_length=2000)
     suggestions = serializers.CharField(required=False, allow_blank=True, allow_null=True, max_length=2000)
-    leave_days = serializers.IntegerField(required=False, min_value=0)
+    # leave_days is not stored: it is worked out on read from approved leave
+    # (see leave.py). It is declared only so a form that still sends the
+    # prefilled value isn't rejected by the project's strict-serializer patch
+    # (mulearnbackend/__init__.py, "Unknown field."); validate() drops it.
+    leave_days = serializers.JSONField(required=False, allow_null=True, write_only=True)
 
     class Meta:
         model = InternMonthlyReview
@@ -72,14 +78,8 @@ class InternMonthlyReviewSerializer(serializers.ModelSerializer):
             'next_month_plan', 'blockers', 'leave_days', 'suggestions',
         ]
 
-    def validate_leave_days(self, value):
-        window = self.context['window']
-        days_in_month = (window.period_end - window.period_start).days + 1
-        if value > days_in_month:
-            raise serializers.ValidationError(f"leave_days cannot exceed {days_in_month} for this month.")
-        return value
-
     def validate(self, data):
+        data.pop('leave_days', None)
         # On an edit, fields not sent keep their stored values; on a create or
         # resubmit the form is taken as a whole.
         editing = bool(self.instance) and self.partial
@@ -137,7 +137,6 @@ class InternMonthlyReviewSerializer(serializers.ModelSerializer):
             'period_start': window.period_start,
             'period_end': window.period_end,
             'team': self.context.get('team') or '',
-            'leave_days': validated_data.get('leave_days', 0),
             'status': InternSubmissionStatus.PENDING.value,
             'created_by_id': user_id,
         })
@@ -149,7 +148,6 @@ class InternMonthlyReviewSerializer(serializers.ModelSerializer):
             # A rejected review is replaced as a whole and goes back for review.
             validated_data.setdefault('blockers', None)
             validated_data.setdefault('suggestions', None)
-            validated_data.setdefault('leave_days', 0)
             validated_data.update({
                 'team': self.context.get('team') or instance.team,
                 'status': InternSubmissionStatus.PENDING.value,
@@ -161,6 +159,10 @@ class InternMonthlyReviewSerializer(serializers.ModelSerializer):
 
 
 class InternMonthlyReviewHistorySerializer(serializers.ModelSerializer):
+    # Approved leave days in the review month (WFH included), worked out on
+    # read. List views pass context['leave_days'] from leave_days_by_review.
+    leave_days = serializers.SerializerMethodField()
+
     class Meta:
         model = InternMonthlyReview
         fields = [
@@ -169,3 +171,6 @@ class InternMonthlyReviewHistorySerializer(serializers.ModelSerializer):
             'leave_days', 'suggestions', 'status', 'review_note',
             'reviewed_at', 'created_at', 'updated_at',
         ]
+
+    def get_leave_days(self, obj) -> int:
+        return review_leave_days(self, obj)
