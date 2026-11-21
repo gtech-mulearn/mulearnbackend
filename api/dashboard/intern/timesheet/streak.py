@@ -18,7 +18,7 @@ from db.achievement import UserStreak
 from db.intern import InternDailyTimesheet, UserInternGuildLink
 from db.task import KarmaActivityLog, TaskList, Wallet
 from utils.karma import notify_karma_change
-from utils.types import COUNTED_TIMESHEET_STATUSES, InternGuildStatus, InternHashtag
+from utils.types import COUNTED_TIMESHEET_STATUSES, InternHashtag
 
 TIMESHEET_STREAK_TYPE = 'intern_timesheet'
 
@@ -203,7 +203,11 @@ def log_daily_timesheet_activity(user_id: str):
 def sync_timesheet_streak(user_id: str, actor_id: str) -> dict:
     """
     Recomputes the intern's timesheet streak, stores it, awards any milestone
-    karma not yet paid, and restores an AT_RISK intern to ACTIVE.
+    karma not yet paid.
+
+    It does not change the intern's status. intern_daily_status_cron is the
+    only place that sets ACTIVE / AT_RISK / INACTIVE: it skips today and
+    yesterday, so a status set here would be undone by the next run.
 
     Runs the same steps the admin approval used to run. Safe to call
     repeatedly — streak is recomputed from scratch and milestones are
@@ -214,11 +218,8 @@ def sync_timesheet_streak(user_id: str, actor_id: str) -> dict:
     see the same milestone as unpaid and award it twice. Must be called
     inside transaction.atomic().
     """
-    guild_link = (
-        UserInternGuildLink.objects.select_for_update()
-        .filter(user_id=user_id)
-        .first()
-    )
+    # Taken only for the row lock; the row itself isn't used.
+    UserInternGuildLink.objects.select_for_update().filter(user_id=user_id).first()
 
     recalc = recalculate_intern_timesheet_streak(user_id)
 
@@ -229,9 +230,5 @@ def sync_timesheet_streak(user_id: str, actor_id: str) -> dict:
     streak.save()
 
     _award_missing_milestone_karma(user_id, actor_id, recalc['milestone_hits'], TIMESHEET_MILESTONE_MAP)
-
-    if guild_link and guild_link.status == InternGuildStatus.AT_RISK.value:
-        guild_link.status = InternGuildStatus.ACTIVE.value
-        guild_link.save(update_fields=['status'])
 
     return recalc
