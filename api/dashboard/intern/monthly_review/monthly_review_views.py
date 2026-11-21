@@ -138,7 +138,13 @@ class InternMonthlyReviewAPI(APIView):
             409: OpenApiResponse(description="A review for this month already exists."),
         },
     )
-    def post(self, request):
+    def post(self, request, review_id=None):
+        # This view also serves monthly-reviews/<review_id>/; submitting goes to the collection.
+        if review_id:
+            return CustomResponse(
+                general_message="Submit to monthly-reviews/ without a review id. Use PATCH to edit a review."
+            ).get_failure_response()
+
         user_id = JWTUtils.fetch_user_id(request)
 
         guild_link = UserInternGuildLink.objects.filter(user_id=user_id).first()
@@ -190,7 +196,10 @@ class InternMonthlyReviewAPI(APIView):
         request=InternMonthlyReviewSerializer,
         responses={200: InternMonthlyReviewHistorySerializer},
     )
-    def patch(self, request, review_id):
+    def patch(self, request, review_id=None):
+        if not review_id:
+            return CustomResponse(general_message="A review id is required to edit a review.").get_failure_response()
+
         user_id = JWTUtils.fetch_user_id(request)
 
         window = _current_window()
