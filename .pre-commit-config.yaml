@@ -1,0 +1,12 @@
+# Run once: pip install pre-commit && pre-commit install
+# Only new-code paths are checked; ruff.toml excludes everything else, including when
+# pre-commit passes file names explicitly (force-exclude).
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.6
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+        files: ^(building_blocks|modules|tests|scripts)/.*\.py$
+      - id: ruff-format
+        files: ^(building_blocks|modules|tests|scripts)/.*\.py$

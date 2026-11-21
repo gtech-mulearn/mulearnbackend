@@ -1,0 +1,8 @@
+# Development and test tools. Install with: pip install -r requirements.txt -r requirements-dev.txt
+# Exact pins, so every contributor and CI lints and tests with the same versions.
+ruff==0.17.6
+pytest==8.3.4
+pytest-django==4.14.0
+factory_boy==3.3.3
+hypothesis==6.168.5
+import-linter==2.15
