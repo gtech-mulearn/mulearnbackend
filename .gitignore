@@ -34,4 +34,6 @@ static/
 .claude
 CLAUDE.md
 latest.sql
+# The vendored schema-only copy is tracked on purpose (schema/README.md).
+!schema/latest.sql
 perf/
