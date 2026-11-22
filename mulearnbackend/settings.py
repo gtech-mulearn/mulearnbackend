@@ -13,15 +13,14 @@ https://docs.djangoproject.com/en/4.1/ref/settings/
 import os
 from pathlib import Path
 
-from decouple import config as decouple_config
 from django.core.exceptions import ImproperlyConfigured
 
-from mulearnbackend.required_settings import make_required, raise_if_missing
+from building_blocks import config
+from mulearnbackend import config_settings  # noqa: F401  declares every setting read below
 
-# Required settings (no default) are collected, so a missing value fails startup once,
-# with every missing name, instead of one bare UndefinedValueError at a time.
-_MISSING: list = []
-_required = make_required(decouple_config, _MISSING)
+# Every setting is declared with its type (mulearnbackend/config_settings.py). A missing or
+# invalid value stops startup here, with every problem in one error.
+config.raise_if_invalid()
 
 import logging
 
@@ -32,20 +31,18 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = _required("SECRET_KEY")
+SECRET_KEY = config.get("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = decouple_config("DEBUG", default=False, cast=bool)
+DEBUG = config.get("DEBUG")
 
-ALLOWED_HOSTS = _required(
-    "ALLOWED_HOSTS", cast=lambda v: [s.strip() for s in v.split(",")]
-)
+ALLOWED_HOSTS = config.get("ALLOWED_HOSTS")
 
 # System admin applied to rows when their parent user instance is deleted
-SYSTEM_ADMIN_ID = _required("SYSTEM_ADMIN_ID")
+SYSTEM_ADMIN_ID = config.get("SYSTEM_ADMIN_ID")
 
 # While this file exists, /healthz/ready returns 503 so the load balancer drains the node.
-DRAIN_FLAG_PATH = decouple_config("DRAIN_FLAG_PATH", default="/tmp/mulearn-drain")
+DRAIN_FLAG_PATH = config.get("DRAIN_FLAG_PATH")
 
 # Application definition
 
@@ -109,7 +106,7 @@ SPECTACULAR_SETTINGS = {
         "persistAuthorization": True,
         "displayOperationId": True,
     },
-    "SERVE_PERMISSIONS": ["rest_framework.permissions.IsAdminUser"] if not decouple_config("ENABLE_SWAGGER", default=False, cast=bool) else ["rest_framework.permissions.AllowAny"],
+    "SERVE_PERMISSIONS": ["rest_framework.permissions.IsAdminUser"] if not config.get("ENABLE_SWAGGER") else ["rest_framework.permissions.AllowAny"],
     "SECURITY": [
         {
             "jwtAuth": [],
@@ -153,8 +150,8 @@ ASGI_APPLICATION = "mulearnbackend.asgi.application"
 
 WSGI_APPLICATION = "mulearnbackend.wsgi.application"
 
-REDIS_HOST = _required("REDIS_HOST")
-REDIS_PORT = _required("REDIS_PORT")
+REDIS_HOST = config.get("REDIS_HOST")
+REDIS_PORT = config.get("REDIS_PORT")
 
 CHANNEL_LAYERS = {
     "default": {
@@ -170,12 +167,12 @@ CHANNEL_LAYERS = {
 
 DATABASES = {
     "default": {
-        "ENGINE": _required("DATABASE_ENGINE"),
-        "NAME": _required("DATABASE_NAME"),
-        "USER": _required("DATABASE_USER"),
-        "PASSWORD": _required("DATABASE_PASSWORD"),
-        "HOST": _required("DATABASE_HOST"),
-        "PORT": _required("DATABASE_PORT"),
+        "ENGINE": config.get("DATABASE_ENGINE"),
+        "NAME": config.get("DATABASE_NAME"),
+        "USER": config.get("DATABASE_USER"),
+        "PASSWORD": config.get("DATABASE_PASSWORD"),
+        "HOST": config.get("DATABASE_HOST"),
+        "PORT": config.get("DATABASE_PORT"),
         # Must stay 0 under ASGI. Django's ASGIHandler wraps every request in a
         # ThreadSensitiveContext, so asgiref gives each request its own thread,
         # and DB connections are thread-local. A non-zero CONN_MAX_AGE tells
@@ -228,14 +225,14 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-LOG_PATH = _required("LOGGER_DIR_PATH")
+LOG_PATH = config.get("LOGGER_DIR_PATH")
 # Level for the catch-all root logger. It used to be DEBUG, which wrote every
 # debug line from every library to root.log synchronously on the request path.
-LOG_LEVEL = decouple_config("LOG_LEVEL", default="WARNING").upper()
+LOG_LEVEL = config.get("LOG_LEVEL").upper()
 
 # "text" keeps today's log lines; "json" writes one JSON object per line, with the request id
 # and with secrets and personal data redacted (building_blocks/observability/logging.py).
-LOG_FORMAT = decouple_config("LOG_FORMAT", default="text").lower()
+LOG_FORMAT = config.get("LOG_FORMAT").lower()
 if LOG_FORMAT not in ("text", "json"):
     raise ImproperlyConfigured(f"LOG_FORMAT must be 'text' or 'json', not {LOG_FORMAT!r}.")
 _log_formatter = "json" if LOG_FORMAT == "json" else "verbose"
@@ -334,48 +331,48 @@ MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Email Sending
-EMAIL_BACKEND = _required("EMAIL_BACKEND")
-EMAIL_HOST = _required("EMAIL_HOST")
-EMAIL_HOST_USER = _required("EMAIL_HOST_USER")
-EMAIL_HOST_PASSWORD = _required("EMAIL_HOST_PASSWORD")
-EMAIL_PORT = _required("EMAIL_PORT")
-EMAIL_USE_TLS = _required("EMAIL_USE_TLS")
-FROM_MAIL = _required("FROM_MAIL")
-FR_DOMAIN_NAME = _required("FR_DOMAIN_NAME")
+EMAIL_BACKEND = config.get("EMAIL_BACKEND")
+EMAIL_HOST = config.get("EMAIL_HOST")
+EMAIL_HOST_USER = config.get("EMAIL_HOST_USER")
+EMAIL_HOST_PASSWORD = config.get("EMAIL_HOST_PASSWORD")
+EMAIL_PORT = config.get("EMAIL_PORT")
+EMAIL_USE_TLS = config.get("EMAIL_USE_TLS")
+FROM_MAIL = config.get("FROM_MAIL")
+FR_DOMAIN_NAME = config.get("FR_DOMAIN_NAME")
 
-WADHWANI_CLIENT_AUTH_URL = _required("WADHWANI_CLIENT_AUTH_URL")
-WADHWANI_CLIENT_SECRET = _required("WADHWANI_CLIENT_SECRET")
-WADHWANI_BASE_URL = _required("WADHWANI_BASE_URL")
+WADHWANI_CLIENT_AUTH_URL = config.get("WADHWANI_CLIENT_AUTH_URL")
+WADHWANI_CLIENT_SECRET = config.get("WADHWANI_CLIENT_SECRET")
+WADHWANI_BASE_URL = config.get("WADHWANI_BASE_URL")
 
-RAZORPAY_ID = _required("RAZORPAY_ID")
-RAZORPAY_SECRET = _required("RAZORPAY_SECRET")
+RAZORPAY_ID = config.get("RAZORPAY_ID")
+RAZORPAY_SECRET = config.get("RAZORPAY_SECRET")
 
-QSEVERSE_BASE_URL = _required("QSEVERSE_BASE_URL")
-QSEVERSE_API_KEY = _required("QSEVERSE_API_KEY")
+QSEVERSE_BASE_URL = config.get("QSEVERSE_BASE_URL")
+QSEVERSE_API_KEY = config.get("QSEVERSE_API_KEY")
 
-BACKEND_API_KEY = _required("BACKEND_API_KEY")
+BACKEND_API_KEY = config.get("BACKEND_API_KEY")
 
 # ── Notification dispatch ──────────────────────────────────────────────────
 # 'inline' (default): NotificationService writes synchronously, same as
 # every other write path today. 'celery' is a reserved value for a future
 # async dispatch task — not implemented yet, since Celery isn't reliably
 # running in this deployment; dispatch() falls back to inline if it's set.
-NOTIFICATION_DISPATCH_MODE = decouple_config("NOTIFICATION_DISPATCH_MODE", default="inline")
+NOTIFICATION_DISPATCH_MODE = config.get("NOTIFICATION_DISPATCH_MODE")
 
 # Audience size at/above which dispatch() writes a single broadcast_notification
 # row instead of one notification row per recipient (the hybrid fan-out branch —
 # see notification_docs/notification-system-status.md).
-NOTIFICATION_BROADCAST_THRESHOLD = decouple_config("NOTIFICATION_BROADCAST_THRESHOLD", default=500, cast=int)
+NOTIFICATION_BROADCAST_THRESHOLD = config.get("NOTIFICATION_BROADCAST_THRESHOLD")
 
 # TTL for the cached unread notification count (seconds).
-NOTIFICATION_UNREAD_COUNT_CACHE_TTL = decouple_config("NOTIFICATION_UNREAD_COUNT_CACHE_TTL", default=60, cast=int)
+NOTIFICATION_UNREAD_COUNT_CACHE_TTL = config.get("NOTIFICATION_UNREAD_COUNT_CACHE_TTL")
 
 # Push notifications (docs/push-notifications.md). FIREBASE_CREDENTIALS is the
 # Firebase service-account JSON (or a path to it); empty disables push without
 # breaking anything. PUSH_ENABLED is a deploy-level switch on top of the admin
 # kill switch.
-FIREBASE_CREDENTIALS = decouple_config("FIREBASE_CREDENTIALS", default="")
-PUSH_ENABLED = decouple_config("PUSH_ENABLED", default=True, cast=bool)
+FIREBASE_CREDENTIALS = config.get("FIREBASE_CREDENTIALS")
+PUSH_ENABLED = config.get("PUSH_ENABLED")
 
 DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
 
@@ -386,7 +383,7 @@ DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
 # No R2 credentials are needed here.
 # Required (no default): without it image URLs would silently become relative
 # paths that 404, so a missing value must stop startup instead.
-R2_PUBLIC_BASE_URL = _required("R2_PUBLIC_BASE_URL")
+R2_PUBLIC_BASE_URL = config.get("R2_PUBLIC_BASE_URL")
 
 import socket
 
@@ -403,7 +400,7 @@ from mulearnbackend.celery_schedules import select_schedules
 # Keywords are case-insensitive. An unknown name stops every process at startup, so a
 # typo never silently turns schedules off. This is deployment configuration, not a
 # feature switch (docs/architecture/adr/ADR-042-background-work-celery.md).
-BEAT_SCHEDULES = decouple_config("BEAT_SCHEDULES", default="all")
+BEAT_SCHEDULES = config.get("BEAT_SCHEDULES")
 
 CELERY_BEAT_SCHEDULE = {
     'intern-daily-status-cron': {
@@ -473,5 +470,3 @@ CELERY_BEAT_SCHEDULE = {
 }
 CELERY_BEAT_SCHEDULE = select_schedules(CELERY_BEAT_SCHEDULE, BEAT_SCHEDULES)
 
-raise_if_missing(_MISSING)
-del _MISSING, _required  # keep them out of django.conf.settings

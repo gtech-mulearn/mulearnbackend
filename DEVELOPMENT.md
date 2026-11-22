@@ -82,7 +82,8 @@ curl -s localhost:8000/api/v1/public/global-count/
   - Against another database, create that user there first.
 - **Port 3306 is already in use.** Another MySQL is running on your machine. Start with `LOCAL_MYSQL_PORT=3307 docker compose -f docker-compose.local.yml up -d`, and test with `TEST_DB_PORT=3307 scripts/test.sh --mysql`.
 - **Port 8000 is already in use.** Stop the other server, or change the `web` port mapping in your local copy of the compose file.
-- **`ImproperlyConfigured: Missing required settings: …` at startup.** Add those names to `.env` (compare with `.env.sample`), or to `.env.local` (compare with `.env.local.example`).
+- **`ImproperlyConfigured: Configuration problems: …` at startup.** Every problem is listed: a missing value, or one that isn't the declared type (a whole number, true/false, an http(s) URL). Fix them in `.env` (compare with `.env.sample`), or in `.env.local` (compare with `.env.local.example`). Each setting's type is declared in `mulearnbackend/config_settings.py`.
+- **Check an env file before a deploy** with `python manage.py config_check --env-file <path>`. It validates every declared setting for the file's `MULEARN_ENV` (`local`, `dev`, `staging` or `production`), lists every problem, never prints a secret, and exits 1 on any problem.
 - **`Refusing to run tests against database …`.** pytest was pointed at a database that isn't a local `test_` one. Use `scripts/test.sh`.
 - **`ERROR 1674 … unsafe because it uses a system function` while loading `schema/latest.sql` yourself.** Turn binary logging off for that session (see `schema/README.md`).
 - **The logs directory is missing.** The logging settings write to `LOGGER_DIR_PATH` (`./logs` in `.env.sample`). `scripts/test.sh` creates it; for `manage.py`, run `mkdir logs` first.
