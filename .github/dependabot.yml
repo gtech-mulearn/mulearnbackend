@@ -1,0 +1,15 @@
+# Weekly dependency update pull requests (issue 0039).
+# Dependabot updates the pins in requirements.txt and requirements-dev.txt. Regenerate
+# requirements.lock and requirements-dev.lock in the same pull request (DEVELOPMENT.md);
+# tests/test_requirements_lock.py fails until they match.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
