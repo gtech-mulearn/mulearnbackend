@@ -25,6 +25,8 @@ from drf_spectacular.views import (
 from decouple import config as decouple_config
 
 urlpatterns = [
+    # Load balancer health checks, outside /api/v1/ and without authentication (building_blocks/health).
+    path("healthz/", include("building_blocks.health.urls")),
     # path('admin/', admin.site.urls),
     path("api/v1/", include("api.urls")),
     re_path(

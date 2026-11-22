@@ -44,6 +44,9 @@ ALLOWED_HOSTS = _required(
 # System admin applied to rows when their parent user instance is deleted
 SYSTEM_ADMIN_ID = _required("SYSTEM_ADMIN_ID")
 
+# While this file exists, /healthz/ready returns 503 so the load balancer drains the node.
+DRAIN_FLAG_PATH = decouple_config("DRAIN_FLAG_PATH", default="/tmp/mulearn-drain")
+
 # Application definition
 
 INSTALLED_APPS = [
