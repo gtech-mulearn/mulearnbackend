@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 
 from decouple import config as decouple_config
+from django.core.exceptions import ImproperlyConfigured
 
 from mulearnbackend.required_settings import make_required, raise_if_missing
 
@@ -64,6 +65,8 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    # First, so every response carries X-Request-Id and every log line its request id.
+    "building_blocks.observability.middleware.RequestContextMiddleware",
     "corsheaders.middleware.CorsMiddleware",  
     "django.middleware.security.SecurityMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -227,6 +230,13 @@ LOG_PATH = _required("LOGGER_DIR_PATH")
 # debug line from every library to root.log synchronously on the request path.
 LOG_LEVEL = decouple_config("LOG_LEVEL", default="WARNING").upper()
 
+# "text" keeps today's log lines; "json" writes one JSON object per line, with the request id
+# and with secrets and personal data redacted (building_blocks/observability/logging.py).
+LOG_FORMAT = decouple_config("LOG_FORMAT", default="text").lower()
+if LOG_FORMAT not in ("text", "json"):
+    raise ImproperlyConfigured(f"LOG_FORMAT must be 'text' or 'json', not {LOG_FORMAT!r}.")
+_log_formatter = "json" if LOG_FORMAT == "json" else "verbose"
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -235,25 +245,25 @@ LOGGING = {
             "level": "INFO",
             "class": "logging.FileHandler",
             "filename": f"{LOG_PATH}/request.log",
-            "formatter": "verbose",
+            "formatter": _log_formatter,
         },
         "error_log": {
             "level": "ERROR",
             "class": "logging.FileHandler",
             "filename": f"{LOG_PATH}/error.log",
-            "formatter": "verbose",
+            "formatter": _log_formatter,
         },
         "sql_log": {
             "level": "DEBUG",
             "class": "logging.FileHandler",
             "filename": f"{LOG_PATH}/sql.log",
-            "formatter": "verbose",
+            "formatter": _log_formatter,
         },
         "root_log": {
             "level": "DEBUG",
             "class": "logging.FileHandler",
             "filename": f"{LOG_PATH}/root.log",
-            "formatter": "verbose",
+            "formatter": _log_formatter,
         },
     },
     "loggers": {
@@ -277,6 +287,9 @@ LOGGING = {
         "verbose": {
             "format": "{asctime} {levelname} {message}",
             "style": "{",
+        },
+        "json": {
+            "()": "building_blocks.observability.logging.JsonFormatter",
         },
     },
 }
