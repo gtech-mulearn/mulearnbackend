@@ -1,0 +1,78 @@
+# Local development only: the whole backend on your machine, with no shared database.
+#
+#   cp .env.local.example .env.local
+#   docker compose -f docker-compose.local.yml up -d
+#
+# The first start builds the database from schema/latest.sql (scripts/local-db-init.sh).
+# Ports are published on 127.0.0.1 only. If 3306 is already taken by a MySQL on your
+# machine, set LOCAL_MYSQL_PORT (for example 3307) for compose and TEST_DB_PORT for
+# scripts/test.sh --mysql. Production uses docker-compose.yml, not this file.
+name: mulearn-local
+
+x-backend: &backend
+  build:
+    context: .
+    dockerfile: Dockerfile
+  env_file: .env.local
+  volumes:
+    - .:/app
+  depends_on:
+    mysql:
+      condition: service_healthy
+    redis-state:
+      condition: service_started
+
+services:
+  mysql:
+    image: mysql:8.4
+    # schema/latest.sql adds a column with DEFAULT (UUID()), which MySQL refuses while
+    # binary logging is on, so a local server runs without it.
+    command: ["mysqld", "--disable-log-bin"]
+    environment:
+      MYSQL_ROOT_PASSWORD: local-only
+      # Only this service sets it; scripts/local-db-init.sh refuses to run without it.
+      MULEARN_LOCAL_DB_INIT: "1"
+    ports:
+      - "127.0.0.1:${LOCAL_MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./scripts/local-db-init.sh:/docker-entrypoint-initdb.d/10-local-db-init.sh:ro
+      # In subfolders, so the entrypoint doesn't run them on its own; the init script does.
+      - ./schema/latest.sql:/docker-entrypoint-initdb.d/schema/latest.sql:ro
+      - ./scripts/seed-system-user.sql:/docker-entrypoint-initdb.d/seed/seed-system-user.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-plocal-only", "--silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+
+  redis-cache:
+    image: redis:7
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+
+  # The backend reads one REDIS_HOST today (cache, Channels and the Celery broker), so it
+  # points here; redis-cache is used once the two are split (issue 0072).
+  redis-state:
+    image: redis:7
+    command: ["redis-server", "--maxmemory-policy", "noeviction"]
+
+  web:
+    <<: *backend
+    command: python manage.py runserver 0.0.0.0:8000
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  worker:
+    <<: *backend
+    command: celery -A mulearnbackend.celery worker -l info
+
+  beat:
+    <<: *backend
+    command: celery -A mulearnbackend.celery beat -l info --schedule /var/lib/beat/celerybeat-schedule
+    volumes:
+      - .:/app
+      - beat-schedule:/var/lib/beat
+
+volumes:
+  mysql-data:
+  beat-schedule:

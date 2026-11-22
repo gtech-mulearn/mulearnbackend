@@ -22,6 +22,7 @@ __pycache__/
 
 # Environments #
 .env
+.env.local
 .venv
 env/
 venv/
@@ -34,4 +35,6 @@ static/
 .claude
 CLAUDE.md
 latest.sql
+# The vendored schema-only copy is tracked on purpose (schema/README.md).
+!schema/latest.sql
 perf/
