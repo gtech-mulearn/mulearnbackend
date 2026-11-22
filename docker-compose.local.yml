@@ -64,7 +64,8 @@ services:
 
   worker:
     <<: *backend
-    command: celery -A mulearnbackend.celery worker -l info
+    # Every queue in mulearnbackend/celery_routing.py; deployed environments split them by worker group.
+    command: celery -A mulearnbackend.celery worker -l info -Q critical,default,projections,notifications,bulk,integrations
 
   beat:
     <<: *backend
