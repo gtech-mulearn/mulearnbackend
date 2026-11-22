@@ -8,6 +8,8 @@ Running tests (Windows PowerShell)
       The MySQL tier: tests marked @pytest.mark.mysql, against a local test database.
       Set TEST_DB_HOST, TEST_DB_PORT, TEST_DB_NAME, TEST_DB_USER and TEST_DB_PASSWORD to change
       the defaults (127.0.0.1, 3306, test_mulearn, root, local-only).
+      SYSTEM_ADMIN_ID is the system user scripts/seed-system-user.sql creates
+      (00000000-0000-4000-8000-000000000001); set TEST_SYSTEM_ADMIN_ID to change it.
 
 Same behaviour as scripts/test.sh: -Mysql counts only as the first argument, and everything else
 goes to pytest unchanged. Paths are relative to the repository root. $env:PYTHON picks the
@@ -52,6 +54,8 @@ if ($Mysql) {
     $env:DATABASE_NAME = if ($env:TEST_DB_NAME) { $env:TEST_DB_NAME } else { "test_mulearn" }
     $env:DATABASE_USER = if ($env:TEST_DB_USER) { $env:TEST_DB_USER } else { "root" }
     $env:DATABASE_PASSWORD = if ($env:TEST_DB_PASSWORD) { $env:TEST_DB_PASSWORD } else { "local-only" }
+    # The backend won't start without this user (db/apps.py). It must match scripts/seed-system-user.sql.
+    $env:SYSTEM_ADMIN_ID = if ($env:TEST_SYSTEM_ADMIN_ID) { $env:TEST_SYSTEM_ADMIN_ID } else { "00000000-0000-4000-8000-000000000001" }
     & $python scripts/check_test_mysql.py
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     & $python -m pytest @PytestArgs --import-mode=importlib -m mysql

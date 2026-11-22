@@ -27,7 +27,7 @@
   - any schema change;
   - the acceptance criteria you checked.
 - **Write commit messages in the history's style:** `feat:`, `fix:`, `chore:`, `docs:`, `test:`, `ci:`, with an optional scope, for example `chore(settings): …`.
-- **CI must pass.** On every pull request, the `ci / unit` check runs ruff, the import contracts and the unit test tier, and `ci / legacy` runs the whole legacy suite and fails on any failure that isn't in `tests/legacy_baseline.txt`.
+- **CI must pass.** On every pull request, the `ci / unit` check runs ruff, the import contracts and the unit test tier, `ci / legacy` runs the whole legacy suite and fails on any failure that isn't in `tests/legacy_baseline.txt`, and `ci / mysql` runs the MySQL tier on MySQL 8.0 and 8.4. Which tier a test belongs to is in [tests/README.md](tests/README.md).
 
 ## Review rules
 

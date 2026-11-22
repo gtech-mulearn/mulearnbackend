@@ -8,6 +8,8 @@
 #       The MySQL tier: tests marked @pytest.mark.mysql, against a local test database.
 #       Set TEST_DB_HOST, TEST_DB_PORT, TEST_DB_NAME, TEST_DB_USER and TEST_DB_PASSWORD to change
 #       the defaults (127.0.0.1, 3306, test_mulearn, root, local-only).
+#       SYSTEM_ADMIN_ID is the system user scripts/seed-system-user.sql creates
+#       (00000000-0000-4000-8000-000000000001); set TEST_SYSTEM_ADMIN_ID to change it.
 #
 # Paths are relative to the repository root. PYTHON picks the interpreter (default: python).
 # The guard in tests/db_guard.py refuses any database that isn't SQLite or a local test_ database.
@@ -42,6 +44,8 @@ if [ "${1:-}" = "--mysql" ]; then
     export DATABASE_NAME="${TEST_DB_NAME:-test_mulearn}"
     export DATABASE_USER="${TEST_DB_USER:-root}"
     export DATABASE_PASSWORD="${TEST_DB_PASSWORD:-local-only}"
+    # The backend won't start without this user (db/apps.py). It must match scripts/seed-system-user.sql.
+    export SYSTEM_ADMIN_ID="${TEST_SYSTEM_ADMIN_ID:-00000000-0000-4000-8000-000000000001}"
     "$PYTHON" scripts/check_test_mysql.py
     exec "$PYTHON" -m pytest "$@" --import-mode=importlib -m mysql
 fi
