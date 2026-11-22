@@ -4,11 +4,12 @@
 [importlinter]
 root_packages =
     building_blocks
+    modules
     api
     db
     utils
     mu_celery
-# Forbidden contracts may name packages that aren't installed or don't exist yet, such as modules.
+# Forbidden contracts may name packages that aren't installed or don't exist yet.
 include_external_packages = True
 
 [importlinter:contract:building-blocks]
@@ -22,3 +23,25 @@ forbidden_modules =
     db
     utils
     mu_celery
+
+[importlinter:contract:legacy-uses-public-surfaces]
+name = legacy code imports only modules.*.public, modules.*.contracts and building_blocks
+type = forbidden
+source_modules =
+    api
+    db
+    utils
+    mu_celery
+forbidden_modules =
+    modules
+ignore_imports =
+    api.** -> modules.*.public
+    api.** -> modules.*.contracts
+    db.** -> modules.*.public
+    db.** -> modules.*.contracts
+    utils.** -> modules.*.public
+    utils.** -> modules.*.contracts
+    mu_celery.** -> modules.*.public
+    mu_celery.** -> modules.*.contracts
+allow_indirect_imports = True
+unmatched_ignore_imports_alerting = none
