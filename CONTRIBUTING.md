@@ -55,4 +55,5 @@
 
 - **ruff checks and formats new code** (`building_blocks/`, `modules/`, `tests/` and `scripts/`; see `ruff.toml`). Run `ruff check --fix` and `ruff format`, or install the hook once with `pre-commit install`.
 - **Legacy packages aren't reformatted.** Leave their style alone in unrelated changes.
+- **Django deprecation warnings are errors in new code** (`building_blocks/`, `modules/`, `tests/`). Use the replacement Django names instead. Legacy code only warns, and CI's `legacy` job reports how many warnings remain.
 - **Import contracts** keep `building_blocks` free of business and legacy code ([04-module-rules.md](docs/architecture/04-module-rules.md)). Run `lint-imports` to check them. `.importlinter` is generated: change `tests/architecture/module_graph.toml`, run `python scripts/gen_importlinter.py`, and commit both.

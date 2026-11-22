@@ -79,10 +79,16 @@ jobs:
       - name: Whole suite (SQLite tier)
         run: |
           cp .env.sample .env
-          scripts/test.sh --junitxml=legacy.xml -p no:cacheprovider || true
+          scripts/test.sh --junitxml=legacy.xml -p no:cacheprovider 2>&1 | tee legacy.log || true
 
       - name: Compare with the baseline
         run: python scripts/legacy_ratchet.py legacy.xml
+
+      # New code can't raise Django removal warnings (they're errors there); this counts the rest.
+      - name: Count legacy deprecation warnings
+        if: always()
+        run: |
+          { grep -h "Django deprecation warnings from legacy code" legacy.log || echo "No count: the suite didn't finish."; } | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Keep the report
         if: always()

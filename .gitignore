@@ -38,7 +38,8 @@ latest.sql
 # The vendored schema-only copy is tracked on purpose (schema/README.md).
 !schema/latest.sql
 perf/
-# The JUnit report scripts/legacy_ratchet.py reads.
+# The JUnit report scripts/legacy_ratchet.py reads, and the legacy job's pytest output.
 legacy.xml
+legacy.log
 # import-linter's cache (lint-imports).
 .import_linter_cache/

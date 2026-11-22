@@ -30,6 +30,20 @@ def pytest_configure(config):
 
     assert_safe_test_database(settings.DATABASES["default"])
 
+    # Django removal warnings raised in new code are errors; legacy code only warns (tests/deprecations.py).
+    from tests.deprecations import error_filters
+
+    for line in error_filters():
+        config.addinivalue_line("filterwarnings", line)
+
+
+def pytest_terminal_summary(terminalreporter):
+    """Count the Django removal warnings left, all from legacy code; CI's legacy job reports it."""
+    from tests.deprecations import count_removal_warnings
+
+    count = count_removal_warnings(terminalreporter.stats.get("warnings", []))
+    terminalreporter.write_line(f"Django deprecation warnings from legacy code: {count}")
+
 
 def ensure_system_user():
     """Apply scripts/seed-system-user.sql if the system user is missing.
