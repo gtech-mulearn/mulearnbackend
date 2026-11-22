@@ -20,6 +20,16 @@ SEED_SYSTEM_USER = Path(__file__).resolve().parent / "scripts" / "seed-system-us
 MYSQL_TIER = settings.DATABASES["default"]["ENGINE"].endswith("mysql")
 
 
+def pytest_addoption(parser):
+    # Declared here, not in tests/characterization/conftest.py: pytest only registers options
+    # from the conftest files it loads at startup.
+    parser.addoption(
+        "--update-golden",
+        action="store_true",
+        help="Rewrite tests/characterization/golden/ from the current responses, then review the diff.",
+    )
+
+
 def pytest_configure(config):
     """Stop before collection unless the database is safe to test against.
 

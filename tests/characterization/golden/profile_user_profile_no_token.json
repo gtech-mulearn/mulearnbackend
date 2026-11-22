@@ -1,0 +1,9 @@
+{
+  "hasError": true,
+  "message": {
+    "general": [
+      "Invalid token header"
+    ]
+  },
+  "statusCode": 1000
+}

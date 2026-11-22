@@ -30,4 +30,5 @@ pytestmark = [pytest.mark.mysql, pytest.mark.django_db]
 - `mysql/`: checks of the MySQL tier itself.
 - `schema/`: parity between the models and the loaded schema. Known drift is in `schema/known_drift.toml`, which only shrinks.
 - `architecture/`: the import contracts and the module graph.
+- `characterization/`: tests that pin a legacy route's response, status and query count before it moves. Its `conftest.py` has the fixtures (`make_user`, `api_client`, `assert_envelope`, `golden`). Run with `--update-golden` to rewrite the golden files, then review the diff.
 - `legacy_baseline.txt`: the legacy tests that fail today, for `scripts/legacy_ratchet.py`. It only shrinks.
