@@ -33,6 +33,9 @@ scripts/test.sh --mysql <paths> # tests marked @pytest.mark.mysql, against the l
 
 - **On Windows PowerShell,** use `scripts\test.ps1`, with `-Mysql` in place of `--mysql`.
 - **The MySQL tier** connects to `127.0.0.1:3306`, database `test_mulearn`, as `root` with password `local-only`, which is the local environment below. Set `TEST_DB_HOST`, `TEST_DB_PORT`, `TEST_DB_NAME`, `TEST_DB_USER` or `TEST_DB_PASSWORD` to change them. If nothing is listening, it fails within seconds with a connection error.
+  - Tests run against `test_mulearn` as it was loaded; no `test_test_mulearn` is created.
+  - `SYSTEM_ADMIN_ID` is set to the system user that `scripts/seed-system-user.sql` creates, whatever `.env` says. Set `TEST_SYSTEM_ADMIN_ID` to change it.
+  - [tests/README.md](tests/README.md) says which tests belong on this tier.
 - **The whole legacy suite (`scripts/test.sh` with no paths)** has known failures under SQLite today. They're listed in `tests/legacy_baseline.txt`, and the `ci / legacy` check fails only on a failure that isn't listed. Check it locally the same way:
 
   ```sh
