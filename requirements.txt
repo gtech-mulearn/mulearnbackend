@@ -6,7 +6,6 @@ Django==4.2.7
 django-cors-headers==4.3.0
 django-debug-toolbar==4.2.0
 djangorestframework==3.14.0
-djangorestframework-simplejwt==5.3.0
 mysqlclient==2.1.1
 openpyxl==3.1.2
 pillow==10.1.0
@@ -25,3 +24,5 @@ django_redis==5.4.0
 celery==5.4.0
 drf-spectacular==0.27.2
 firebase-admin==7.1.0
+# razorpay imports pkg_resources, which setuptools 81 removed. Keep setuptools below that until razorpay is upgraded.
+setuptools==65.5.1

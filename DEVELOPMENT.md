@@ -14,12 +14,29 @@
 ```sh
 python -m venv .venv
 source .venv/bin/activate              # Windows: .venv\Scripts\activate
-pip install -r requirements.txt -r requirements-dev.txt
+pip install --require-hashes -r requirements-dev.lock
 cp .env.sample .env
 pre-commit install                     # optional: ruff on every commit
 ```
 
 `.env` is read by the commands you run on your machine. The test runner below overrides every database setting in it, so the other values only need to be present.
+
+## Change a dependency
+
+`requirements.txt` and `requirements-dev.txt` hold the direct dependencies, pinned. The lock files pin every package, transitive ones included, with hashes:
+
+- `requirements.lock`, which the Docker image installs;
+- `requirements-dev.lock`, which CI and local setups install. It includes everything in `requirements.lock`, at the same versions.
+
+After editing a requirements file, regenerate both, using the commands in their headers, and commit all four files:
+
+```sh
+pip install uv
+uv pip compile --universal --python-version 3.10 --generate-hashes requirements.txt -o requirements.lock
+uv pip compile --universal --python-version 3.10 --generate-hashes requirements.txt requirements-dev.txt -c requirements.lock -o requirements-dev.lock
+```
+
+`tests/test_requirements_lock.py` fails when a pin and its lock disagree. Dependabot opens weekly pull requests that update the pins; regenerate the locks in the same pull request.
 
 ## Run the tests
 

@@ -29,15 +29,17 @@ jobs:
         with:
           python-version: "3.10"
           cache: pip
-          cache-dependency-path: |
-            requirements.txt
-            requirements-dev.txt
+          cache-dependency-path: requirements-dev.lock
 
       - name: Install mysqlclient's build dependencies
         run: sudo apt-get update && sudo apt-get install -y default-libmysqlclient-dev pkg-config
 
       - name: Install dependencies
-        run: pip install -r requirements.txt -r requirements-dev.txt
+        # Every package pinned and hash-checked (issue 0039). It includes requirements.lock at the same versions.
+        # Python 3.10 bundles pip 23.0.1, which rejects a dependency with extras (twisted[tls]) in hash mode.
+        run: |
+          python -m pip install pip==25.1.1
+          pip install --require-hashes -r requirements-dev.lock
 
       - name: Ruff
         run: |
@@ -64,15 +66,17 @@ jobs:
         with:
           python-version: "3.10"
           cache: pip
-          cache-dependency-path: |
-            requirements.txt
-            requirements-dev.txt
+          cache-dependency-path: requirements-dev.lock
 
       - name: Install mysqlclient's build dependencies
         run: sudo apt-get update && sudo apt-get install -y default-libmysqlclient-dev pkg-config
 
       - name: Install dependencies
-        run: pip install -r requirements.txt -r requirements-dev.txt
+        # Every package pinned and hash-checked (issue 0039). It includes requirements.lock at the same versions.
+        # Python 3.10 bundles pip 23.0.1, which rejects a dependency with extras (twisted[tls]) in hash mode.
+        run: |
+          python -m pip install pip==25.1.1
+          pip install --require-hashes -r requirements-dev.lock
 
       # The suite has known failures, so its exit code is ignored here. The ratchet decides,
       # and it also fails if pytest crashed before writing the report.
@@ -130,15 +134,17 @@ jobs:
         with:
           python-version: "3.10"
           cache: pip
-          cache-dependency-path: |
-            requirements.txt
-            requirements-dev.txt
+          cache-dependency-path: requirements-dev.lock
 
       - name: Install mysqlclient's build dependencies
         run: sudo apt-get update && sudo apt-get install -y default-libmysqlclient-dev pkg-config
 
       - name: Install dependencies
-        run: pip install -r requirements.txt -r requirements-dev.txt
+        # Every package pinned and hash-checked (issue 0039). It includes requirements.lock at the same versions.
+        # Python 3.10 bundles pip 23.0.1, which rejects a dependency with extras (twisted[tls]) in hash mode.
+        run: |
+          python -m pip install pip==25.1.1
+          pip install --require-hashes -r requirements-dev.lock
 
       # Binary logging is on in the image, and the schema's DEFAULT (UUID()) columns fail with
       # ERROR 1674 unless it is off for the loading session (schema/README.md).

@@ -1,4 +1,5 @@
-# Development and test tools. Install with: pip install -r requirements.txt -r requirements-dev.txt
+# Development and test tools. Install everything with: pip install --require-hashes -r requirements-dev.lock
+# After changing this file or requirements.txt, regenerate both lock files (DEVELOPMENT.md).
 # Exact pins, so every contributor and CI lints and tests with the same versions.
 ruff==0.17.6
 pytest==8.3.4
