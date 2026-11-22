@@ -1,0 +1,27 @@
+{
+  "hasError": false,
+  "message": {
+    "general": []
+  },
+  "response": {
+    "company": null,
+    "dob": null,
+    "dynamic_type": [],
+    "email": "info-person@example.com",
+    "exist_in_guild": false,
+    "full_name": "Info Person",
+    "gender": null,
+    "interested_in_gig_work": false,
+    "interested_in_work": false,
+    "joined": "<datetime>",
+    "mobile": null,
+    "muid": "info-person@mulearn",
+    "profile_pic": null,
+    "roles": [
+      "Student"
+    ],
+    "user_domains": [],
+    "user_endgoals": []
+  },
+  "statusCode": 200
+}
