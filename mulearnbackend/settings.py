@@ -377,6 +377,17 @@ hostname, _, ips = socket.gethostbyname_ex(socket.gethostname())
 INTERNAL_IPS = [f"{ip[:-1]}1" for ip in ips] + ["127.0.0.1", "10.0.2.2"]
 DEFAULT_CHARSET = "utf-8"
 from celery.schedules import crontab
+
+from mulearnbackend.celery_schedules import select_schedules
+
+# BEAT_SCHEDULES chooses which of the schedules below this deployment's beat registers:
+# "all" (the default, also when unset or empty), "none", or a comma-separated list of
+# schedule names, for example "push-dispatch-due-campaigns,refresh-leaderboards-cron".
+# Keywords are case-insensitive. An unknown name stops every process at startup, so a
+# typo never silently turns schedules off. This is deployment configuration, not a
+# feature switch (docs/architecture/adr/ADR-042-background-work-celery.md).
+BEAT_SCHEDULES = decouple_config("BEAT_SCHEDULES", default="all")
+
 CELERY_BEAT_SCHEDULE = {
     'intern-daily-status-cron': {
         'task': 'mu_celery.intern_cron.intern_daily_status_cron',
@@ -443,6 +454,7 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': crontab(hour=1, minute=40),
     },
 }
+CELERY_BEAT_SCHEDULE = select_schedules(CELERY_BEAT_SCHEDULE, BEAT_SCHEDULES)
 
 raise_if_missing(_MISSING)
 del _MISSING, _required  # keep them out of django.conf.settings
