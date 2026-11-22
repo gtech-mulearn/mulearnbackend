@@ -38,3 +38,5 @@ latest.sql
 # The vendored schema-only copy is tracked on purpose (schema/README.md).
 !schema/latest.sql
 perf/
+# The JUnit report scripts/legacy_ratchet.py reads.
+legacy.xml

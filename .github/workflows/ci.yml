@@ -1,6 +1,7 @@
-# Checks every pull request: ruff on new-code paths and the unit test tier.
-# The unit tier runs on in-memory SQLite (scripts/test.sh), so it can't reach any database,
-# and the job uses no secrets. Branch rules require the "ci / unit" check (issue 0029).
+# Checks every pull request: ruff on new-code paths, the unit test tier, and the legacy suite
+# against its baseline (tests/legacy_baseline.txt). Both test jobs run on in-memory SQLite
+# (scripts/test.sh), so they can't reach any database, and they use no secrets.
+# Branch rules require the "ci / unit" check (issue 0029).
 name: ci
 
 on:
@@ -46,3 +47,43 @@ jobs:
         run: |
           cp .env.sample .env
           scripts/test.sh tests/
+
+  legacy:
+    name: legacy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install mysqlclient's build dependencies
+        run: sudo apt-get update && sudo apt-get install -y default-libmysqlclient-dev pkg-config
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      # The suite has known failures, so its exit code is ignored here. The ratchet decides,
+      # and it also fails if pytest crashed before writing the report.
+      - name: Whole suite (SQLite tier)
+        run: |
+          cp .env.sample .env
+          scripts/test.sh --junitxml=legacy.xml -p no:cacheprovider || true
+
+      - name: Compare with the baseline
+        run: python scripts/legacy_ratchet.py legacy.xml
+
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: legacy-junit
+          path: legacy.xml
+          if-no-files-found: ignore
+          retention-days: 7
