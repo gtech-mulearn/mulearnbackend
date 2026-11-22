@@ -27,7 +27,7 @@
   - any schema change;
   - the acceptance criteria you checked.
 - **Write commit messages in the history's style:** `feat:`, `fix:`, `chore:`, `docs:`, `test:`, `ci:`, with an optional scope, for example `chore(settings): …`.
-- **CI must pass.** The `ci / unit` check runs ruff and the unit test tier on every pull request.
+- **CI must pass.** On every pull request, the `ci / unit` check runs ruff and the unit test tier, and `ci / legacy` runs the whole legacy suite and fails on any failure that isn't in `tests/legacy_baseline.txt`.
 
 ## Review rules
 
