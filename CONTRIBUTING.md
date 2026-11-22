@@ -27,7 +27,7 @@
   - any schema change;
   - the acceptance criteria you checked.
 - **Write commit messages in the history's style:** `feat:`, `fix:`, `chore:`, `docs:`, `test:`, `ci:`, with an optional scope, for example `chore(settings): …`.
-- **CI must pass.** On every pull request, the `ci / unit` check runs ruff and the unit test tier, and `ci / legacy` runs the whole legacy suite and fails on any failure that isn't in `tests/legacy_baseline.txt`.
+- **CI must pass.** On every pull request, the `ci / unit` check runs ruff, the import contracts and the unit test tier, and `ci / legacy` runs the whole legacy suite and fails on any failure that isn't in `tests/legacy_baseline.txt`.
 
 ## Review rules
 
@@ -55,3 +55,4 @@
 
 - **ruff checks and formats new code** (`building_blocks/`, `modules/`, `tests/` and `scripts/`; see `ruff.toml`). Run `ruff check --fix` and `ruff format`, or install the hook once with `pre-commit install`.
 - **Legacy packages aren't reformatted.** Leave their style alone in unrelated changes.
+- **Import contracts** keep `building_blocks` free of business and legacy code ([04-module-rules.md](docs/architecture/04-module-rules.md)). Run `lint-imports` to check them. `.importlinter` is generated: change `tests/architecture/module_graph.toml`, run `python scripts/gen_importlinter.py`, and commit both.

@@ -1,7 +1,7 @@
-# Checks every pull request: ruff on new-code paths, the unit test tier, and the legacy suite
-# against its baseline (tests/legacy_baseline.txt). Both test jobs run on in-memory SQLite
-# (scripts/test.sh), so they can't reach any database, and they use no secrets.
-# Branch rules require the "ci / unit" check (issue 0029).
+# Checks every pull request: ruff on new-code paths, the import contracts, the unit test tier,
+# and the legacy suite against its baseline (tests/legacy_baseline.txt). Both test jobs run
+# on in-memory SQLite (scripts/test.sh), so they can't reach any database, and they use no
+# secrets. Branch rules require the "ci / unit" check (issue 0029).
 name: ci
 
 on:
@@ -43,10 +43,14 @@ jobs:
           ruff check
           ruff format --check
 
+      # The import contracts in .importlinter, generated from tests/architecture/module_graph.toml.
+      - name: Import contracts
+        run: lint-imports --no-cache
+
       - name: Unit tests (SQLite tier)
         run: |
           cp .env.sample .env
-          scripts/test.sh tests/
+          scripts/test.sh tests/ building_blocks/
 
   legacy:
     name: legacy
