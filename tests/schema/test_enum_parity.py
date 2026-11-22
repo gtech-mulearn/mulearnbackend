@@ -5,6 +5,7 @@ from django.apps import apps
 from django.db import connection
 
 from tests.schema.enum_parity import KNOWN_DRIFT, compare, load_known, parse_enum, unexpected_and_fixed
+from tests.schema.model_parity import import_all_models
 
 pytestmark = [pytest.mark.mysql, pytest.mark.django_db]
 
@@ -20,6 +21,7 @@ def enum_columns() -> dict[tuple[str, str], list[str]]:
 
 def mapped_fields(columns):
     """Every concrete model field whose column is an ENUM: ((table, column), field)."""
+    import_all_models()
     for model in apps.get_models():
         for field in model._meta.concrete_fields:
             key = (model._meta.db_table, field.column)

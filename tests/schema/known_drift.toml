@@ -1,6 +1,8 @@
-# Known drift between model choices and the ENUM columns they map (issue 0054).
+# Known drift between the models and the vendored schema, schema/latest.sql.
+#   [[enum]]   model choices against ENUM columns (issue 0054, tests/schema/test_enum_parity.py)
+#   [[model]]  tables, columns, nullability, lengths and foreign keys (issue 0053, test_model_parity.py)
 #
-# tests/schema/test_enum_parity.py fails on drift that isn't listed here, and on a listed
+# Each parity test fails on drift that isn't listed here, and on a listed
 # entry that no longer drifts, so this file only shrinks. Enum values are part of the API for
 # some endpoints, so each fix is its own issue; the owner is the module that owns the table
 # (docs/architecture/03-target-architecture.md).
@@ -93,3 +95,611 @@ column = "status"
 kind = "no_choices"
 values = ["In-Review", "Interview", "Pending", "Rejected", "Selected", "Shortlisted"]
 owner = "careers"
+
+# ---------------------------------------------------------------------------------------------
+# [[model]]: unmanaged models against information_schema (issue 0053).
+#
+# Kinds:
+#   missing_table        the model's table doesn't exist
+#   missing_column       a model field's column doesn't exist; every query selecting it fails (1054)
+#   nullability          the model's null differs from the column's: null=True on a NOT NULL column
+#                        fails on write (1048); null=False on a NULL column can read a None
+#   max_length           a CharField allows more than its column: longer values fail on write (1406)
+#   missing_foreign_key  a ForeignKey (db_constraint=True) has no matching database foreign key
+#
+# The two missing_column entries on interest_group (cover_image_key, icon_image_key) came with
+# backend 62cf57aa, on dev only. No db-scripts alter adds them, so interest-group queries fail on
+# any database built from db-scripts; they need an alter before dev ships.
+
+[[model]]
+table = "achievement"
+column = "icon"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "gamification"
+
+[[model]]
+table = "achievement_audit_log"
+column = "performed_by"
+kind = "missing_foreign_key"
+detail = "to user.id"
+owner = "gamification"
+
+[[model]]
+table = "achievement_event"
+column = "processed"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "gamification"
+
+[[model]]
+table = "achievement_rule"
+column = "is_active"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "gamification"
+
+[[model]]
+table = "categories"
+column = "created_at"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "events"
+
+[[model]]
+table = "categories"
+column = "updated_at"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "events"
+
+[[model]]
+table = "circle_meeting_log"
+column = "meet_code"
+kind = "max_length"
+detail = "model 10, column 6"
+owner = "communities"
+
+[[model]]
+table = "circle_meeting_log"
+column = "meet_code"
+kind = "nullability"
+detail = "model null=True, column NOT NULL"
+owner = "communities"
+
+[[model]]
+table = "circle_meeting_log"
+column = "meet_link"
+kind = "max_length"
+detail = "model 200, column 100"
+owner = "communities"
+
+[[model]]
+table = "college_showcase"
+column = "gallery"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "organizations"
+
+[[model]]
+table = "college_showcase"
+column = "highlights"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "organizations"
+
+[[model]]
+table = "college_showcase"
+column = "testimonials"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "organizations"
+
+[[model]]
+table = "company"
+column = "status"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "careers"
+
+[[model]]
+table = "donation"
+column = "created_at"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "payments"
+
+[[model]]
+table = "donation"
+column = "currency"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "payments"
+
+[[model]]
+table = "donation"
+column = "is_paid"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "payments"
+
+[[model]]
+table = "donation"
+column = "payment_status"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "payments"
+
+[[model]]
+table = "donor"
+column = "is_organisation"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "payments"
+
+[[model]]
+table = "enabler_campus_note"
+column = "priority"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "organizations"
+
+[[model]]
+table = "enabler_campus_note"
+column = "status"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "organizations"
+
+[[model]]
+table = "events"
+column = "slug"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "events"
+
+[[model]]
+table = "events_connection"
+column = "entity_type"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "events"
+
+[[model]]
+table = "hackathon"
+column = "type"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "events"
+
+[[model]]
+table = "hackathon_submission"
+column = "data"
+kind = "nullability"
+detail = "model null=True, column NOT NULL"
+owner = "events"
+
+[[model]]
+table = "ig_opportunity"
+column = "created_by"
+kind = "missing_foreign_key"
+detail = "to user.id"
+owner = "communities"
+
+[[model]]
+table = "ig_opportunity"
+column = "updated_by"
+kind = "missing_foreign_key"
+detail = "to user.id"
+owner = "communities"
+
+[[model]]
+table = "interest_group"
+column = "code"
+kind = "max_length"
+detail = "model 10, column 5"
+owner = "communities"
+
+[[model]]
+table = "interest_group"
+column = "cover_image_key"
+kind = "missing_column"
+detail = "db.InterestGroup.cover_image_key"
+owner = "communities"
+
+[[model]]
+table = "interest_group"
+column = "icon_image_key"
+kind = "missing_column"
+detail = "db.InterestGroup.icon_image_key"
+owner = "communities"
+
+[[model]]
+table = "interest_group"
+column = "sponsor_company_id"
+kind = "missing_foreign_key"
+detail = "to company.id"
+owner = "communities"
+
+[[model]]
+table = "karma_activity_log"
+column = "appraiser_approved_by"
+kind = "missing_foreign_key"
+detail = "to user.id"
+owner = "contributions"
+
+[[model]]
+table = "karma_activity_log"
+column = "peer_approved_by"
+kind = "missing_foreign_key"
+detail = "to user.id"
+owner = "contributions"
+
+[[model]]
+table = "karma_activity_log"
+column = "user_id"
+kind = "nullability"
+detail = "model null=True, column NOT NULL"
+owner = "contributions"
+
+[[model]]
+table = "launchpad_companies"
+column = "is_verified"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "careers"
+note = "launchpad is deprecated: remove the model rather than fix it"
+
+[[model]]
+table = "launchpad_job_applications"
+column = "created_at"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "careers"
+note = "launchpad is deprecated: remove the model rather than fix it"
+
+[[model]]
+table = "launchpad_job_applications"
+column = "invited_at"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "careers"
+note = "launchpad is deprecated: remove the model rather than fix it"
+
+[[model]]
+table = "launchpad_job_applications"
+column = "updated_at"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "careers"
+note = "launchpad is deprecated: remove the model rather than fix it"
+
+[[model]]
+table = "launchpad_job_tasks"
+column = "created_at"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "careers"
+note = "launchpad is deprecated: remove the model rather than fix it"
+
+[[model]]
+table = "launchpad_job_tasks"
+column = "updated_at"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "careers"
+note = "launchpad is deprecated: remove the model rather than fix it"
+
+[[model]]
+table = "launchpad_jobs"
+column = "task_id"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "careers"
+note = "launchpad is deprecated: remove the model rather than fix it"
+
+[[model]]
+table = "learning_circle"
+column = "description"
+kind = "nullability"
+detail = "model null=True, column NOT NULL"
+owner = "communities"
+
+[[model]]
+table = "mentorship_session"
+column = "is_recurring"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "mentorship"
+
+[[model]]
+table = "notification"
+column = "description"
+kind = "max_length"
+detail = "model 300, column 200"
+owner = "notifications"
+
+[[model]]
+table = "notification"
+column = "title"
+kind = "max_length"
+detail = "model 100, column 50"
+owner = "notifications"
+
+[[model]]
+table = "organization"
+column = "district_id"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "organizations"
+
+[[model]]
+table = "skill"
+column = "is_active"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "learning"
+
+[[model]]
+table = "socials"
+column = "linkedin"
+kind = "max_length"
+detail = "model 255, column 60"
+owner = "people"
+
+[[model]]
+table = "socials"
+column = "updated_at"
+kind = "nullability"
+detail = "model null=True, column NOT NULL"
+owner = "people"
+
+[[model]]
+table = "task_list"
+column = "usage_count"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "learning"
+
+[[model]]
+table = "url_shortener"
+column = "count"
+kind = "nullability"
+detail = "model null=True, column NOT NULL"
+owner = "administration"
+
+[[model]]
+table = "url_shortener_tracker"
+column = "ip_address"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "administration"
+
+[[model]]
+table = "user"
+column = "interested_in_gig_work"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "people"
+
+[[model]]
+table = "user"
+column = "interested_in_work"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "people"
+
+[[model]]
+table = "user_achievements_log"
+column = "rule_version"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "gamification"
+
+[[model]]
+table = "user_achievements_log"
+column = "vc_url"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "gamification"
+
+[[model]]
+table = "user_circle_link"
+column = "invited_by"
+kind = "missing_foreign_key"
+detail = "to user.id"
+owner = "communities"
+
+[[model]]
+table = "user_circle_link"
+column = "is_invited"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "communities"
+
+[[model]]
+table = "user_circle_link"
+column = "lead"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "communities"
+
+[[model]]
+table = "user_daily_activity"
+column = "has_karma"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "gamification"
+
+[[model]]
+table = "user_daily_activity"
+column = "has_login"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "gamification"
+
+[[model]]
+table = "user_daily_activity"
+column = "has_task"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "gamification"
+
+[[model]]
+table = "user_daily_activity"
+column = "karma_earned"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "gamification"
+
+[[model]]
+table = "user_daily_activity"
+column = "task_count"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "gamification"
+
+[[model]]
+table = "user_ig_karma"
+column = "task_count"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "communities"
+
+[[model]]
+table = "user_ig_karma"
+column = "total_karma"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "communities"
+
+[[model]]
+table = "user_organization_link"
+column = "is_alumni"
+kind = "nullability"
+detail = "model null=True, column NOT NULL"
+owner = "organizations"
+
+[[model]]
+table = "user_skill_progress"
+column = "completed_task_count"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "learning"
+
+[[model]]
+table = "user_skill_progress"
+column = "total_karma"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "learning"
+
+[[model]]
+table = "user_streak"
+column = "current_streak"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "gamification"
+
+[[model]]
+table = "user_streak"
+column = "longest_streak"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "gamification"
+
+[[model]]
+table = "voucher_log"
+column = "code"
+kind = "max_length"
+detail = "model 255, column 15"
+owner = "rewards"
+
+[[model]]
+table = "voucher_log"
+column = "updated_by"
+kind = "missing_foreign_key"
+detail = "to user.id"
+owner = "rewards"
+
+[[model]]
+table = "wallet"
+column = "karma_last_updated_at"
+kind = "nullability"
+detail = "model null=True, column NOT NULL"
+owner = "contributions"
+
+[[model]]
+table = "intern_leave_request"
+column = "created_by"
+kind = "missing_foreign_key"
+detail = "to user.id"
+owner = "interns"
+
+[[model]]
+table = "intern_leave_request"
+column = "updated_by"
+kind = "missing_foreign_key"
+detail = "to user.id"
+owner = "interns"
+
+[[model]]
+table = "intern_task"
+column = "is_verified"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "interns"
+
+[[model]]
+table = "intern_task"
+column = "karma_awarded"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "interns"
+
+[[model]]
+table = "intern_weekly_review"
+column = "tasks_assigned"
+kind = "nullability"
+detail = "model null=False, column NULL"
+owner = "interns"
+
+[[model]]
+table = "push_campaign"
+column = ""
+kind = "missing_table"
+detail = "db.PushCampaign"
+owner = "notifications"
+note = "the push tables come with alter 1.93 (db-scripts PR #103), which isn't on db-scripts main yet"
+
+[[model]]
+table = "push_config"
+column = ""
+kind = "missing_table"
+detail = "db.PushConfig"
+owner = "notifications"
+note = "the push tables come with alter 1.93 (db-scripts PR #103), which isn't on db-scripts main yet"
+
+[[model]]
+table = "push_delivery_log"
+column = ""
+kind = "missing_table"
+detail = "db.PushDeliveryLog"
+owner = "notifications"
+note = "the push tables come with alter 1.93 (db-scripts PR #103), which isn't on db-scripts main yet"
+
+[[model]]
+table = "user_push_device"
+column = ""
+kind = "missing_table"
+detail = "db.UserPushDevice"
+owner = "notifications"
+note = "the push tables come with alter 1.93 (db-scripts PR #103), which isn't on db-scripts main yet"
+
+[[model]]
+table = "user_push_preference"
+column = ""
+kind = "missing_table"
+detail = "db.UserPushPreference"
+owner = "notifications"
+note = "the push tables come with alter 1.93 (db-scripts PR #103), which isn't on db-scripts main yet"
