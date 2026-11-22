@@ -28,5 +28,6 @@ pytestmark = [pytest.mark.mysql, pytest.mark.django_db]
 ## What's here
 
 - `mysql/`: checks of the MySQL tier itself.
+- `schema/`: parity between the models and the loaded schema. Known drift is in `schema/known_drift.toml`, which only shrinks.
 - `architecture/`: the import contracts and the module graph.
 - `legacy_baseline.txt`: the legacy tests that fail today, for `scripts/legacy_ratchet.py`. It only shrinks.

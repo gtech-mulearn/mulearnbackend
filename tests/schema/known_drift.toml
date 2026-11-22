@@ -1,0 +1,95 @@
+# Known drift between model choices and the ENUM columns they map (issue 0054).
+#
+# tests/schema/test_enum_parity.py fails on drift that isn't listed here, and on a listed
+# entry that no longer drifts, so this file only shrinks. Enum values are part of the API for
+# some endpoints, so each fix is its own issue; the owner is the module that owns the table
+# (docs/architecture/03-target-architecture.md).
+#
+# Kinds:
+#   case_only           choices that differ from the ENUM only in case (the dangerous kind)
+#   missing_in_enum     choices the ENUM doesn't allow: writing them fails
+#   missing_in_choices  ENUM values with no choice
+#   no_choices          the field has no choices at all; values are the ENUM's
+
+[[enum]]
+table = "broadcast_notification"
+column = "target_type"
+kind = "no_choices"
+values = ["campus", "campus_ig", "event_coowners", "event_interest", "global", "interest_group"]
+owner = "notifications"
+
+[[enum]]
+table = "company"
+column = "status"
+kind = "no_choices"
+values = ["pending", "rejected", "verified"]
+owner = "careers"
+
+[[enum]]
+table = "company_jobs"
+column = "certificate_provided"
+kind = "no_choices"
+values = ["No", "Yes"]
+owner = "careers"
+
+[[enum]]
+table = "company_jobs"
+column = "duration_unit"
+kind = "no_choices"
+values = ["days", "months", "weeks"]
+owner = "careers"
+
+[[enum]]
+table = "company_jobs"
+column = "job_type"
+kind = "no_choices"
+values = ["Full-Time", "Gig", "Hybrid", "Internship", "Part-Time", "Remote"]
+owner = "careers"
+
+[[enum]]
+table = "events_connection"
+column = "ticket_status"
+kind = "no_choices"
+values = ["active", "pending", "rejected", "removed", "withdrawn"]
+owner = "events"
+
+[[enum]]
+table = "karma_activity_log"
+column = "mentor_review_status"
+kind = "no_choices"
+values = ["APPROVED", "PENDING", "REJECTED"]
+owner = "contributions"
+
+[[enum]]
+table = "system_action_log"
+column = "action_type"
+kind = "missing_in_choices"
+values = ["PERSONA_SWITCH"]
+owner = "administration"
+
+# The model has the push and broadcast actions; the vendored schema (db-scripts main) doesn't
+# yet, so writing these fails until the alters that add them are applied and re-vendored.
+[[enum]]
+table = "system_action_log"
+column = "action_type"
+kind = "missing_in_enum"
+values = [
+    "NOTIF_BROADCAST_CREATE",
+    "NOTIF_BROADCAST_DELETE",
+    "NOTIF_BROADCAST_DEL_ALL",
+    "NOTIF_BROADCAST_SEND",
+    "NOTIF_BROADCAST_UPDATE",
+    "PUSH_CAMPAIGN_CANCEL",
+    "PUSH_CAMPAIGN_CREATE",
+    "PUSH_CAMPAIGN_SEND",
+    "PUSH_CONFIG_UPDATE",
+    "PUSH_TEST_SEND",
+]
+owner = "administration"
+
+[[enum]]
+table = "user_job_application"
+column = "status"
+kind = "no_choices"
+values = ["In-Review", "Interview", "Pending", "Rejected", "Selected", "Shortlisted"]
+owner = "careers"
