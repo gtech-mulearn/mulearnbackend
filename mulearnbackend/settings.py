@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     # custom apps
     "utils.apps.UtilsConfig",
     "api.apps.ApiConfig",
+    "building_blocks",
     "corsheaders",
     "db",
     "drf_spectacular",

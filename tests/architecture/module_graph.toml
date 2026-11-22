@@ -1,0 +1,11 @@
+# The modules under modules/ and which other modules each may import (docs/architecture/04-module-rules.md).
+#
+# To add a module, add a line naming it and the modules whose public.py it may call:
+#
+#     notifications = ["events", "people"]
+#
+# A module that calls no other module gets an empty list. Importing another module's
+# contracts.py to subscribe to its events needs no entry. The graph must stay acyclic.
+# After any change, run python scripts/gen_importlinter.py and commit .importlinter with it.
+
+[modules]
