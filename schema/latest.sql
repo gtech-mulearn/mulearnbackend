@@ -3318,3 +3318,6 @@ CREATE TABLE IF NOT EXISTS `notification_log` (
   KEY `idx_notif_type_sent` (`type`, `sent_at`),
   CONSTRAINT `fk_notif_log_user` FOREIGN KEY (`user_id`) REFERENCES `user` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Probe for PR #3419: the mysql job must fail when the schema fails to load. Reverted in the next commit.
+THIS IS NOT SQL;
