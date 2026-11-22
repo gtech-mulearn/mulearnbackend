@@ -44,6 +44,12 @@ SYSTEM_ADMIN_ID = config.get("SYSTEM_ADMIN_ID")
 # While this file exists, /healthz/ready returns 503 so the load balancer drains the node.
 DRAIN_FLAG_PATH = config.get("DRAIN_FLAG_PATH")
 
+# @command (building_blocks/persistence/command.py) raises CrossModuleTransaction when this is on,
+# and only logs and counts a violation when it is off. Unset, it follows DEBUG.
+COMMAND_GUARD_STRICT = config.get("COMMAND_GUARD_STRICT")
+if COMMAND_GUARD_STRICT is None:
+    COMMAND_GUARD_STRICT = DEBUG
+
 # Application definition
 
 INSTALLED_APPS = [

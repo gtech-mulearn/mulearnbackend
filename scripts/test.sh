@@ -36,6 +36,8 @@ fi
 mkdir -p "${log_dir:-./logs}"
 
 # Exported variables win over .env, because decouple reads the environment first.
+# pytest-django switches DEBUG off, so the @command guard is made strict explicitly.
+export COMMAND_GUARD_STRICT=1
 if [ "${1:-}" = "--mysql" ]; then
     shift
     export DATABASE_ENGINE=django.db.backends.mysql
