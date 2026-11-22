@@ -1,0 +1,12 @@
+# Lint and format new code only (docs/architecture/adr/ADR-051-toolchain.md).
+# Legacy packages (api/, db/, utils/, mu_celery/ and the rest) are left untouched until a
+# coordinated maintainer change; adding a path here brings it under the checks.
+target-version = "py310"
+line-length = 120
+include = ["building_blocks/**/*.py", "modules/**/*.py", "tests/**/*.py", "scripts/**/*.py"]
+# Scripts that existed before ruff. Excluded even when a file is passed explicitly (pre-commit does that).
+extend-exclude = ["scripts/__init__.py", "scripts/add_responses.py", "scripts/annotate_schemas.py"]
+force-exclude = true
+
+[lint]
+select = ["E", "F", "I", "B", "UP"]
