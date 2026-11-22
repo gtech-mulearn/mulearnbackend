@@ -625,9 +625,9 @@ class GlobalCountAPI(APIView):
     )
     def get(self, request):
         # Same five counts as the landing-stats websocket, served from the same
-        # short-lived cache (see LandingStats in common_consumer.py) instead of
+        # short-lived cache (see LandingStats in api/common/landing_stats.py) instead of
         # five full-table aggregates per anonymous request.
-        from api.common.common_consumer import landing_stats
+        from api.common.landing_stats import landing_stats
 
         data = landing_stats.snapshot(
             [
