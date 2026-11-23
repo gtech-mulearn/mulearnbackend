@@ -12,6 +12,8 @@ def _envelope(inner_schema):
                 },
             },
             "response": inner_schema,
+            "code": {"type": "string", "example": "ok", "description": '"ok", or a stable error code.'},
+            "requestId": {"type": "string", "nullable": True, "example": "req_0193a1b2c3d4e5f60718293a4b5c6d7e"},
         },
         "required": ["hasError", "statusCode", "message", "response"],
     }

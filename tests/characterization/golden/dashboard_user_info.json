@@ -1,8 +1,10 @@
 {
+  "code": "ok",
   "hasError": false,
   "message": {
     "general": []
   },
+  "requestId": "<request-id>",
   "response": {
     "company": null,
     "dob": null,

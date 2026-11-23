@@ -1,0 +1,12 @@
+{
+  "code": "not_found",
+  "hasError": true,
+  "message": {
+    "general": [
+      "Mentor profile not found."
+    ]
+  },
+  "requestId": "<request-id>",
+  "response": {},
+  "statusCode": 404
+}

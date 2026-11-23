@@ -35,6 +35,11 @@ def test_an_expired_token_is_refused_by_the_backend():
         JWTUtils.is_jwt_authenticated(request)
 
 
+def test_normalise_replaces_request_ids():
+    assert normalise({"requestId": "req_0193a1b2c3d4e5f60718293a4b5c6d7e"}) == {"requestId": "<request-id>"}
+    assert normalise({"note": "req_short"}) == {"note": "req_short"}
+
+
 def test_normalise_replaces_ids_and_timestamps_only():
     body = {
         "id": "0b5c3f5e-8a2d-4c41-9d0e-2f1a3b4c5d6e",

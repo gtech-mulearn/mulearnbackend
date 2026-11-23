@@ -1,0 +1,9 @@
+{
+  "hasError": true,
+  "message": {
+    "general": [
+      "Token Expired or Invalid"
+    ]
+  },
+  "statusCode": 1000
+}

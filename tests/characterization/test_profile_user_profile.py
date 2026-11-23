@@ -4,6 +4,8 @@ import pytest
 from django.db import OperationalError
 from rest_framework.test import APIClient
 
+from tests.characterization.harness import mint_token
+
 pytestmark = [pytest.mark.mysql, pytest.mark.django_db]
 
 URL = "/api/v1/dashboard/profile/user-profile/"
@@ -34,3 +36,15 @@ def test_without_a_token_the_profile_is_refused(golden):
     # Legacy auth failures answer HTTP 403 with statusCode 1000, and their body has no "response" key.
     assert response.status_code == 403
     golden(response, "profile_user_profile_no_token")
+
+
+def test_with_an_expired_token_the_profile_is_refused(make_user, golden):
+    user = make_user(roles=["Student"], muid="expired-person@mulearn")
+    client = APIClient()
+    client.credentials(HTTP_AUTHORIZATION=f"Bearer {mint_token(user, ['Student'], expires_in_seconds=-60)}")
+
+    response = client.get(URL)
+
+    # An expired token is refused like a missing one: HTTP 403, statusCode 1000, no "response" key.
+    assert response.status_code == 403
+    golden(response, "profile_user_profile_expired_token")

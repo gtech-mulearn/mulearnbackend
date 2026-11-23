@@ -294,6 +294,11 @@ def cache_view_response(key: str, timeout: int):
             except Exception:
                 cached = None
             if cached is not None:
+                if isinstance(cached, dict) and "requestId" in cached:
+                    # The cached envelope carries the first request's id: answer with this one's.
+                    from building_blocks.observability.context import current_request_id
+
+                    cached = {**cached, "requestId": current_request_id()}
                 return Response(data=cached, status=200)
             response = view_method(view, request, *args, **kwargs)
             if getattr(response, "status_code", None) == 200 and hasattr(response, "data"):
