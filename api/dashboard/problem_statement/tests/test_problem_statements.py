@@ -155,8 +155,40 @@ def test_company_routes_need_company_role_and_own_company(world):
     assert with_role_no_company.post(BASE + "company/", PAYLOAD, format="json").status_code == 403
 
 
-def test_unauthenticated_rejected(world):
-    assert APIClient().get(BASE).status_code in (401, 403)
+def test_unauthenticated_list_is_public(world):
+    draft = create(world["a"]).json()["response"]["id"]
+    published = create_published(world)
+    res = APIClient().get(BASE, {"sortBy": "-published_at"})
+    assert res.status_code == 200
+    data = res.json()["response"]["data"]
+    assert [s["id"] for s in data] == [published]
+    assert data[0]["my_interaction"] is None
+
+
+def test_unauthenticated_detail_is_public_for_published_only(world):
+    draft = create(world["a"]).json()["response"]["id"]
+    published = create_published(world)
+    anon = APIClient()
+    res = anon.get(f"{BASE}{published}/")
+    assert res.status_code == 200
+    assert res.json()["response"]["my_interaction"] is None
+    assert anon.get(f"{BASE}{draft}/").json()["statusCode"] == 404
+
+
+def test_unauthenticated_rejected_on_interaction_routes(world):
+    sid = create_published(world)
+    anon = APIClient()
+    assert anon.get(f"{BASE}{sid}/interaction/").status_code in (401, 403)
+    assert anon.put(f"{BASE}{sid}/interaction/", {}, format="json").status_code in (401, 403)
+    assert anon.put(f"{BASE}{sid}/submission/", {}, format="json").status_code in (401, 403)
+
+
+def test_invalid_token_rejected_on_public_routes(world):
+    sid = create_published(world)
+    anon = APIClient()
+    anon.credentials(HTTP_AUTHORIZATION="Bearer not-a-jwt")
+    assert anon.get(BASE).status_code in (401, 403)
+    assert anon.get(f"{BASE}{sid}/").status_code in (401, 403)
 
 
 # ----------------------------------------------------------------- visibility
