@@ -1,0 +1,21 @@
+# Code owners (architecture issue 0028). GitHub requests a review from the owner of every path a
+# pull request touches; the last matching line wins, so more specific paths come later.
+#
+# @gtech-mulearn/team is the team that maintains this repository. The paths below that need two
+# reviewers (core-review: authz, messaging, contributions, identity_access, workflows) are also
+# enforced by .github/workflows/two-reviewers.yml (issue 0029). Split an entry to a narrower team
+# once that team exists and has write access here: an owner without write access is ignored.
+
+# Shared building blocks
+/building_blocks/                  @gtech-mulearn/team
+/building_blocks/authz/            @gtech-mulearn/team
+/building_blocks/messaging/        @gtech-mulearn/team
+
+# Modules whose changes need two reviewers
+/modules/contributions/            @gtech-mulearn/team
+/modules/identity_access/          @gtech-mulearn/team
+
+# The architecture, CI and the vendored schema
+/docs/architecture/                @gtech-mulearn/team
+/.github/workflows/                @gtech-mulearn/team
+/schema/                           @gtech-mulearn/team
