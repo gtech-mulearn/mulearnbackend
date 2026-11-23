@@ -7,7 +7,8 @@ name: two-reviewers
 on:
   pull_request:
     branches: [dev, staging, production]
-    types: [opened, synchronize, reopened, ready_for_review]
+    # edited covers a retargeted base branch.
+    types: [opened, synchronize, reopened, ready_for_review, edited]
   pull_request_review:
     types: [submitted, dismissed]
 
@@ -26,11 +27,13 @@ jobs:
     if: contains(fromJSON('["dev", "staging", "production"]'), github.event.pull_request.base.ref)
     runs-on: ubuntu-latest
     steps:
-      # The base branch's copy of the script, never the pull request's: a pull request can't
-      # change the rule it is checked against. (Changing this workflow file itself is a core path.)
+      # The default branch's copy of the script, never the pull request's, so a pull request can't
+      # change the rule it is checked against. Not the base branch's: staging and production get
+      # the script only through a release, and base.sha goes stale. This workflow file itself is a
+      # core path with a code owner, so the rulesets require that owner's approval to change it.
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
       - name: Count approvals on core-review paths
         env:

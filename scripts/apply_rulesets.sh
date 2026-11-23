@@ -14,7 +14,8 @@ here="$(cd "$(dirname "$0")/.." && pwd)"
 
 for file in "$here"/.github/rulesets/*.json; do
   name="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["name"])' "$file")"
-  id="$(gh api "repos/$repo/rulesets" --paginate -q ".[] | select(.name == \"$name\") | .id" | head -n 1)"
+  # This repository's own rulesets only: an organisation ruleset of the same name can't be PUT here.
+  id="$(gh api "repos/$repo/rulesets?includes_parents=false" --paginate -q ".[] | select(.name == \"$name\") | .id" | head -n 1)"
   if [ -n "$id" ]; then
     gh api --method PUT "repos/$repo/rulesets/$id" --input "$file" > /dev/null
     echo "updated ruleset $name ($id)"
