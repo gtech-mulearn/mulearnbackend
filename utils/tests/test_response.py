@@ -85,7 +85,9 @@ def test_a_failure_without_a_code_names_its_status():
     }
 
 
-def test_a_cached_response_gets_the_current_request_id():
+def test_a_cached_response_gets_the_current_request_id(settings):
+    # An in-memory cache: CI has no Redis.
+    settings.CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
     from django.core.cache import cache
 
     from utils.utils import cache_view_response
