@@ -30,12 +30,22 @@ def cycle(graph: dict[str, list[str]]) -> list[str] | None:
     return None
 
 
-def module_packages(root: Path) -> set[str]:
-    """The packages directly under <root>/modules/."""
+def module_directories(root: Path) -> set[str]:
+    """The directories directly under <root>/modules/, packages or not (caches aside)."""
     base = root / "modules"
     if not base.is_dir():
         return set()
-    return {path.name for path in base.iterdir() if (path / "__init__.py").is_file()}
+    return {path.name for path in base.iterdir() if path.is_dir() and path.name != "__pycache__"}
+
+
+def module_packages(root: Path) -> set[str]:
+    """The packages directly under <root>/modules/."""
+    return {name for name in module_directories(root) if (root / "modules" / name / "__init__.py").is_file()}
+
+
+def not_packages(root: Path) -> list[str]:
+    """Directories under modules/ without an __init__.py: import-linter and the graph checks miss them."""
+    return sorted(module_directories(root) - module_packages(root))
 
 
 def undeclared(graph: dict[str, list[str]], packages: set[str]) -> list[str]:

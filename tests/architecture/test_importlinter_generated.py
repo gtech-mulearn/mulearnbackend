@@ -46,10 +46,6 @@ def test_the_output_is_deterministic():
     assert render({}) == render({})
 
 
-def test_the_graph_starts_with_no_modules():
-    assert load_graph(GRAPH) == {}
-
-
 def test_a_graph_without_a_modules_table_is_refused(tmp_path):
     graph = tmp_path / "module_graph.toml"
     graph.write_text("[other]\n", encoding="utf-8")
@@ -74,12 +70,13 @@ def test_each_module_gets_a_layers_contract_pointing_downwards():
     contract = contracts(render(GRAPH_OF_TWO))["events-layers"]
 
     assert contract["type"] == "layers"
+    # Each layer is optional (in parentheses): a module without, say, adapters/ yet still lints.
     assert lines(contract["layers"]) == [
-        "modules.events.api | modules.events.tasks",
-        "modules.events.services",
-        "modules.events.selectors",
-        "modules.events.data | modules.events.adapters",
-        "modules.events.domain",
+        "(modules.events.api) | (modules.events.tasks)",
+        "(modules.events.services)",
+        "(modules.events.selectors)",
+        "(modules.events.data) | (modules.events.adapters)",
+        "(modules.events.domain)",
     ]
 
 
@@ -94,6 +91,7 @@ def test_each_modules_domain_stays_framework_free():
         "celery",
         "requests",
         "httpx",
+        "opentelemetry",
         "building_blocks.persistence",
         "building_blocks.messaging",
         "building_blocks.http",
@@ -102,19 +100,34 @@ def test_each_modules_domain_stays_framework_free():
 
 
 def test_a_declared_dependency_is_reached_only_through_public_and_contracts():
-    forbidden = lines(contracts(render(GRAPH_OF_TWO))["karma-boundaries"]["forbidden_modules"])
+    contract = contracts(render(GRAPH_OF_TWO))["karma-boundaries"]
 
-    assert "modules.events.services" in forbidden
-    assert "modules.events.data" in forbidden
-    assert "modules.events.public" not in forbidden
-    assert "modules.events.contracts" not in forbidden
+    assert lines(contract["forbidden_modules"]) == ["modules.events"]  # the whole module
+    assert lines(contract["ignore_imports"]) == [
+        "modules.karma -> modules.events.public",
+        "modules.karma.** -> modules.events.public",
+        "modules.karma -> modules.events.contracts",
+        "modules.karma.** -> modules.events.contracts",
+    ]
+    assert contract["allow_indirect_imports"] == "True"
 
 
 def test_an_undeclared_module_is_reached_only_through_contracts():
-    forbidden = lines(contracts(render(GRAPH_OF_TWO))["events-boundaries"]["forbidden_modules"])
+    contract = contracts(render(GRAPH_OF_TWO))["events-boundaries"]
 
-    assert "modules.karma.public" in forbidden
-    assert "modules.karma.contracts" not in forbidden
+    assert lines(contract["forbidden_modules"]) == ["modules.karma"]
+    assert lines(contract["ignore_imports"]) == [
+        "modules.events -> modules.karma.contracts",
+        "modules.events.** -> modules.karma.contracts",
+    ]
+
+
+def test_modules_may_not_import_the_legacy_packages():
+    contract = contracts(render({}))["modules-no-legacy"]
+
+    assert contract["type"] == "forbidden"
+    assert lines(contract["source_modules"]) == ["modules"]
+    assert lines(contract["forbidden_modules"]) == LEGACY
 
 
 def test_legacy_code_may_import_only_public_contracts_and_building_blocks():
@@ -124,7 +137,10 @@ def test_legacy_code_may_import_only_public_contracts_and_building_blocks():
     assert lines(contract["source_modules"]) == LEGACY
     assert lines(contract["forbidden_modules"]) == ["modules"]
     assert lines(contract["ignore_imports"]) == [
-        f"{package}.** -> modules.*.{surface}" for package in LEGACY for surface in ("public", "contracts")
+        f"{source} -> modules.*.{surface}"
+        for package in LEGACY
+        for source in (package, f"{package}.**")
+        for surface in ("public", "contracts")
     ]
     assert contract["allow_indirect_imports"] == "True"
 

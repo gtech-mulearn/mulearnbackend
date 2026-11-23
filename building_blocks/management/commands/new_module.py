@@ -127,5 +127,7 @@ class Command(BaseCommand):
             f"  1. Declare it in tests/architecture/module_graph.toml: {name} = [...], then run "
             "python scripts/gen_importlinter.py.\n"
             f'  2. Mount its routes in modules/urls.py: path("{name}/", include("modules.{name}.api.urls")).\n'
-            f'  3. Add "modules.{name}" to INSTALLED_APPS in mulearnbackend/settings.py.'
+            f'  3. Add "modules.{name}" to INSTALLED_APPS in mulearnbackend/settings.py, and '
+            f'"{name}": None to MIGRATION_MODULES there (create it if it is missing): the schema '
+            "comes from db-scripts, never from Django migrations (ADR-016)."
         )

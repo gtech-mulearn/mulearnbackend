@@ -3,7 +3,14 @@
 from pathlib import Path
 
 from scripts.gen_importlinter import GRAPH, load_graph
-from tests.architecture.graph import cycle, declared_but_missing, module_packages, undeclared, unknown_dependencies
+from tests.architecture.graph import (
+    cycle,
+    declared_but_missing,
+    module_packages,
+    not_packages,
+    undeclared,
+    unknown_dependencies,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -43,3 +50,17 @@ def test_an_undeclared_module_is_found(tmp_path):
 
 def test_an_unknown_dependency_is_found():
     assert unknown_dependencies({"events": ["people"], "karma": []}) == ["events -> people"]
+
+
+def test_every_directory_under_modules_is_a_package():
+    assert not_packages(ROOT) == []
+
+
+def test_a_directory_without_an_init_is_found(tmp_path):
+    (tmp_path / "modules" / "events").mkdir(parents=True)
+    (tmp_path / "modules" / "events" / "__init__.py").touch()
+    (tmp_path / "modules" / "rogue").mkdir()
+    (tmp_path / "modules" / "rogue" / "x.py").touch()
+    (tmp_path / "modules" / "__pycache__").mkdir()
+
+    assert not_packages(tmp_path) == ["rogue"]

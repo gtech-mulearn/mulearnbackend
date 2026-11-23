@@ -35,13 +35,32 @@ source_modules =
 forbidden_modules =
     modules
 ignore_imports =
+    api -> modules.*.public
+    api -> modules.*.contracts
     api.** -> modules.*.public
     api.** -> modules.*.contracts
+    db -> modules.*.public
+    db -> modules.*.contracts
     db.** -> modules.*.public
     db.** -> modules.*.contracts
+    utils -> modules.*.public
+    utils -> modules.*.contracts
     utils.** -> modules.*.public
     utils.** -> modules.*.contracts
+    mu_celery -> modules.*.public
+    mu_celery -> modules.*.contracts
     mu_celery.** -> modules.*.public
     mu_celery.** -> modules.*.contracts
 allow_indirect_imports = True
 unmatched_ignore_imports_alerting = none
+
+[importlinter:contract:modules-no-legacy]
+name = modules never import the legacy packages
+type = forbidden
+source_modules =
+    modules
+forbidden_modules =
+    api
+    db
+    utils
+    mu_celery

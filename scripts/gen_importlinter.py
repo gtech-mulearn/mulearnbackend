@@ -41,28 +41,17 @@ def block(key: str, values: list[str]) -> str:
     return f"{key} =\n" + "".join(f"    {value}\n" for value in values)
 
 
-# The parts of a module (04-module-rules.md "The anatomy of a module"). Another module may import
-# only contracts, plus public when module_graph.toml declares the dependency.
-MODULE_PARTS = (
-    "apps",
-    "public",
-    "contracts",
-    "policies",
-    "flags",
-    "tasks",
-    "api",
-    "services",
-    "selectors",
-    "data",
-    "adapters",
-    "domain",
-    "management",
-    "tests",
-)
-# 04-module-rules.md "Layers and imports": imports point downwards only.
+# 04-module-rules.md "Layers and imports": imports point downwards only. Every layer is optional,
+# so a module without, say, adapters/ yet still lints.
 LAYERS = ("api | tasks", "services", "selectors", "data | adapters", "domain")
+# What another module may import: contracts always, public only when module_graph.toml declares the
+# dependency (04-module-rules.md, rules 3 and 4).
+SURFACES = ("public", "contracts")
 LEGACY_ALLOWED = [
-    f"{package}.** -> modules.*.{part}" for package in LEGACY_PACKAGES for part in ("public", "contracts")
+    f"{source} -> modules.*.{part}"
+    for package in LEGACY_PACKAGES
+    for source in (package, f"{package}.**")  # ** needs a segment: the package itself is listed too
+    for part in SURFACES
 ]
 DOMAIN_FORBIDDEN = (
     "django",
@@ -70,11 +59,15 @@ DOMAIN_FORBIDDEN = (
     "celery",
     "requests",
     "httpx",
+    "opentelemetry",
     "building_blocks.persistence",
     "building_blocks.messaging",
     "building_blocks.http",
     "building_blocks.cache",
 )
+# Direct imports only, and ignores that match nothing yet are fine: a public surface may use its own
+# module's internals, and a new module doesn't import every surface it may.
+DIRECT_ONLY = "allow_indirect_imports = True\nunmatched_ignore_imports_alerting = none\n"
 
 
 def contract(key: str, name: str, kind: str, *blocks: str, extra: str = "") -> str:
@@ -83,7 +76,7 @@ def contract(key: str, name: str, kind: str, *blocks: str, extra: str = "") -> s
 
 def module_contracts(module: str, graph: dict[str, list[str]]) -> str:
     prefix = f"modules.{module}"
-    layers = [" | ".join(f"{prefix}.{part}" for part in layer.split(" | ")) for layer in LAYERS]
+    layers = [" | ".join(f"({prefix}.{part})" for part in layer.split(" | ")) for layer in LAYERS]
     text = contract(f"{module}-layers", f"{prefix} layers point downwards", "layers", block("layers", layers))
     text += contract(
         f"{module}-domain",
@@ -92,19 +85,22 @@ def module_contracts(module: str, graph: dict[str, list[str]]) -> str:
         block("source_modules", [f"{prefix}.domain"]),
         block("forbidden_modules", list(DOMAIN_FORBIDDEN)),
     )
-    forbidden = []
-    for other in sorted(graph):
-        if other == module:
-            continue
-        allowed = {"contracts", "public"} if other in graph[module] else {"contracts"}
-        forbidden += [f"modules.{other}.{part}" for part in MODULE_PARTS if part not in allowed]
-    if forbidden:
+    others = [other for other in sorted(graph) if other != module]
+    if others:
+        # Every other module is forbidden as a whole, its package and anything in it, except the
+        # surfaces this module may use.
+        allowed = []
+        for other in others:
+            for part in SURFACES if other in graph[module] else ("contracts",):
+                allowed += [f"{prefix} -> modules.{other}.{part}", f"{prefix}.** -> modules.{other}.{part}"]
         text += contract(
             f"{module}-boundaries",
             f"{prefix} reaches other modules only through their public and contracts, as declared",
             "forbidden",
             block("source_modules", [prefix]),
-            block("forbidden_modules", forbidden),
+            block("forbidden_modules", [f"modules.{other}" for other in others]),
+            block("ignore_imports", allowed),
+            extra=DIRECT_ONLY,
         )
     return text
 
@@ -134,7 +130,14 @@ def render(graph: dict[str, list[str]]) -> str:
             block("forbidden_modules", ["modules"]),
             block("ignore_imports", LEGACY_ALLOWED),
             # Direct imports only: legacy code may call public, which then calls its own services.
-            extra="allow_indirect_imports = True\nunmatched_ignore_imports_alerting = none\n",
+            extra=DIRECT_ONLY,
+        )
+        + contract(
+            "modules-no-legacy",
+            "modules never import the legacy packages",
+            "forbidden",
+            block("source_modules", ["modules"]),
+            block("forbidden_modules", LEGACY_PACKAGES),
         )
     )
     for module in sorted(graph):
