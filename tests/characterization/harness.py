@@ -16,6 +16,8 @@ GOLDEN_DIR = Path(__file__).resolve().parent / "golden"
 ENVELOPE_KEYS = ("hasError", "statusCode", "message", "response")
 
 _UUID = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+# The envelope's requestId (building_blocks.observability): "req_" and a UUIDv7's 32 hex digits.
+_REQUEST_ID = re.compile(r"req_[0-9a-f]{32}")
 # An ISO 8601 date and time, with optional fractions and offset. A bare date isn't replaced.
 _DATETIME = re.compile(r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?")
 
@@ -59,6 +61,8 @@ def normalise(value):
     if isinstance(value, str):
         if _UUID.fullmatch(value):
             return "<uuid>"
+        if _REQUEST_ID.fullmatch(value):
+            return "<request-id>"
         if _DATETIME.fullmatch(value):
             return "<datetime>"
     return value
