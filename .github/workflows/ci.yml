@@ -53,7 +53,7 @@ jobs:
       - name: Unit tests (SQLite tier)
         run: |
           cp .env.sample .env
-          scripts/test.sh tests/ building_blocks/
+          scripts/test.sh tests/ building_blocks/ modules/
 
   legacy:
     name: legacy
@@ -157,4 +157,4 @@ jobs:
       - name: MySQL tier
         run: |
           cp .env.sample .env
-          scripts/test.sh --mysql tests/ building_blocks/
+          scripts/test.sh --mysql tests/ building_blocks/ modules/

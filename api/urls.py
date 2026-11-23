@@ -26,3 +26,7 @@ if settings.DEBUG:
     import debug_toolbar
 
     urlpatterns.append(path("__debug__/", include(debug_toolbar.urls)))
+
+# Module routes go last, after every legacy include and the debug toolbar, so no module route can
+# shadow a legacy one (issue 0023). Each module adds its own include in modules/urls.py.
+urlpatterns.append(path("", include("modules.urls")))

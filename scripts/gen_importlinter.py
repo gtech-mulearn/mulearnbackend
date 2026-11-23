@@ -41,20 +41,108 @@ def block(key: str, values: list[str]) -> str:
     return f"{key} =\n" + "".join(f"    {value}\n" for value in values)
 
 
+# 04-module-rules.md "Layers and imports": imports point downwards only. Every layer is optional,
+# so a module without, say, adapters/ yet still lints.
+LAYERS = ("api | tasks", "services", "selectors", "data | adapters", "domain")
+# What another module may import: contracts always, public only when module_graph.toml declares the
+# dependency (04-module-rules.md, rules 3 and 4).
+SURFACES = ("public", "contracts")
+LEGACY_ALLOWED = [
+    f"{source} -> modules.*.{part}"
+    for package in LEGACY_PACKAGES
+    for source in (package, f"{package}.**")  # ** needs a segment: the package itself is listed too
+    for part in SURFACES
+]
+DOMAIN_FORBIDDEN = (
+    "django",
+    "rest_framework",
+    "celery",
+    "requests",
+    "httpx",
+    "opentelemetry",
+    "building_blocks.persistence",
+    "building_blocks.messaging",
+    "building_blocks.http",
+    "building_blocks.cache",
+)
+# Direct imports only, and ignores that match nothing yet are fine: a public surface may use its own
+# module's internals, and a new module doesn't import every surface it may.
+DIRECT_ONLY = "allow_indirect_imports = True\nunmatched_ignore_imports_alerting = none\n"
+
+
+def contract(key: str, name: str, kind: str, *blocks: str, extra: str = "") -> str:
+    return f"\n[importlinter:contract:{key}]\nname = {name}\ntype = {kind}\n" + "".join(blocks) + extra
+
+
+def module_contracts(module: str, graph: dict[str, list[str]]) -> str:
+    prefix = f"modules.{module}"
+    layers = [" | ".join(f"({prefix}.{part})" for part in layer.split(" | ")) for layer in LAYERS]
+    text = contract(f"{module}-layers", f"{prefix} layers point downwards", "layers", block("layers", layers))
+    text += contract(
+        f"{module}-domain",
+        f"{prefix}.domain is framework-free",
+        "forbidden",
+        block("source_modules", [f"{prefix}.domain"]),
+        block("forbidden_modules", list(DOMAIN_FORBIDDEN)),
+    )
+    others = [other for other in sorted(graph) if other != module]
+    if others:
+        # Every other module is forbidden as a whole, its package and anything in it, except the
+        # surfaces this module may use.
+        allowed = []
+        for other in others:
+            for part in SURFACES if other in graph[module] else ("contracts",):
+                allowed += [f"{prefix} -> modules.{other}.{part}", f"{prefix}.** -> modules.{other}.{part}"]
+        text += contract(
+            f"{module}-boundaries",
+            f"{prefix} reaches other modules only through their public and contracts, as declared",
+            "forbidden",
+            block("source_modules", [prefix]),
+            block("forbidden_modules", [f"modules.{other}" for other in others]),
+            block("ignore_imports", allowed),
+            extra=DIRECT_ONLY,
+        )
+    return text
+
+
 def render(graph: dict[str, list[str]]) -> str:
-    # graph is unused until issue 0023 adds one contract per module.
-    return (
+    unknown = sorted(f"{m} -> {d}" for m, deps in graph.items() for d in deps if d not in graph)
+    if unknown:
+        raise ValueError(f"module_graph.toml names undeclared dependencies: {', '.join(unknown)}.")
+    text = (
         HEADER
         + "\n[importlinter]\n"
-        + block("root_packages", ["building_blocks", *LEGACY_PACKAGES])
-        + "# Forbidden contracts may name packages that aren't installed or don't exist yet, such as modules.\n"
+        + block("root_packages", ["building_blocks", "modules", *LEGACY_PACKAGES])
+        + "# Forbidden contracts may name packages that aren't installed or don't exist yet.\n"
         + "include_external_packages = True\n"
-        + "\n[importlinter:contract:building-blocks]\n"
-        + "name = building_blocks imports no business or legacy code\n"
-        + "type = forbidden\n"
-        + block("source_modules", ["building_blocks"])
-        + block("forbidden_modules", ["modules", *LEGACY_PACKAGES])
+        + contract(
+            "building-blocks",
+            "building_blocks imports no business or legacy code",
+            "forbidden",
+            block("source_modules", ["building_blocks"]),
+            block("forbidden_modules", ["modules", *LEGACY_PACKAGES]),
+        )
+        + contract(
+            "legacy-uses-public-surfaces",
+            "legacy code imports only modules.*.public, modules.*.contracts and building_blocks",
+            "forbidden",
+            block("source_modules", LEGACY_PACKAGES),
+            block("forbidden_modules", ["modules"]),
+            block("ignore_imports", LEGACY_ALLOWED),
+            # Direct imports only: legacy code may call public, which then calls its own services.
+            extra=DIRECT_ONLY,
+        )
+        + contract(
+            "modules-no-legacy",
+            "modules never import the legacy packages",
+            "forbidden",
+            block("source_modules", ["modules"]),
+            block("forbidden_modules", LEGACY_PACKAGES),
+        )
     )
+    for module in sorted(graph):
+        text += module_contracts(module, graph)
+    return text
 
 
 def main(argv: list[str] | None = None) -> int:
