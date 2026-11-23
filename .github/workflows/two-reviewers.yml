@@ -1,0 +1,38 @@
+# Two approvals for core-review paths (issue 0029). A pull request into dev, staging or production
+# that touches building_blocks/authz/, building_blocks/messaging/, modules/contributions/,
+# modules/identity_access/, scripts/deploy.sh or .github/workflows/ needs two approvals. The
+# branch rulesets (.github/rulesets/) make the "two reviewers" check required.
+name: two-reviewers
+
+on:
+  pull_request:
+    branches: [dev, staging, production]
+    types: [opened, synchronize, reopened, ready_for_review]
+  pull_request_review:
+    types: [submitted, dismissed]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: two-reviewers-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  two-reviewers:
+    name: two reviewers
+    # pull_request_review has no branch filter, so the base branch is checked here.
+    if: contains(fromJSON('["dev", "staging", "production"]'), github.event.pull_request.base.ref)
+    runs-on: ubuntu-latest
+    steps:
+      # The base branch's copy of the script, never the pull request's: a pull request can't
+      # change the rule it is checked against. (Changing this workflow file itself is a core path.)
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+      - name: Count approvals on core-review paths
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/two_reviewers.py "${{ github.repository }}" "${{ github.event.pull_request.number }}"
