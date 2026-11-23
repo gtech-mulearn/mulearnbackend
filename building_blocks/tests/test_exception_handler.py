@@ -1,7 +1,7 @@
-import logging
-
 import pytest
+from django.db import connection, transaction
 from django.http import Http404
+from django.test import Client, override_settings
 from rest_framework import exceptions
 from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory
@@ -114,36 +114,115 @@ def test_a_token_failure_keeps_its_status_and_body(status_code):
         (exceptions.PermissionDenied(), 403),
         (Http404(), 404),
         (exceptions.Throttled(wait=5), 429),
+        (exceptions.MethodNotAllowed("PATCH"), 405),
     ],
 )
-def test_other_framework_errors_keep_drfs_response(error, status):
-    response = call(view_raising(error))
+def test_a_legacy_views_framework_errors_keep_drfs_response(error, status):
+    response = call(view_raising(error, module="api.dashboard.views"))
 
     assert response.status_code == status
     assert set(response.data) == {"detail"}
 
 
-def test_an_unhandled_exception_renders_a_json_500_and_is_logged(caplog):
-    with caplog.at_level(logging.ERROR, logger="building_blocks.api"):
-        response = call(view_raising(RuntimeError("boom")))
+@pytest.mark.parametrize(
+    ("error", "status", "code"),
+    [
+        (exceptions.NotFound(), 404, "not_found"),
+        (Http404(), 404, "not_found"),
+        (exceptions.PermissionDenied(), 403, "forbidden"),
+        (exceptions.MethodNotAllowed("PATCH"), 405, "method_not_allowed"),
+        (exceptions.UnsupportedMediaType("text/plain"), 415, "unsupported_media_type"),
+        (exceptions.ParseError(), 400, "parse_error"),
+        (exceptions.Throttled(wait=5), 429, "rate_limited"),
+    ],
+)
+def test_a_module_views_framework_errors_render_the_envelope(error, status, code):
+    response = call(view_raising(error))
+
+    assert response.status_code == status
+    assert response.data["code"] == code
+    assert response.data["statusCode"] == status
+    assert response.data["requestId"] == "req_0123456789abcdef0123456789abcdef"
+    assert response.data["message"]["general"]
+
+
+def test_a_throttled_envelope_keeps_retry_after():
+    response = call(view_raising(exceptions.Throttled(wait=5)))
+
+    assert response["Retry-After"] == "5"
+
+
+def test_a_token_failure_in_a_module_view_keeps_its_body():
+    body = {"hasError": True, "message": {"general": ["Token Expired or Invalid"]}, "statusCode": 1000}
+
+    response = call(view_raising(TokenFailure(body, 403)))
+
+    assert response.status_code == 403
+    assert response.data == body
+
+
+def test_an_unhandled_exception_is_left_to_django():
+    # DRF re-raises when the handler returns None, so Django's middleware logs it (the error log)
+    # and Django keeps its own statuses, such as 400 for SuspiciousOperation.
+    with pytest.raises(RuntimeError, match="boom"):
+        call(view_raising(RuntimeError("boom"), module="api.dashboard.views"))
+    with pytest.raises(RuntimeError, match="boom"):
+        call(view_raising(RuntimeError("boom")))
+
+
+@override_settings(ROOT_URLCONF="building_blocks.tests.urls_errors", DEBUG=False)
+def test_django_renders_an_unhandled_exception_as_a_json_500_envelope():
+    response = Client(raise_request_exception=False).get("/crash/")
 
     assert response.status_code == 500
-    assert response.data == {
-        "hasError": True,
-        "statusCode": 500,
-        "code": "internal_error",
-        "message": {"general": ["Something went wrong. Please try again."], "fields": {}},
-        "response": {},
-        "requestId": "req_0123456789abcdef0123456789abcdef",
+    assert response["Content-Type"] == "application/json"
+    body = response.json()
+    assert body["code"] == "internal_error"
+    assert body["hasError"] is True
+    assert body["statusCode"] == 500
+    assert body["message"] == {"general": ["Something went wrong. Please try again."], "fields": {}}
+    assert body["requestId"] == response["X-Request-Id"]
+
+
+@override_settings(ROOT_URLCONF="building_blocks.tests.urls_errors", DEBUG=False)
+def test_djangos_own_400s_stay_400():
+    response = Client(raise_request_exception=False).get("/suspicious/")
+
+    assert response.status_code == 400
+
+
+def test_the_root_urlconf_renders_500s_as_json():
+    from mulearnbackend import urls
+
+    assert urls.handler500 == "building_blocks.api.exceptions.server_error"
+
+
+def test_a_list_of_errors_from_a_many_serializer_is_indexed_under_fields():
+    error = exceptions.ValidationError([{"first_name": ["This field is required."]}, {}])
+
+    response = call(view_raising(error))
+
+    assert response.data["message"] == {
+        "general": [],
+        "fields": {"0": {"firstName": ["This field is required."]}},
     }
-    assert any(record.exc_info and "boom" in str(record.exc_info[1]) for record in caplog.records)
 
 
-def test_an_unhandled_exception_in_a_legacy_view_is_a_json_500_too():
-    response = call(view_raising(KeyError("x"), module="api.dashboard.views"))
+def test_errors_of_a_nested_many_serializer_are_camel_cased():
+    error = exceptions.ValidationError({"kids": [{"first_name": ["Required."]}]})
 
-    assert response.status_code == 500
-    assert response.data["code"] == "internal_error"
+    response = call(view_raising(error))
+
+    assert response.data["message"]["fields"] == {"kids": [{"firstName": ["Required."]}]}
+
+
+@pytest.mark.django_db
+def test_an_envelope_marks_the_transaction_for_rollback(monkeypatch):
+    # As DRF's own handler does, under ATOMIC_REQUESTS: a failed request's writes don't commit.
+    monkeypatch.setitem(connection.settings_dict, "ATOMIC_REQUESTS", True)
+    with transaction.atomic():
+        exception_handler(NotBookmarkable(), {})
+        assert connection.needs_rollback
 
 
 def test_the_handler_needs_no_view():

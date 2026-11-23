@@ -1,5 +1,5 @@
 {
-  "code": "domain_error",
+  "code": "not_found",
   "hasError": true,
   "message": {
     "general": [

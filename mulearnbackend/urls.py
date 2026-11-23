@@ -52,3 +52,7 @@ if decouple_config("ENABLE_SWAGGER", default=False, cast=bool):
 
 
 # urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+# Django renders an unhandled error as a JSON envelope (issue 0019), after the error-log middleware
+# has recorded it.
+handler500 = "building_blocks.api.exceptions.server_error"

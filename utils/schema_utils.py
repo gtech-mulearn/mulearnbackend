@@ -17,3 +17,5 @@ class CustomResponseSerializer(serializers.Serializer):
     response = serializers.JSONField(
         help_text="Free-form response payload; shape varies per endpoint."
     )
+    code = serializers.CharField(default="ok", help_text='"ok", or a stable error code (issue 0019).')
+    requestId = serializers.CharField(allow_null=True, help_text="The request id, as in X-Request-Id.")

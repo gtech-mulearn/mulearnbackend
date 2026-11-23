@@ -65,3 +65,46 @@ def test_a_paginated_response_gains_code_ok():
 
 def test_outside_a_request_the_request_id_is_none():
     assert CustomResponse().get_success_response().data["requestId"] is None
+
+
+def test_a_failure_without_a_code_names_its_status():
+    codes = {
+        status: render(CustomResponse().get_failure_response, status_code=status).data["code"]
+        for status in (400, 401, 403, 404, 409, 422, 429, 500)
+    }
+
+    assert codes == {
+        400: "domain_error",
+        401: "unauthorized",
+        403: "forbidden",
+        404: "not_found",
+        409: "conflict",
+        422: "unprocessable",
+        429: "rate_limited",
+        500: "internal_error",
+    }
+
+
+def test_a_cached_response_gets_the_current_request_id():
+    from django.core.cache import cache
+
+    from utils.utils import cache_view_response
+
+    cache.delete("test-0019-cache")
+
+    class View:
+        @cache_view_response("test-0019-cache", timeout=60)
+        def get(self, request):
+            return CustomResponse(response={"a": 1}).get_success_response()
+
+    first = render(View().get, None)
+    token = context.request_id.set("req_ffffffffffffffffffffffffffffffff")
+    try:
+        second = View().get(None)
+    finally:
+        context.request_id.reset(token)
+        cache.delete("test-0019-cache")
+
+    assert first.data["requestId"] == RID
+    assert second.data["requestId"] == "req_ffffffffffffffffffffffffffffffff"
+    assert second.data["response"] == {"a": 1}
