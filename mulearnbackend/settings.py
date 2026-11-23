@@ -97,6 +97,8 @@ CORS_ALLOW_ALL_ORIGINS = True
 REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": ("rest_framework.renderers.JSONRenderer",),
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    # One handler renders every error (issue 0019); legacy error responses keep their bodies.
+    "EXCEPTION_HANDLER": "building_blocks.api.exceptions.exception_handler",
 }
 
 SPECTACULAR_SETTINGS = {

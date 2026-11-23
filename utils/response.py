@@ -6,9 +6,14 @@ from rest_framework.response import Response
 from django.core.files.storage import FileSystemStorage
 from django.http import HttpResponse
 
+from building_blocks.observability.context import current_request_id
+
 
 class CustomResponse:
     """A custom response class for API views.
+
+    Every envelope carries the four legacy keys plus ``code`` ("ok" on success, the given code or
+    "domain_error" on failure) and ``requestId`` (issue 0019, docs/architecture/07-api-standards.md).
 
     Attributes:
         message (Dict[str, Any]): A dictionary of messages.
@@ -52,6 +57,8 @@ class CustomResponse:
                 "statusCode": status.HTTP_200_OK,
                 "message": self.message,
                 "response": self.response,
+                "code": "ok",
+                "requestId": current_request_id(),
             },
             status=status.HTTP_200_OK,
         )
@@ -60,6 +67,7 @@ class CustomResponse:
             self,
             status_code: int = 400,
             http_status_code: int = status.HTTP_400_BAD_REQUEST,
+            code: str = "domain_error",
     ) -> Response:
         """Returns a failure response.
 
@@ -68,6 +76,8 @@ class CustomResponse:
                 Defaults to 400.
             http_status_code (int, optional): An HTTP status code for the response.
                 Defaults to status.HTTP_400_BAD_REQUEST.
+            code (str, optional): A stable error code clients can branch on.
+                Defaults to "domain_error".
 
         Returns:
             Response: A failure response object.
@@ -78,6 +88,8 @@ class CustomResponse:
                 "statusCode": status_code,
                 "message": self.message,
                 "response": self.response,
+                "code": code,
+                "requestId": current_request_id(),
             },
             status=http_status_code,
         )
@@ -95,6 +107,8 @@ class CustomResponse:
                 "statusCode": 403,
                 "message": self.message,
                 "response": self.response,
+                "code": "forbidden",
+                "requestId": current_request_id(),
             },
             status=status.HTTP_403_FORBIDDEN,
         )
@@ -119,6 +133,8 @@ class CustomResponse:
                 "statusCode": status.HTTP_200_OK,
                 "message": self.message,
                 "response": self.response,
+                "code": "ok",
+                "requestId": current_request_id(),
             },
             status=status.HTTP_200_OK,
         )

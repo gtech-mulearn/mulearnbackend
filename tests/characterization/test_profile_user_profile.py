@@ -1,7 +1,6 @@
 """GET /api/v1/dashboard/profile/user-profile/, as it behaves today (issue 0025's example route)."""
 
 import pytest
-from django.db import OperationalError
 from rest_framework.test import APIClient
 
 from tests.characterization.harness import mint_token
@@ -13,12 +12,14 @@ URL = "/api/v1/dashboard/profile/user-profile/"
 
 # The InterestGroup model has a cover_image_key column (backend 62cf57aa, on dev only) that the
 # schema of record doesn't: no db-scripts alter adds it, so the route's interest-group prefetch
-# fails on the vendored schema. strict=True turns this red as soon as the alter lands and is
-# re-vendored; then delete the marker and write the golden file with --update-golden.
+# fails on the vendored schema. Since issue 0019 the exception handler answers that failure with a
+# JSON 500 envelope instead of raising, so the envelope check is what fails. strict=True turns this
+# red as soon as the alter lands and is re-vendored; then delete the marker and write the golden
+# file with --update-golden.
 MISSING_COLUMN = "interest_group.cover_image_key isn't in schema/latest.sql"
 
 
-@pytest.mark.xfail(strict=True, raises=OperationalError, reason=MISSING_COLUMN)
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason=MISSING_COLUMN)
 def test_a_signed_in_user_gets_their_profile(make_user, api_client, assert_envelope, golden):
     user = make_user(
         roles=["Student"], muid="profile-person@mulearn", full_name="Profile Person", email="profile-person@example.com"
