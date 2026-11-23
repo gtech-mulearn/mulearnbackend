@@ -7,7 +7,7 @@ from rest_framework.views import APIView
 
 from db.problem_statement import ProblemStatement, ProblemStatementInteraction
 from db.user import User
-from utils.permission import CustomizePermission, JWTUtils
+from utils.permission import CustomizePermission, JWTUtils, OptionalAuthentication
 from utils.response import CustomResponse
 from utils import problem_statement as ps_utils
 from utils.utils import CommonUtils
@@ -27,15 +27,17 @@ def _published_or_none(statement_id):
 
 
 class ProblemStatementListAPI(APIView):
-    permission_classes = [CustomizePermission]
+    """Public: anonymous callers get the list without per-user interaction status."""
+    authentication_classes = [OptionalAuthentication]
+    permission_classes = []
 
     @extend_schema(
         tags=TAGS,
-        description="List published problem statements. "
+        description="List published problem statements (public; a valid token adds my_interaction). "
                     "Filters: category, skill, company_id, source=company|mulearn, open_only=true.",
     )
     def get(self, request):
-        user_id = JWTUtils.fetch_user_id(request)
+        user_id = JWTUtils.fetch_user_id(request) if JWTUtils.is_logged_in(request) else None
         qs = ps_utils.filter_source(_published(), request.query_params)
         params = request.query_params
         if params.get("category"):
@@ -67,7 +69,7 @@ class ProblemStatementListAPI(APIView):
         ids = [s.id for s in items]
         ctx = {
             "counts": ps_utils.interaction_counts(ids),
-            "my_interactions": ps_utils.my_interactions(user_id, ids),
+            "my_interactions": ps_utils.my_interactions(user_id, ids) if user_id else {},
         }
         return CustomResponse().paginated_response(
             data=serializers.ProblemStatementSerializer(items, many=True, context=ctx).data,
@@ -76,17 +78,20 @@ class ProblemStatementListAPI(APIView):
 
 
 class ProblemStatementDetailAPI(APIView):
-    permission_classes = [CustomizePermission]
+    """Public: anonymous callers get the details without per-user interaction status."""
+    authentication_classes = [OptionalAuthentication]
+    permission_classes = []
 
-    @extend_schema(tags=TAGS, description="Full details of a published problem statement.")
+    @extend_schema(tags=TAGS, description="Full details of a published problem statement "
+                                          "(public; a valid token adds my_interaction).")
     def get(self, request, statement_id):
         statement = _published_or_none(statement_id)
         if not statement:
             return ps_utils.not_found()
-        user_id = JWTUtils.fetch_user_id(request)
+        user_id = JWTUtils.fetch_user_id(request) if JWTUtils.is_logged_in(request) else None
         ctx = {
             "counts": ps_utils.interaction_counts([statement.id]),
-            "my_interactions": ps_utils.my_interactions(user_id, [statement.id]),
+            "my_interactions": ps_utils.my_interactions(user_id, [statement.id]) if user_id else {},
         }
         return CustomResponse(
             response=serializers.ProblemStatementSerializer(statement, context=ctx).data
