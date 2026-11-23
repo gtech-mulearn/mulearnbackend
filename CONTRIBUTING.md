@@ -33,6 +33,14 @@
 
 - **A maintainer reviews every pull request.**
 - **Issues labelled `core-review` need two approvals, one of them from a maintainer.** These touch money, roles, auth, the ledger, the outbox or deploys.
+- **The branch rules** (`.github/rulesets/`, applied with `scripts/apply_rulesets.sh`) protect `dev`, `staging` and `production`:
+  - changes arrive only through a pull request, with at least 1 approval;
+  - an approval is dismissed when new commits are pushed;
+  - code owners (`.github/CODEOWNERS`) must approve changes to the paths they own, `.github/workflows/` included;
+  - the `unit`, `legacy`, `mysql (8.0)`, `mysql (8.4)` and `two reviewers` checks must pass;
+  - no force pushes and no deletions.
+- **The `two reviewers` check** (`.github/workflows/two-reviewers.yml`) fails a pull request into those branches that touches a core-review path with fewer than 2 approvals. The paths are `building_blocks/authz/`, `building_blocks/messaging/`, `modules/contributions/`, `modules/identity_access/`, `scripts/deploy.sh` and `.github/workflows/`. It re-runs when a review is submitted or dismissed. Only approvals from people with access to the repository count, never bots or outside accounts.
+- **Nobody bypasses the rules, maintainers included.** An urgent fix is a pull request like any other: open it, get the approvals and merge it as soon as the checks pass.
 - **Schema changes are never made in this repository.** An issue labelled `needs-db-change` needs an alter that a maintainer writes and applies in `db-scripts` first. `schema/latest.sql` is a read-only copy.
 
 ## Labels
