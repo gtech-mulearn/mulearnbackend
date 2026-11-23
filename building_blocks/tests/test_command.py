@@ -178,9 +178,10 @@ def test_a_deadlock_is_retried_at_the_outermost_level_three_times_in_all(strict)
         calls.append(1)
         raise deadlock()
 
-    with pytest.raises(OperationalError):
+    with pytest.raises(OperationalError) as raised:
         write()
 
+    assert raised.value.args[0] == 1213
     assert len(calls) == 3
     assert len(pauses) == 2
     assert all(0.05 <= pause <= 0.2 for pause in pauses)
@@ -269,13 +270,118 @@ def test_the_decorator_works_on_a_method(strict):
 def test_a_violation_outside_strict_mode_still_runs_the_command_inside_a_transaction(lenient, unlisted):
     @command("events")
     def write():
-        return connection.in_atomic_block
+        return len(connection.savepoint_ids)
 
+    before = violation_count()
     with transaction.atomic():
-        assert write() is True
+        outside = len(connection.savepoint_ids)
+        inside = write()
+
+    assert inside == outside + 1  # the command opened its own savepoint inside the legacy block
+    assert violation_count() == before + 1
 
 
 def test_the_legacy_caller_allowlist_starts_empty():
     command_module.legacy_callers.cache_clear()
 
     assert command_module.legacy_callers() == frozenset()
+
+
+@transactional
+def test_a_deadlock_from_an_on_commit_callback_doesnt_rerun_the_committed_body(strict):
+    # Django runs on_commit callbacks after the commit, inside atomic().__exit__, so their errors
+    # leave the command's atomic block. Retrying then would write the committed body again.
+    calls = []
+
+    @command("events", sleep=lambda seconds: None)
+    def cancel():
+        calls.append(1)
+        transaction.on_commit(lambda: (_ for _ in ()).throw(deadlock()))
+
+    with pytest.raises(OperationalError) as raised:
+        cancel()
+
+    assert raised.value.args[0] == 1213
+    assert calls == [1]
+
+
+@transactional
+def test_a_deadlock_raised_by_the_commit_itself_is_retried(strict, monkeypatch):
+    calls = []
+    real_commit = connection.commit
+    failures = [deadlock()]
+
+    def commit():
+        if failures:
+            raise failures.pop()
+        real_commit()
+
+    monkeypatch.setattr(connection, "commit", commit)
+
+    @command("events", sleep=lambda seconds: None)
+    def write():
+        calls.append(1)
+        return "ran"
+
+    assert write() == "ran"
+    assert len(calls) == 2
+
+
+@pytest.mark.django_db
+def test_a_deadlock_inside_a_legacy_transaction_isnt_retried(strict, listed):
+    calls = []
+
+    @command("events", sleep=lambda seconds: None)
+    def write():
+        calls.append(1)
+        raise deadlock()
+
+    with pytest.raises(OperationalError):
+        legacy_caller(write)
+
+    assert len(calls) == 1
+
+
+@pytest.mark.django_db
+def test_a_deadlock_inside_the_test_cases_transaction_isnt_retried(strict):
+    # Retrying inside any open block, even a test case's, would retry inside a savepoint that a
+    # real MySQL deadlock has already rolled back.
+    calls = []
+
+    @command("events", sleep=lambda seconds: None)
+    def write():
+        calls.append(1)
+        raise deadlock()
+
+    with pytest.raises(OperationalError):
+        write()
+
+    assert len(calls) == 1
+
+
+def test_a_coroutine_function_is_refused():
+    with pytest.raises(TypeError, match="async"):
+
+        @command("events")
+        async def write():
+            return None
+
+
+def test_a_generator_function_is_refused():
+    with pytest.raises(TypeError, match="generator"):
+
+        @command("events")
+        def write():
+            yield None
+
+
+@pytest.mark.django_db
+def test_the_call_site_is_found_without_inspect_stack(strict, listed, monkeypatch):
+    # inspect.stack() reads source lines for every frame: milliseconds per command call.
+    monkeypatch.setattr(command_module.inspect, "stack", lambda *args, **kwargs: pytest.fail("inspect.stack used"))
+
+    @command("events")
+    def write():
+        return "ran"
+
+    assert legacy_caller(write) == "ran"
