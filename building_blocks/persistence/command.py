@@ -5,7 +5,9 @@
 
 - **One transaction per write.** The decorated function runs inside transaction.atomic().
 - **No module runs inside another module's transaction.** The owners of the running commands
-  are kept on a ContextVar stack. A command whose owner differs from the one already running is
+  are kept on a ContextVar stack, each only while its command's body runs. So a callback
+  registered with transaction.on_commit(), which Django runs after the commit, starts with an
+  empty stack and may run any module's command. A command whose owner differs from the one already running is
   a violation. So is a command inside a transaction that legacy code opened, unless that call
   site is listed in tests/architecture/allowlists/legacy_tx_callers.toml. Django's own test-case
   transactions (marked _from_testcase) are ignored.
@@ -114,18 +116,21 @@ def command(owner: str, *, sleep=time.sleep):
                     )
             outermost = not running and not legacy_open
             attempts = MAX_ATTEMPTS if outermost else 1
-            token = _owners.set((*running, owner))
-            try:
-                for attempt in range(1, attempts + 1):
-                    try:
-                        with transaction.atomic():
+            for attempt in range(1, attempts + 1):
+                try:
+                    with transaction.atomic():
+                        # The owner is on the stack only while the body runs. It is reset before
+                        # atomic() exits, because Django runs on_commit callbacks during that exit,
+                        # after the commit: a callback may run another module's command.
+                        token = _owners.set((*running, owner))
+                        try:
                             return function(*args, **kwargs)
-                    except OperationalError as error:
-                        if not _is_deadlock(error) or attempt == attempts:
-                            raise
-                        sleep(random.uniform(0.05, 0.2))
-            finally:
-                _owners.reset(token)
+                        finally:
+                            _owners.reset(token)
+                except OperationalError as error:
+                    if not _is_deadlock(error) or attempt == attempts:
+                        raise
+                    sleep(random.uniform(0.05, 0.2))
 
         return run
 

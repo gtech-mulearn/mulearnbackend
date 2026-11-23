@@ -128,6 +128,48 @@ def test_a_command_called_outside_any_transaction_opens_one(strict):
 
 
 @transactional
+def test_a_command_scheduled_on_commit_runs_in_its_own_transaction(strict):
+    # Django runs on_commit callbacks while the outermost atomic() exits, after the commit. By
+    # then the command that scheduled the callback is over, so another module's command is fine.
+    seen = {}
+
+    @command("karma")
+    def award():
+        seen["owners"] = current_owners()
+        seen["in_atomic_block"] = connection.in_atomic_block
+
+    @command("events")
+    def cancel():
+        transaction.on_commit(award)
+        return "cancelled"
+
+    assert cancel() == "cancelled"
+    assert seen == {"owners": ("karma",), "in_atomic_block": True}
+    assert current_owners() == ()
+
+
+@transactional
+def test_a_command_scheduled_on_commit_from_a_nested_command_runs_after_the_outer_commit(strict):
+    seen = {}
+
+    @command("karma")
+    def award():
+        seen["owners"] = current_owners()
+
+    @command("events")
+    def inner():
+        transaction.on_commit(award)
+
+    @command("events")
+    def outer():
+        inner()
+        seen["before_commit"] = dict(seen)
+
+    outer()
+    assert seen == {"before_commit": {}, "owners": ("karma",)}
+
+
+@transactional
 def test_a_deadlock_is_retried_at_the_outermost_level_three_times_in_all(strict):
     calls, pauses = [], []
 
