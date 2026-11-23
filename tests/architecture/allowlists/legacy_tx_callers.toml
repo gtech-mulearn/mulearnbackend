@@ -1,0 +1,5 @@
+# Legacy call sites allowed to call a @command inside a transaction they opened themselves
+# (building_blocks/persistence/command.py, issue 0021). One "path/from/repo/root.py::function"
+# string each. This list only shrinks: add a call site only while its code moves into a
+# module, and remove it when the move is done. @command reads this file once per process.
+callers = []

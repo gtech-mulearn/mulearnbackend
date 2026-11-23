@@ -26,3 +26,5 @@ drf-spectacular==0.27.2
 firebase-admin==7.1.0
 # razorpay imports pkg_resources, which setuptools 81 removed. Keep setuptools below that until razorpay is upgraded.
 setuptools==65.5.1
+# building_blocks/persistence/command.py reads TOML; Python 3.11+ has tomllib built in.
+tomli==2.5.0; python_version < "3.11"

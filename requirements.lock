@@ -1329,6 +1329,7 @@ tomli==2.5.0 ; python_full_version < '3.11' \
     --hash=sha256:f79203b3965b4000e91808aaa7c040206093f2b8bf86f455982f2274c9ccf442 \
     --hash=sha256:fd4dc129784e0c5335bd4e61dfcc4487499a013419e655cf2da1d091b7e0efdc
     # via
+    #   -r requirements.txt
     #   black
     #   incremental
 twisted==25.5.0 \

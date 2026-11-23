@@ -1794,6 +1794,7 @@ tomli==2.5.0 ; python_full_version < '3.11' \
     # via
     #   -c requirements.lock
     #   -r requirements-dev.txt
+    #   -r requirements.txt
     #   black
     #   import-linter
     #   incremental

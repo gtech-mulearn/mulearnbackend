@@ -18,6 +18,9 @@ declare(
     Setting("SYSTEM_ADMIN_ID", str, required_in=ALL),
     Setting("DRAIN_FLAG_PATH", str, default="/tmp/mulearn-drain"),
     Setting("ENABLE_SWAGGER", bool, default=False),
+    # @command raises on a cross-module transaction when on, and logs and counts when off.
+    # Unset means DEBUG (building_blocks/persistence/command.py).
+    Setting("COMMAND_GUARD_STRICT", bool, default=None),
     # Redis
     Setting("REDIS_HOST", str, required_in=ALL),
     Setting("REDIS_PORT", int, required_in=ALL),

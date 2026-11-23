@@ -47,6 +47,8 @@ if (-not $logDir) { $logDir = "./logs" }
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 
 # Environment variables win over .env, because decouple reads the environment first.
+# pytest-django switches DEBUG off, so the @command guard is made strict explicitly.
+$env:COMMAND_GUARD_STRICT = "1"
 if ($Mysql) {
     $env:DATABASE_ENGINE = "django.db.backends.mysql"
     $env:DATABASE_HOST = if ($env:TEST_DB_HOST) { $env:TEST_DB_HOST } else { "127.0.0.1" }
