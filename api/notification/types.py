@@ -72,6 +72,10 @@ class NotificationType(str, Enum):
     # ── Admin ─────────────────────────────────────────────────────────────────
     ADMIN_BROADCAST = "ADMIN_BROADCAST"  # all users: free-text admin announcement
 
+    # ── Intern ────────────────────────────────────────────────────────────────
+    INTERN_MONTHLY_REVIEW_OPEN     = "INTERN_MONTHLY_REVIEW_OPEN"      # interns: monthly review window opened
+    INTERN_MONTHLY_REVIEW_LAST_DAY = "INTERN_MONTHLY_REVIEW_LAST_DAY"  # interns who haven't submitted: last day
+
     # ── Add more modules below as they are built ──────────────────────────────
     # MENTORSHIP, INTERN, TASKS ...
 
@@ -92,6 +96,7 @@ class Category(str, Enum):
     JOBS    = "JOBS"
     MEDIA_CONTENT = "MEDIA_CONTENT"
     ADMIN   = "ADMIN"
+    INTERN  = "INTERN"
 
     # Add below as modules are built:
     # MENTORSHIP     = "MENTORSHIP"
@@ -363,6 +368,18 @@ TYPE_META: dict[str, TypeMeta] = {
     NotificationType.ADMIN_BROADCAST: TypeMeta(
         category    = Category.ADMIN,
         is_personal = False,
+        eligible    = ["IN_APP", "WEBSOCKET"],
+    ),
+
+    # ── Intern — personal, in-app + websocket only for now ────────────────────
+    NotificationType.INTERN_MONTHLY_REVIEW_OPEN: TypeMeta(
+        category    = Category.INTERN,
+        is_personal = True,
+        eligible    = ["IN_APP", "WEBSOCKET"],
+    ),
+    NotificationType.INTERN_MONTHLY_REVIEW_LAST_DAY: TypeMeta(
+        category    = Category.INTERN,
+        is_personal = True,
         eligible    = ["IN_APP", "WEBSOCKET"],
     ),
 

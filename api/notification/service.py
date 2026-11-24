@@ -488,6 +488,10 @@ _ENTITY_TYPE_MAP: dict[str, str] = {
     NotificationType.INSPIRATION_STATION_ANNOUNCED:   "media_content",
     NotificationType.GRAB_YOUR_SUPERPOWERS_ANNOUNCED: "media_content",
 
+    # Intern
+    NotificationType.INTERN_MONTHLY_REVIEW_OPEN:     "intern_monthly_review",
+    NotificationType.INTERN_MONTHLY_REVIEW_LAST_DAY: "intern_monthly_review",
+
     # Add more as modules are built:
     # NotificationType.SESSION_BOOKED:    "session",
 }

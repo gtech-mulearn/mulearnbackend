@@ -4,7 +4,7 @@ from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
-from utils.types import RoleType, InternLeaderboardWeights, InternGuildStatus
+from utils.types import RoleType, InternLeaderboardWeights, InternGuildStatus, COUNTED_TIMESHEET_STATUSES
 from db.intern import UserInternGuildLink, InternTask, InternDailyTimesheet, InternWeeklyReview
 from db.task import KarmaActivityLog
 from db.achievement import UserStreak
@@ -42,7 +42,7 @@ class InternLeaderboardAPI(APIView):
         for t in completed_tasks:
             tasks_by_user.setdefault(t.assigned_to_id, []).append(t)
             
-        approved_daily_timesheets = InternDailyTimesheet.objects.filter(user_id__in=intern_user_ids, status='APPROVED').values('user_id').annotate(total=Count('id'))
+        approved_daily_timesheets = InternDailyTimesheet.objects.filter(user_id__in=intern_user_ids, status__in=COUNTED_TIMESHEET_STATUSES).values('user_id').annotate(total=Count('id'))
         daily_ts_counts = {item['user_id']: item['total'] for item in approved_daily_timesheets}
         
         approved_weekly_reviews = InternWeeklyReview.objects.filter(user_id__in=intern_user_ids, status='APPROVED').values('user_id').annotate(total=Count('id'))
@@ -151,7 +151,7 @@ class InternLeaderboardMeAPI(APIView):
         for t in completed_tasks:
             tasks_by_user.setdefault(t.assigned_to_id, []).append(t)
             
-        approved_daily_timesheets = InternDailyTimesheet.objects.filter(user_id__in=intern_user_ids, status='APPROVED').values('user_id').annotate(total=Count('id'))
+        approved_daily_timesheets = InternDailyTimesheet.objects.filter(user_id__in=intern_user_ids, status__in=COUNTED_TIMESHEET_STATUSES).values('user_id').annotate(total=Count('id'))
         daily_ts_counts = {item['user_id']: item['total'] for item in approved_daily_timesheets}
         
         approved_weekly_reviews = InternWeeklyReview.objects.filter(user_id__in=intern_user_ids, status='APPROVED').values('user_id').annotate(total=Count('id'))

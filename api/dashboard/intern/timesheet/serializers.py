@@ -1,10 +1,25 @@
 from rest_framework import serializers
-from django.utils.timezone import now
 from django.db import transaction
 from datetime import timedelta
 
 from db.intern import InternDailyTimesheet, InternTask
-from utils.types import InternSubmissionStatus, InternTaskStatus
+from utils.types import InternSubmissionStatus, InternTaskStatus, COUNTED_TIMESHEET_STATUSES
+from utils.utils import DateTimeUtils
+
+from .streak import log_daily_timesheet_activity, sync_timesheet_streak
+
+# Error code attached to the duplicate-date validation error so the view can
+# answer 409 instead of a generic 400.
+DUPLICATE_TIMESHEET_CODE = 'duplicate_timesheet'
+
+# Timesheets count without admin review, so a minimum description length is
+# the only guard against one-word entries. DRF trims leading/trailing
+# whitespace before validators run, so padding doesn't count.
+DESCRIPTION_MIN_LENGTH = 30
+DESCRIPTION_MAX_LENGTH = 2000
+DESCRIPTION_ERRORS = {
+    'min_length': f"Description must be at least {DESCRIPTION_MIN_LENGTH} characters.",
+}
 
 
 class TaskUpdateEntrySerializer(serializers.Serializer):
@@ -18,10 +33,17 @@ class TaskUpdateEntrySerializer(serializers.Serializer):
 
 class InternTimesheetSerializer(serializers.ModelSerializer):
     task = TaskUpdateEntrySerializer(many=True, required=False, allow_null=True)
-    description = serializers.CharField(max_length=2000)
+    description = serializers.CharField(
+        min_length=DESCRIPTION_MIN_LENGTH, max_length=DESCRIPTION_MAX_LENGTH, error_messages=DESCRIPTION_ERRORS
+    )
     blockers = serializers.CharField(max_length=1000, required=False, allow_blank=True, allow_null=True)
     end_of_day_note = serializers.CharField(max_length=1000, required=False, allow_blank=True, allow_null=True)
-    edit_reason = serializers.CharField(max_length=300, required=False, allow_blank=True, allow_null=True)
+    # Accepted for backward compatibility with clients built on the old form
+    # (unknown fields are rejected project-wide), but discarded: it only
+    # justified late submissions, which are no longer allowed.
+    edit_reason = serializers.CharField(
+        max_length=300, required=False, allow_blank=True, allow_null=True, write_only=True
+    )
 
     class Meta:
         model = InternDailyTimesheet
@@ -32,15 +54,20 @@ class InternTimesheetSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         entry_date = data.get('entry_date')
-        today = now().date()
+        # Day boundaries follow IST, not the server's UTC date.
+        today = DateTimeUtils.get_ist_today()
         yesterday = today - timedelta(days=1)
         user_id = self.context.get('user_id')
 
         if entry_date > today:
             raise serializers.ValidationError({"entry_date": "Future dates are not allowed."})
 
-        if entry_date < yesterday and not data.get('edit_reason'):
-            raise serializers.ValidationError({"edit_reason": "Reason is required for late submissions."})
+        # No admin review any more, so a submission counts immediately —
+        # only today and yesterday are accepted to prevent backfilling.
+        if entry_date < yesterday:
+            raise serializers.ValidationError(
+                {"entry_date": "Timesheets can only be submitted for today or yesterday."}
+            )
 
         if not data.get('description'):
             raise serializers.ValidationError({"description": "Description is required."})
@@ -53,10 +80,12 @@ class InternTimesheetSerializer(serializers.ModelSerializer):
 
         # Prevent duplicate timesheet for the same date
         if InternDailyTimesheet.objects.filter(user_id=user_id, entry_date=entry_date).exists():
-            raise serializers.ValidationError({"entry_date": "A timesheet for this date has already been submitted."})
+            raise serializers.ValidationError(
+                {"entry_date": "A timesheet for this date has already been submitted."},
+                code=DUPLICATE_TIMESHEET_CODE,
+            )
 
         task_entries = data.get('task') or []
-        user_id = self.context.get('user_id')
         task_ids = [entry.get('task_id') for entry in task_entries if entry.get('task_id')]
 
         # Bulk fetch tasks
@@ -103,6 +132,7 @@ class InternTimesheetSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         user_id = self.context.get('user_id')
         task_entries = validated_data.pop('task', None) or []
+        validated_data.pop('edit_reason', None)  # not stored on submit
 
         with transaction.atomic():
             # Update InternTask.status for each entry
@@ -126,14 +156,24 @@ class InternTimesheetSerializer(serializers.ModelSerializer):
             validated_data['user_id'] = user_id
             validated_data['created_by_id'] = user_id
             validated_data['updated_by_id'] = user_id
-            validated_data['status'] = InternSubmissionStatus.PENDING.value
+            # Counts immediately — no admin approval step.
+            validated_data['status'] = InternSubmissionStatus.SUBMITTED.value
 
-            return InternDailyTimesheet.objects.create(**validated_data)
+            timesheet = InternDailyTimesheet.objects.create(**validated_data)
+
+            # Quest Log entry, then streak / milestone karma — what admin
+            # approval used to do, now on submit. Status (AT_RISK → ACTIVE)
+            # is left to intern_daily_status_cron.
+            log_daily_timesheet_activity(user_id)
+            sync_timesheet_streak(user_id, actor_id=user_id)
+
+            return timesheet
 
 
 class InternTimesheetHistorySerializer(serializers.ModelSerializer):
     # Points awarded to the leaderboard score for this timesheet entry.
-    # Only APPROVED timesheets count (25 pts each); all others earn 0.
+    # Counted timesheets (submitted, plus legacy approved/pending) earn
+    # 25 pts each; rejected ones earn 0.
     score = serializers.SerializerMethodField()
 
     class Meta:
@@ -145,17 +185,23 @@ class InternTimesheetHistorySerializer(serializers.ModelSerializer):
         ]
 
     def get_score(self, obj):
-        return 25 if obj.status == 'APPROVED' else 0
+        return 25 if obj.status in COUNTED_TIMESHEET_STATUSES else 0
 
 
 class InternTimesheetEditSerializer(serializers.ModelSerializer):
     task = TaskUpdateEntrySerializer(many=True, required=False, allow_null=True)
-    description = serializers.CharField(max_length=2000, required=False)
+    description = serializers.CharField(
+        min_length=DESCRIPTION_MIN_LENGTH, max_length=DESCRIPTION_MAX_LENGTH,
+        error_messages=DESCRIPTION_ERRORS, required=False,
+    )
     blockers = serializers.CharField(max_length=1000, required=False, allow_blank=True, allow_null=True)
     end_of_day_note = serializers.CharField(max_length=1000, required=False, allow_blank=True, allow_null=True)
     edit_reason = serializers.CharField(max_length=300, required=True, allow_blank=False, allow_null=False)
-    entry_date = serializers.DateField(required=False)
     hours = serializers.DecimalField(max_digits=4, decimal_places=2, required=False)
+    # entry_date is not editable: moving a timesheet to another date would
+    # rewrite the streak. It is still accepted so clients that resend the
+    # whole form keep working, but it must equal the current date.
+    entry_date = serializers.DateField(required=False)
 
     class Meta:
         model = InternDailyTimesheet
@@ -165,23 +211,17 @@ class InternTimesheetEditSerializer(serializers.ModelSerializer):
         ]
 
     def validate(self, data):
-        timesheet = self.instance
         user_id = self.context.get('user_id')
 
         # 0. edit_reason is mandatory for all modifications
         if 'edit_reason' not in data or not data.get('edit_reason'):
             raise serializers.ValidationError({"edit_reason": "edit_reason is mandatory for all modifications."})
 
-        # 1. Validate entry_date if provided
-        entry_date = data.get('entry_date')
-        if entry_date is not None:
-            today = now().date()
-            if entry_date > today:
-                raise serializers.ValidationError({"entry_date": "Future dates are not allowed."})
-
-            # Check duplicate timesheet on the same date for the same user, excluding current timesheet
-            if InternDailyTimesheet.objects.filter(user_id=user_id, entry_date=entry_date).exclude(id=timesheet.id).exists():
-                raise serializers.ValidationError({"entry_date": "A timesheet for this date has already been submitted."})
+        # 1. entry_date cannot change
+        if 'entry_date' in data:
+            if data['entry_date'] != self.instance.entry_date:
+                raise serializers.ValidationError({"entry_date": "entry_date cannot be changed."})
+            data.pop('entry_date')
 
         # 2. Validate description if provided
         if 'description' in data and not data.get('description'):
