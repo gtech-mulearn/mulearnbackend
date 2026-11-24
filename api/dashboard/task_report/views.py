@@ -18,7 +18,9 @@ class TaskReportInfoView(APIView):
         responses={200: serializers.TaskReportSerializer},
     )
     def get(self, request):
-        reports = TaskReport.objects.all()
+        # prefetch, not select_related: no ORDER BY here, so a join could
+        # change the row order (reporter and offender were 2 queries per row)
+        reports = TaskReport.objects.prefetch_related("reporter", "offender")
         
         # Filtering
         if status := request.query_params.get("status"):
@@ -63,18 +65,28 @@ class TaskReportTaskGroupingView(APIView):
             .order_by("-report_count")
         )
         
+        report_counts = list(report_counts)
+        # Hashtag of the first (lowest pk) karma log per message id, for all
+        # groups in one query instead of a log query plus a task query each.
+        # task_message_id compares case-insensitively, so the map is keyed
+        # on the lower-cased id.
+        hashtags = {}
+        for message_id, hashtag in (
+            KarmaActivityLog.objects.filter(
+                task_message_id__in=[item["message_id"] for item in report_counts]
+            )
+            .order_by("task_message_id", "pk")
+            .values_list("task_message_id", "task__hashtag")
+        ):
+            hashtags.setdefault(str(message_id).lower(), hashtag)
+
         data = []
         for item in report_counts:
-            res = {
+            data.append({
                 "message_id": item["message_id"],
                 "report_count": item["report_count"],
-                "task_hashtag": None
-            }
-            # Try to fetch hashtag from KarmaActivityLog
-            if kal := KarmaActivityLog.objects.filter(task_message_id=item["message_id"]).first():
-                res["task_hashtag"] = kal.task.hashtag
-            
-            data.append(res)
+                "task_hashtag": hashtags.get(str(item["message_id"]).lower()),
+            })
 
         return CustomResponse(response=data).get_success_response()
 

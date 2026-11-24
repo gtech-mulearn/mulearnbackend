@@ -19,7 +19,7 @@ CACHE_TTL = 15 * 60  # 15 minutes
 MAX_PREFERRED_IGS = 5
 
 
-def get_effective_ig_ids(user, preferred_ig_ids, exclude_application_id=None):
+def get_effective_ig_ids(user, preferred_ig_ids, exclude_application_id=None, approved_apps=None):
     """
     The full set of IG ids `user` would actively mentor if `preferred_ig_ids`
     were in effect for one application, unioned with every OTHER currently
@@ -33,14 +33,20 @@ def get_effective_ig_ids(user, preferred_ig_ids, exclude_application_id=None):
     reconcile_mentor_ig_links applies it, release_mentor_ig_links and the
     max-IG-limit checks validate against it — so a mentor's IG access is
     additive across tiers/applications and never depends on approval order.
+
+    `approved_apps`, when given, is this user's APPROVED applications already
+    loaded by the caller (bulk validation), so no query runs here.
     """
     desired = {str(i) for i in (preferred_ig_ids or []) if i}
 
-    other_approved = MentorApplication.objects.filter(
-        user=user, status=MentorApplication.Status.APPROVED,
-    )
-    if exclude_application_id:
-        other_approved = other_approved.exclude(id=exclude_application_id)
+    if approved_apps is None:
+        other_approved = MentorApplication.objects.filter(
+            user=user, status=MentorApplication.Status.APPROVED,
+        )
+        if exclude_application_id:
+            other_approved = other_approved.exclude(id=exclude_application_id)
+    else:
+        other_approved = [app for app in approved_apps if app.id != exclude_application_id]
     for app in other_approved:
         desired.update(str(i) for i in (app.preferred_ig_ids or []) if i)
 

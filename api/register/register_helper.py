@@ -4,7 +4,7 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-from db.user import User
+from db.user import User, first_free_muid
 
 from utils.exception import CustomException
 
@@ -14,15 +14,8 @@ AUTH_TIMEOUT = (3, 10)  # (connect seconds, read seconds) — B4
 
 def generate_muid(full_name):
     full_name = full_name.replace(" ", "").lower()[:85]
-    muid = f"{full_name}@mulearn"
-
-    counter = 0
-
-    while User.every.filter(muid=muid).exists():
-        counter += 1
-        muid = f"{full_name}-{counter}@mulearn"
-
-    return muid
+    # Same candidates and result as the old one-query-per-candidate loop.
+    return first_free_muid(full_name)
 
 
 def _post_auth(path, **kwargs):

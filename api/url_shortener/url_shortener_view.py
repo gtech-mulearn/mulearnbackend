@@ -73,7 +73,8 @@ class UrlShortenerAPI(APIView):
             },
         )
 
-        if len(url_shortener_objects) == 0:
+        # exists(): len() loaded every row of the table just to test emptiness.
+        if not url_shortener_objects.exists():
             return CustomResponse(
                 general_message="No URL related data available"
             ).get_failure_response()
@@ -189,7 +190,11 @@ class UrlAnalyticsAPI(APIView):
                 general_message="Short URL not found"
             ).get_failure_response(status_code=404)
 
-        if not queryset.exists():
+        # Read the clicks once: the response lists every click, so all rows are
+        # needed anyway; total and first click come from the same rows instead
+        # of separate exists(), count() and first() queries.
+        clicks = list(queryset)
+        if not clicks:
             # The URL exists but has not been clicked yet. This is a valid empty
             # state, not an error, so return a 200 with zero-value analytics.
             # The client renders zeros instead of a failure screen.
@@ -226,7 +231,7 @@ class UrlAnalyticsAPI(APIView):
         region = {}
         time_based_data = {'all_time': []}
 
-        for query in queryset:
+        for query in clicks:
             # Counting browsers, platforms, devices, sources, countries, and dimensions
             browsers[query.browser] = browsers.get(query.browser, 0) + 1
             platforms[query.operating_system] = platforms.get(
@@ -248,8 +253,9 @@ class UrlAnalyticsAPI(APIView):
             ])
 
         result = {
-            'total_clicks': queryset.count(),
-            'created_on': queryset.first().created_at.strftime('%Y-%m-%d'),
+            'total_clicks': len(clicks),
+            # .first() on this unordered queryset meant the lowest pk
+            'created_on': min(clicks, key=lambda click: str(click.pk).lower()).created_at.strftime('%Y-%m-%d'),
             'browsers': browsers,
             'platforms': platforms,
             'devices': devices,

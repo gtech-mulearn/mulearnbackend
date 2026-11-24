@@ -6,6 +6,20 @@ from db.user import Socials, UserMentor, UserRoleLink, Role, MentorScopeGrant, M
 from utils.validators import validate_safe_text, enforce_max_length
 
 
+def _existing_ig_ids(ig_ids):
+    """
+    Lower-cased ids from `ig_ids` that name an InterestGroup, in one query
+    (validators used to run one exists() per id). The id column compares
+    case-insensitively, so callers compare lower-cased ids too.
+    """
+    if not ig_ids:
+        return set()
+    return {
+        str(i).lower()
+        for i in InterestGroup.objects.filter(id__in=[str(i) for i in ig_ids]).values_list("id", flat=True)
+    }
+
+
 class MentorScopeGrantSerializer(serializers.ModelSerializer):
     granted_by_name = serializers.CharField(source='granted_by.full_name', read_only=True)
     revoked_by_name = serializers.CharField(source='revoked_by.full_name', read_only=True, default=None)
@@ -134,9 +148,10 @@ class MentorRegisterSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 f"You can select at most {MAX_PREFERRED_IGS} Interest Groups."
             )
+        existing = _existing_ig_ids(value)
         for ig_id in value:
             validate_safe_text(str(ig_id))
-            if not InterestGroup.objects.filter(id=ig_id).exists():
+            if str(ig_id).lower() not in existing:
                 raise serializers.ValidationError(f"Invalid IG ID: {ig_id}")
         return value
 
@@ -365,9 +380,10 @@ class MentorUpdateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     f"You can select at most {MAX_PREFERRED_IGS} Interest Groups."
                 )
+            existing = _existing_ig_ids(value)
             for ig_id in value:
                 validate_safe_text(str(ig_id))
-                if not InterestGroup.objects.filter(id=ig_id).exists():
+                if str(ig_id).lower() not in existing:
                     raise serializers.ValidationError(f"Invalid IG ID: {ig_id}")
         return value
 
@@ -488,9 +504,10 @@ class MentorIgPreferenceSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 f"You can select at most {MAX_PREFERRED_IGS} Interest Groups."
             )
+        existing = _existing_ig_ids(value)
         for ig_id in value:
             validate_safe_text(str(ig_id))
-            if not InterestGroup.objects.filter(id=ig_id).exists():
+            if str(ig_id).lower() not in existing:
                 raise serializers.ValidationError(f"Invalid IG ID: {ig_id}")
         return value
 
@@ -560,9 +577,99 @@ class MentorDetailSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
+    @staticmethod
+    def list_prefetches():
+        """Prefetch for list views: each row's applications (and their org)."""
+        from django.db.models import Prefetch
+        return Prefetch(
+            "user__mentor_applications",
+            queryset=MentorApplication.objects.select_related("org"),
+        )
+
+    @staticmethod
+    def build_rating_map(mentors):
+        """
+        Rating aggregates for a page of mentors in two queries total, instead
+        of four per row. Same numbers as _rating_aggregate: MySQL runs the
+        same AVG/COUNT, only grouped by mentor. List views pass the result as
+        context={"rating_map": ...}.
+
+        Returns {user_id: (session_stats, company_stats)}, each a dict with
+        "avg" and "count".
+        """
+        from django.db import connection
+        from django.db.models import Avg, Count, F
+        from db.company import CompanyFeedback
+        from db.mentor import MentorshipSessionUserLink, MentorshipSession
+
+        user_ids = list({m.user_id for m in mentors})
+        if not user_ids:
+            return {}
+        role = MentorshipSessionUserLink.ParticipantRole
+        # Mentee ratings on sessions each mentor ran. (session, user, role) is
+        # unique, so the join adds no duplicate rows.
+        session_rows = (
+            MentorshipSessionUserLink.objects.filter(
+                participant_role=role.MENTEE,
+                rating__isnull=False,
+                session__participant_links__participant_role=role.MENTOR,
+                session__participant_links__user_id__in=user_ids,
+            )
+            .values(mentor_id=F("session__participant_links__user_id"))
+            .annotate(avg=Avg("rating"), count=Count("id"))
+            .order_by()
+        )
+        # Company feedback on each mentor's company sessions. entity_id is a
+        # plain column (no FK), so the ORM cannot join it; same SQL by hand.
+        link_table = MentorshipSessionUserLink._meta.db_table
+        session_table = MentorshipSession._meta.db_table
+        feedback_table = CompanyFeedback._meta.db_table
+        marks = ", ".join(["%s"] * len(user_ids))
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"SELECT l.user_id, AVG(f.rating), COUNT(f.id) "
+                f"FROM `{feedback_table}` f "
+                f"JOIN `{link_table}` l ON l.session_id = f.entity_id "
+                f"JOIN `{session_table}` s ON s.id = l.session_id "
+                f"WHERE f.interaction_type = %s AND l.participant_role = %s "
+                f"AND s.session_type = %s AND l.user_id IN ({marks}) "
+                f"GROUP BY l.user_id",
+                [
+                    CompanyFeedback.InteractionType.SESSION,
+                    role.MENTOR,
+                    MentorshipSession.SessionType.COMPANY_SESSION,
+                    *user_ids,
+                ],
+            )
+            company_rows = cursor.fetchall()
+
+        empty = {"avg": None, "count": 0}
+        result = {user_id: (empty, empty) for user_id in user_ids}
+        for row in session_rows:
+            result[row["mentor_id"]] = ({"avg": row["avg"], "count": row["count"]}, empty)
+        for user_id, avg, count in company_rows:
+            # Avg() returns a float; match it.
+            result[user_id] = (result[user_id][0],
+                               {"avg": float(avg) if avg is not None else None, "count": count})
+        return result
+
+    @staticmethod
+    def _combine_ratings(session_stats, company_stats):
+        total_count = (session_stats['count'] or 0) + (company_stats['count'] or 0)
+        if not total_count:
+            return {'avg_rating': None, 'rating_count': 0}
+        weighted = (session_stats['avg'] or 0) * (session_stats['count'] or 0) + \
+                   (company_stats['avg'] or 0) * (company_stats['count'] or 0)
+        return {'avg_rating': weighted / total_count, 'rating_count': total_count}
+
     def _rating_aggregate(self, obj):
         cached = getattr(obj, '_rating_aggregate_cache', None)
         if cached is not None:
+            return cached
+        rating_map = self.context.get("rating_map")
+        if rating_map is not None and obj.user_id in rating_map:
+            cached = self._combine_ratings(*rating_map[obj.user_id])
+            obj._rating_aggregate_cache = cached
             return cached
         from django.db.models import Avg, Count
         from db.mentor import MentorshipSessionUserLink, MentorshipSession
@@ -598,13 +705,7 @@ class MentorDetailSerializer(serializers.ModelSerializer):
             entity_id__in=company_session_ids,
         ).aggregate(avg=Avg('rating'), count=Count('id'))
 
-        total_count = (session_stats['count'] or 0) + (company_stats['count'] or 0)
-        if not total_count:
-            cached = {'avg_rating': None, 'rating_count': 0}
-        else:
-            weighted = (session_stats['avg'] or 0) * (session_stats['count'] or 0) + \
-                       (company_stats['avg'] or 0) * (company_stats['count'] or 0)
-            cached = {'avg_rating': weighted / total_count, 'rating_count': total_count}
+        cached = self._combine_ratings(session_stats, company_stats)
         obj._rating_aggregate_cache = cached
         return cached
 
@@ -1747,8 +1848,17 @@ class AdminAssignMentorSerializer(serializers.Serializer):
         # ── Resolve all user_muids ──────────────────────────────────────────
         resolved_users = {}
         invalid_muids  = []
+        # One query for the whole list. The muid column compares case- and
+        # accent-insensitively, so a muid not matched here by its lower-cased
+        # form is looked up on its own, as before.
+        by_muid = {
+            u.muid.lower(): u
+            for u in User.objects.filter(muid__in=attrs["user_muids"], suspended_at__isnull=True)
+        }
         for muid in attrs["user_muids"]:
-            user = User.objects.filter(muid=muid, suspended_at__isnull=True).first()
+            user = by_muid.get(muid.lower())
+            if user is None:
+                user = User.objects.filter(muid=muid, suspended_at__isnull=True).first()
             if user is None:
                 invalid_muids.append(muid)
             else:
@@ -1784,10 +1894,8 @@ class AdminAssignMentorSerializer(serializers.Serializer):
             if not ig_ids:
                 errors["ig_ids"] = "ig_ids (non-empty list) is required for IG_MENTOR."
             else:
-                invalid_igs = [
-                    ig_id for ig_id in ig_ids
-                    if not InterestGroup.objects.filter(id=ig_id).exists()
-                ]
+                existing = _existing_ig_ids(ig_ids)
+                invalid_igs = [ig_id for ig_id in ig_ids if str(ig_id).lower() not in existing]
                 if invalid_igs:
                     errors["ig_ids"] = (
                         f"The following IG IDs are invalid: {', '.join(invalid_igs)}"
@@ -1800,15 +1908,28 @@ class AdminAssignMentorSerializer(serializers.Serializer):
         if ig_ids and not errors.get("ig_ids"):
             from .dash_mentor_helper import get_effective_ig_ids, MAX_PREFERRED_IGS
 
+            # Every resolved user's APPROVED applications in one query, in pk
+            # order (the order .first() used per user).
+            approved_by_user = {}
+            for app in MentorApplication.objects.filter(
+                user__in=list(resolved_users.values()),
+                status=MentorApplication.Status.APPROVED,
+            ).order_by("pk"):
+                approved_by_user.setdefault(app.user_id, []).append(app)
+
+            org = attrs.get("_org")
             over_limit_muids = []
             for muid, user in resolved_users.items():
-                existing_app = MentorApplication.objects.filter(
-                    user=user, mentor_tier=tier, org=attrs.get("_org"),
-                    status=MentorApplication.Status.APPROVED,
-                ).first()
+                approved = approved_by_user.get(user.id, [])
+                existing_app = next(
+                    (app for app in approved
+                     if app.mentor_tier == tier and app.org_id == (org.id if org else None)),
+                    None,
+                )
                 effective = get_effective_ig_ids(
                     user, ig_ids,
                     exclude_application_id=existing_app.id if existing_app else None,
+                    approved_apps=approved,
                 )
                 if len(effective) > MAX_PREFERRED_IGS:
                     over_limit_muids.append(muid)
@@ -2149,17 +2270,10 @@ class StudentSessionRequestListSerializer(serializers.ModelSerializer):
             "created_at",
         ]
 
-    def get_entity_name(self, obj):
-        if obj.session_type == MentorshipSession.SessionType.IG_SESSION:
-            ig = InterestGroup.objects.filter(id=obj.entity_id).first()
-            return ig.name if ig else None
-        elif obj.session_type in (
-            MentorshipSession.SessionType.CAMPUS_SESSION,
-            MentorshipSession.SessionType.COMPANY_SESSION,
-        ):
-            org = Organization.objects.filter(id=obj.entity_id).first()
-            return org.title if org else None
-        return None
+    # Same lookup as the session list: list views pass
+    # context={"ig_map": ..., "org_map": ...} from build_entity_maps, so a page
+    # costs two queries instead of one per row.
+    get_entity_name = SessionListSerializer.get_entity_name
 
 
 class MentorStudentRequestVerifySerializer(serializers.Serializer):

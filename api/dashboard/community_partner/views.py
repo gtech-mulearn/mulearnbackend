@@ -59,7 +59,9 @@ class CommunityPartnerListCreateAPI(PublicGetMixin, APIView):
 
     @extend_schema(tags=['Community Partner'])
     def get(self, request):
-        qs = CommunityPartner.objects.all().order_by('name')
+        qs = CommunityPartner.objects.prefetch_related(
+            CommunityPartnerReadSerializer.list_prefetch()
+        ).order_by('name')
 
         ig_id = request.query_params.get('ig_id')
         if ig_id:

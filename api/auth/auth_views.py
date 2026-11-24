@@ -9,6 +9,63 @@ from rest_framework import serializers as s
 
 AUTH_DOMAIN = decouple.config("AUTH_DOMAIN")
 
+# (connect, read) seconds. The read timeout stays 30s (logins can be slow on the
+# auth server); the connect timeout stops an unreachable auth server from
+# holding the request thread for the full 30s.
+AUTH_PROXY_TIMEOUT = (5, 30)
+
+
+def _forward_to_auth(path, payload, failure_message, success_message=None):
+    """
+    POST payload to the auth server and wrap its reply in a CustomResponse.
+
+    The four proxies below used to call response.json() and trust the result:
+    a non-JSON or non-dict body, or a "message" that was not a dict, raised
+    and returned 500, and an error status whose body had no "hasError" key was
+    returned as "Access Granted" with an empty response. Those cases now return
+    failure_message. Messages for the normal cases are unchanged.
+    """
+    try:
+        response = requests.post(
+            f"{AUTH_DOMAIN}{path}",
+            json=payload,
+            headers={"Content-Type": "application/json"},
+            timeout=AUTH_PROXY_TIMEOUT,
+        )
+        data = response.json()
+    except requests.exceptions.Timeout:
+        return CustomResponse(
+            general_message="Authentication server timeout"
+        ).get_failure_response()
+    except requests.exceptions.RequestException as e:
+        # Includes a body that is not JSON (requests' JSONDecodeError).
+        return CustomResponse(
+            general_message=f"Authentication server error: {str(e)}"
+        ).get_failure_response()
+    except ValueError:
+        return CustomResponse(general_message=failure_message).get_failure_response()
+
+    if not isinstance(data, dict):
+        return CustomResponse(general_message=failure_message).get_failure_response()
+
+    if data.get("hasError") or response.status_code >= 400:
+        message = data.get("message")
+        general = message.get("general") if isinstance(message, dict) else None
+        if isinstance(general, list) and general:
+            text = general[0]
+        elif isinstance(general, str) and general:
+            text = general
+        else:
+            text = failure_message
+        return CustomResponse(general_message=text).get_failure_response()
+
+    if success_message:
+        return CustomResponse(
+            general_message=success_message,
+            response=data.get("response"),
+        ).get_success_response()
+    return CustomResponse(response=data.get("response")).get_success_response()
+
 
 class GoogleMobileAuthProxyAPI(APIView):
     """
@@ -34,34 +91,9 @@ class GoogleMobileAuthProxyAPI(APIView):
                 general_message="ID token is required"
             ).get_failure_response()
 
-        try:
-            response = requests.post(
-                f"{AUTH_DOMAIN}/api/v1/auth/google-mobile/",
-                json={"id_token": id_token},
-                headers={"Content-Type": "application/json"},
-                timeout=30,
-            )
-
-            data = response.json()
-
-            if data.get("hasError"):
-                return CustomResponse(
-                    general_message=data.get("message", {}).get("general", ["Authentication failed"])[0]
-                ).get_failure_response()
-
-            return CustomResponse(
-                general_message="Access Granted",
-                response=data.get("response"),
-            ).get_success_response()
-
-        except requests.exceptions.Timeout:
-            return CustomResponse(
-                general_message="Authentication server timeout"
-            ).get_failure_response()
-        except requests.exceptions.RequestException as e:
-            return CustomResponse(
-                general_message=f"Authentication server error: {str(e)}"
-            ).get_failure_response()
+        return _forward_to_auth(
+            "/api/v1/auth/google-mobile/", {"id_token": id_token}, "Authentication failed", success_message="Access Granted"
+        )
 
 
 class AppleMobileAuthProxyAPI(APIView):
@@ -89,38 +121,13 @@ class AppleMobileAuthProxyAPI(APIView):
                 general_message="Identity token is required"
             ).get_failure_response()
 
-        try:
-            payload = {"identity_token": identity_token}
-            if email:
-                payload["email"] = email
+        payload = {"identity_token": identity_token}
+        if email:
+            payload["email"] = email
 
-            response = requests.post(
-                f"{AUTH_DOMAIN}/api/v1/auth/apple-mobile/",
-                json=payload,
-                headers={"Content-Type": "application/json"},
-                timeout=30,
-            )
-
-            data = response.json()
-
-            if data.get("hasError"):
-                return CustomResponse(
-                    general_message=data.get("message", {}).get("general", ["Authentication failed"])[0]
-                ).get_failure_response()
-
-            return CustomResponse(
-                general_message="Access Granted",
-                response=data.get("response"),
-            ).get_success_response()
-
-        except requests.exceptions.Timeout:
-            return CustomResponse(
-                general_message="Authentication server timeout"
-            ).get_failure_response()
-        except requests.exceptions.RequestException as e:
-            return CustomResponse(
-                general_message=f"Authentication server error: {str(e)}"
-            ).get_failure_response()
+        return _forward_to_auth(
+            "/api/v1/auth/apple-mobile/", payload, "Authentication failed", success_message="Access Granted"
+        )
 
 
 class UserAuthenticationProxyAPI(APIView):
@@ -148,34 +155,9 @@ class UserAuthenticationProxyAPI(APIView):
                 general_message="Email and password are required"
             ).get_failure_response()
 
-        try:
-            response = requests.post(
-                f"{AUTH_DOMAIN}/api/v1/auth/user-authentication/",
-                json={"emailOrMuid": email, "password": password},
-                headers={"Content-Type": "application/json"},
-                timeout=30,
-            )
-
-            data = response.json()
-
-            if data.get("hasError"):
-                return CustomResponse(
-                    general_message=data.get("message", {}).get("general", ["Authentication failed"])[0]
-                ).get_failure_response()
-
-            return CustomResponse(
-                general_message="Access Granted",
-                response=data.get("response"),
-            ).get_success_response()
-
-        except requests.exceptions.Timeout:
-            return CustomResponse(
-                general_message="Authentication server timeout"
-            ).get_failure_response()
-        except requests.exceptions.RequestException as e:
-            return CustomResponse(
-                general_message=f"Authentication server error: {str(e)}"
-            ).get_failure_response()
+        return _forward_to_auth(
+            "/api/v1/auth/user-authentication/", {"emailOrMuid": email, "password": password}, "Authentication failed", success_message="Access Granted"
+        )
 
 
 class RefreshTokenProxyAPI(APIView):
@@ -202,30 +184,6 @@ class RefreshTokenProxyAPI(APIView):
                 general_message="Refresh token is required"
             ).get_failure_response()
 
-        try:
-            response = requests.post(
-                f"{AUTH_DOMAIN}/api/v1/auth/get-access-token/",
-                json={"refreshToken": refresh_token},
-                headers={"Content-Type": "application/json"},
-                timeout=30,
-            )
-
-            data = response.json()
-
-            if data.get("hasError"):
-                return CustomResponse(
-                    general_message=data.get("message", {}).get("general", ["Token refresh failed"])[0]
-                ).get_failure_response()
-
-            return CustomResponse(
-                response=data.get("response"),
-            ).get_success_response()
-
-        except requests.exceptions.Timeout:
-            return CustomResponse(
-                general_message="Authentication server timeout"
-            ).get_failure_response()
-        except requests.exceptions.RequestException as e:
-            return CustomResponse(
-                general_message=f"Authentication server error: {str(e)}"
-            ).get_failure_response()
+        return _forward_to_auth(
+            "/api/v1/auth/get-access-token/", {"refreshToken": refresh_token}, "Token refresh failed"
+        )

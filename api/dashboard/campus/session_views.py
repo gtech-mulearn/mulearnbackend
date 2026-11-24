@@ -37,7 +37,7 @@ class CampusSessionListAPI(APIView):
             entity_id=user_org_link.org_id, 
             session_type=MentorshipSession.SessionType.CAMPUS_SESSION,
             is_deleted=False
-        )
+        ).select_related("created_by")
 
         roles = JWTUtils.fetch_role(request)
         is_elevated = any(
@@ -65,7 +65,11 @@ class CampusSessionListAPI(APIView):
             sort_fields={"created_at": "created_at", "starts_at": "starts_at"}
         )
         
-        serializer = mentor_serializers.SessionListSerializer(paginated_queryset.get("queryset"), many=True)
+        page = list(paginated_queryset.get("queryset"))
+        ig_map, org_map = mentor_serializers.SessionListSerializer.build_entity_maps(page)
+        serializer = mentor_serializers.SessionListSerializer(
+            page, many=True, context={"ig_map": ig_map, "org_map": org_map}
+        )
         return CustomResponse(
             response={
                 "data": serializer.data,

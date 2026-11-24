@@ -1,7 +1,7 @@
 import re
 from datetime import timedelta
 from rest_framework.views import APIView
-from django.db.models import Q, Case, When
+from django.db.models import Q, Case, When, Exists, OuterRef
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType, OrganizationType
@@ -322,6 +322,22 @@ class MentorProfileAPI(APIView):
 
         return CustomResponse(message=serializer.errors).get_failure_response()
 
+def _has_approved_same_tier():
+    """
+    True for an application whose user also holds an APPROVED application of
+    the same tier. A PENDING application that matches is a change request.
+    One correlated EXISTS on the user_id index, instead of loading every
+    approved and pending application into Python.
+    """
+    return Exists(
+        MentorApplication.objects.filter(
+            user_id=OuterRef("user_id"),
+            mentor_tier=OuterRef("mentor_tier"),
+            status=MentorApplication.Status.APPROVED,
+        )
+    )
+
+
 class MentorListAPI(APIView):
     """
     Admin review queue over MentorApplication rows — pending applications by
@@ -349,20 +365,9 @@ class MentorListAPI(APIView):
         # application for a *different* tier (e.g. an approved IG mentor
         # newly applying for CAMPUS_MENTOR) is a genuinely new application
         # and must still show up in the main review queue.
-        approved_user_tier_pairs = set(
-            MentorApplication.objects.filter(
-                status=MentorApplication.Status.APPROVED
-            ).values_list('user_id', 'mentor_tier')
+        applications = MentorApplication.objects.select_related('user', 'org').exclude(
+            Q(status=MentorApplication.Status.PENDING) & _has_approved_same_tier()
         )
-
-        applications = MentorApplication.objects.select_related('user', 'org')
-        if approved_user_tier_pairs:
-            change_request_ids = [
-                app.id for app in applications.filter(status=MentorApplication.Status.PENDING)
-                if (app.user_id, app.mentor_tier) in approved_user_tier_pairs
-            ]
-            if change_request_ids:
-                applications = applications.exclude(id__in=change_request_ids)
 
         status = request.query_params.get("status")
         mentor_tier = request.query_params.get("mentor_tier")
@@ -420,7 +425,11 @@ class MentorRosterAPI(APIView):
             mentor_user_ids = mentor_user_ids.filter(scope_type=mentor_tier)
         mentor_user_ids = mentor_user_ids.values_list('application__user_id', flat=True).distinct()
 
-        mentors = UserMentor.objects.filter(user_id__in=mentor_user_ids, is_active=True)
+        mentors = (
+            UserMentor.objects.filter(user_id__in=mentor_user_ids, is_active=True)
+            .select_related("user")
+            .prefetch_related(serializers.MentorDetailSerializer.list_prefetches())
+        )
 
         if low_rating:
             from django.db.models import Avg, Count
@@ -447,7 +456,11 @@ class MentorRosterAPI(APIView):
             sort_fields={"created_at": "created_at", "user_full_name": "user__full_name"}
         )
 
-        serializer = serializers.MentorDetailSerializer(paginated_queryset.get("queryset"), many=True)
+        page = list(paginated_queryset.get("queryset"))
+        serializer = serializers.MentorDetailSerializer(
+            page, many=True,
+            context={"rating_map": serializers.MentorDetailSerializer.build_rating_map(page)},
+        )
         return CustomResponse(
             response={
                 "data": serializer.data,
@@ -487,21 +500,8 @@ class MentorChangeRequestListAPI(APIView):
         # A change request is a PENDING application whose user already holds
         # an APPROVED application of the *same* tier (see MentorListAPI for
         # the matching exclusion logic this must stay consistent with).
-        approved_user_tier_pairs = set(
-            MentorApplication.objects.filter(
-                status=MentorApplication.Status.APPROVED
-            ).values_list('user_id', 'mentor_tier')
-        )
-
-        pending_applications = MentorApplication.objects.select_related('user', 'org').filter(
-            status=MentorApplication.Status.PENDING
-        )
-        change_request_ids = [
-            app.id for app in pending_applications
-            if (app.user_id, app.mentor_tier) in approved_user_tier_pairs
-        ]
-        change_requests = pending_applications.filter(
-            id__in=change_request_ids
+        change_requests = MentorApplication.objects.select_related('user', 'org').filter(
+            _has_approved_same_tier(), status=MentorApplication.Status.PENDING,
         ).order_by("-created_at", "pk")
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
