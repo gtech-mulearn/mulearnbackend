@@ -123,10 +123,18 @@ class ListCreateBase(ManageBase):
         user_id = JWTUtils.fetch_user_id(request)
         # Admin-authored statements aren't attributed to any company (source=MULEARN);
         # admin cannot target another company's profile here.
-        serializer = serializers.ProblemStatementWriteSerializer(data=request.data)
+        # Only admins (no company scope) may mention a user by muid.
+        serializer_class = (
+            serializers.ProblemStatementWriteSerializer if company
+            else serializers.AdminProblemStatementWriteSerializer
+        )
+        serializer = serializer_class(data=request.data)
         if not serializer.is_valid():
             return CustomResponse(message=serializer.errors).get_failure_response()
         data = serializer.validated_data
+        on_behalf_of_id, error = ps_utils.resolve_muid(data.get("muid"))
+        if error:
+            return error
         source = ProblemStatement.Source.COMPANY if company else ProblemStatement.Source.MULEARN
         try:
             with transaction.atomic():
@@ -139,6 +147,7 @@ class ListCreateBase(ManageBase):
                     deadline=data.get("deadline"),
                     status=ProblemStatement.Status.DRAFT,
                     source=source,
+                    on_behalf_of_id=on_behalf_of_id,
                     created_by_id=user_id,
                     updated_by_id=user_id,
                 )
@@ -150,6 +159,7 @@ class ListCreateBase(ManageBase):
             if not User.objects.filter(id=user_id).exists():
                 return ps_utils.failure("User not found.", 404)
             raise
+        ps_utils.notify_on_behalf_of(on_behalf_of_id, statement, user_id)
         statement = self.fresh(statement.id)
         return CustomResponse(
             general_message="Problem statement created.", response=self.render(statement)
@@ -167,14 +177,27 @@ class DetailBase(ManageBase):
         statement, error = self.find(request, statement_id)
         if error:
             return error
-        serializer = serializers.ProblemStatementWriteSerializer(data=request.data, partial=True)
+        _, company, _ = self.scope(request)
+        serializer_class = (
+            serializers.ProblemStatementWriteSerializer if company
+            else serializers.AdminProblemStatementWriteSerializer
+        )
+        serializer = serializer_class(data=request.data, partial=True)
         if not serializer.is_valid():
             return CustomResponse(message=serializer.errors).get_failure_response()
-        error = ps_utils.apply_changes(
-            statement.id, serializer.validated_data, JWTUtils.fetch_user_id(request)
-        )
+        data = serializer.validated_data
+        user_id = JWTUtils.fetch_user_id(request)
+        kwargs = {}
+        if "muid" in data:
+            kwargs["on_behalf_of_id"], error = ps_utils.resolve_muid(data["muid"])
+            if error:
+                return error
+        error = ps_utils.apply_changes(statement.id, data, user_id, **kwargs)
         if error:
             return error
+        new_id = kwargs.get("on_behalf_of_id")
+        if new_id and new_id != statement.on_behalf_of_id:
+            ps_utils.notify_on_behalf_of(new_id, statement, user_id)
         return CustomResponse(
             general_message="Problem statement updated.", response=self.render(self.fresh(statement.id))
         ).get_success_response()
@@ -295,7 +318,7 @@ class CompanyProblemStatementInteractionsAPI(InteractionsBase):
     get=extend_schema(tags=ADMIN, description="List problem statements of all companies and muLearn. "
                                               "Filters: status, category, company_id, source=company|mulearn."),
     post=extend_schema(tags=ADMIN, description="Create a problem statement from muLearn (not attributed to a company).",
-                       request=serializers.ProblemStatementWriteSerializer),
+                       request=serializers.AdminProblemStatementWriteSerializer),
 )
 @role_guarded([RoleType.ADMIN.value])
 class AdminProblemStatementListAPI(ListCreateBase):
@@ -305,7 +328,7 @@ class AdminProblemStatementListAPI(ListCreateBase):
 @extend_schema_view(
     get=extend_schema(tags=ADMIN),
     delete=extend_schema(tags=ADMIN),
-    patch=extend_schema(tags=ADMIN, request=serializers.ProblemStatementWriteSerializer),
+    patch=extend_schema(tags=ADMIN, request=serializers.AdminProblemStatementWriteSerializer),
 )
 @role_guarded([RoleType.ADMIN.value])
 class AdminProblemStatementDetailAPI(DetailBase):
