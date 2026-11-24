@@ -403,37 +403,29 @@ class CollegeWiseLcReport(APIView):
         responses={200: CollegeInfoSerializer},
     )
     def get(self, request):
+        # learning_circle_count was a correlated subquery that re-grouped every
+        # learning circle once per college title (about 10 s here). Counting
+        # distinct circle ids in the same grouped query gives the same number:
+        # the join to user_circle_link repeats a circle once per link, and
+        # DISTINCT removes the repeats. (The old prefetch_related did nothing
+        # on a .values() query.)
         date = request.query_params.get('date')
         if date:
-            lc_query = (
-                LearningCircle.objects.filter(org__org_type=OrganizationType.COLLEGE.value, created_at__date=date)
-                .select_related("org")
-                .prefetch_related("user_circle_link_circle__user")
+            lc_query = LearningCircle.objects.filter(
+                org__org_type=OrganizationType.COLLEGE.value, created_at__date=date
             )
-            learning_circle_count_subquery = (lc_query.values(org_title=F("org__title"))
-                                              .annotate(learning_circle_count=Count("id"))
-                                              .filter(org_title=OuterRef("org_title"))
-                                              .values("learning_circle_count")
-            [:1])
             learning_circles_info = (lc_query.values(org_title=F("org__title"))
                                      .annotate(
-                learning_circle_count=Subquery(learning_circle_count_subquery),
+                learning_circle_count=Count("id", distinct=True),
                 user_count=Count("user_circle_link_circle__user"),
             ).order_by("org_title"))
         else:
-            lc_query = (
-                LearningCircle.objects.filter(org__org_type=OrganizationType.COLLEGE.value)
-                .select_related("org")
-                .prefetch_related("user_circle_link_circle__user")
+            lc_query = LearningCircle.objects.filter(
+                org__org_type=OrganizationType.COLLEGE.value
             )
-            learning_circle_count_subquery = (lc_query.values(org_title=F("org__title"))
-                                              .annotate(learning_circle_count=Count("id"))
-                                              .filter(org_title=OuterRef("org_title"))
-                                              .values("learning_circle_count")
-            [:1])
             learning_circles_info = (lc_query.values(org_title=F("org__title"))
                                      .annotate(
-                learning_circle_count=Subquery(learning_circle_count_subquery),
+                learning_circle_count=Count("id", distinct=True),
                 user_count=Count("user_circle_link_circle__user"),
             ).order_by("org_title"))
 
@@ -459,20 +451,17 @@ class CollegeWiseLcReportCSV(APIView):
         responses={200: CollegeInfoSerializer},
     )
     def get(self, request):
-        learning_circle_count_subquery = (
-            LearningCircle.objects.filter(org__org_type=OrganizationType.COLLEGE.value)
-            .values(org_title=F("org__title"))
-            .annotate(learning_circle_count=Count("id"))
-            .filter(org_title=OuterRef("org_title"))
-            .values("learning_circle_count")
-            [:1]
-        )
-
+        # learning_circle_count was a correlated subquery that re-grouped every
+        # learning circle once per college title (about 10 s here). Counting
+        # distinct circle ids in the same grouped query gives the same number:
+        # the join to user_circle_link repeats a circle once per link, and
+        # DISTINCT removes the repeats. (The old prefetch_related did nothing
+        # on a .values() query.)
         learning_circles_info = (
             LearningCircle.objects.filter(org__org_type=OrganizationType.COLLEGE.value)
             .values(org_title=F("org__title"))
             .annotate(
-                learning_circle_count=Subquery(learning_circle_count_subquery),
+                learning_circle_count=Count("id", distinct=True),
                 user_count=Count("user_circle_link_circle__user"),
             )
             .order_by("org_title")
@@ -793,9 +782,16 @@ class ListAllLevelInfo(APIView):
     def get(self, request):
 
         levels = Level.objects.all().order_by("level_order")
+        # Active tasks of every level in one query (this was one per level),
+        # grouped here keeping the order the database returns them in.
+        tasks_by_level = {}
+        for task in TaskList.objects.filter(
+            level__isnull=False, active=True
+        ).select_related("ig", "channel"):
+            tasks_by_level.setdefault(task.level_id, []).append(task)
         response = []
         for level in levels:
-            tasks = TaskList.objects.filter(level=level, active=True).select_related("ig", "channel")
+            tasks = tasks_by_level.get(level.id, [])
             task_list = []
             for task in tasks:
                 task_list.append({

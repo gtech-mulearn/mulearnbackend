@@ -1,6 +1,8 @@
 from rest_framework.views import APIView
 
-from db.organization import OrgAffiliation
+from django.db.models import Count, OuterRef, Subquery
+from django.db.models.functions import Coalesce
+from db.organization import OrgAffiliation, Organization
 from utils.permission import CustomizePermission, JWTUtils
 from utils.permission import role_required
 from utils.response import CustomResponse
@@ -23,7 +25,15 @@ class AffiliationCRUDAPI(APIView):
         responses={200: AffiliationListSerializer},
     )
     def get(self, request):
-        affiliation = OrgAffiliation.objects.all()
+        # created_by / updated_by joined and the organization count as a
+        # correlated subquery: they were three queries per row.
+        org_count = (
+            Organization.objects.filter(affiliation=OuterRef("pk"))
+            .order_by().values("affiliation").annotate(n=Count("id")).values("n")
+        )
+        affiliation = OrgAffiliation.objects.select_related(
+            "created_by", "updated_by"
+        ).annotate(organization_count_value=Coalesce(Subquery(org_count), 0))
         paginated_queryset = CommonUtils.get_paginated_queryset(
             affiliation,
             request,

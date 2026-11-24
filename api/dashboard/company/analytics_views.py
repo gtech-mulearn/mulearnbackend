@@ -167,29 +167,31 @@ def _public_learners_qs(request):
 
 
 def _talent_pool_payload(request):
-    from db.user import User
-    from db.task import Level, UserIgLink
-    from django.db.models import Count, Q, Sum
-    from utils.types import RoleType
+    from db.task import Level, UserIgLink, UserLvlLink
+    from django.db.models import Count, Sum
 
     learners = _public_learners_qs(request)
-    total = learners.count()
-    levels = Level.objects.order_by("level_order").annotate(
-        learner_count=Count(
-            "user_lvl_link_level",
-            filter=Q(user_lvl_link_level__user__in=learners),
-        )
-    )
-    level_distribution = [
-        {
+    # DISTINCT over the id only, not every user column (same count).
+    total = learners.values("id").count()
+    # One grouped count over the learners' level links, instead of a
+    # CASE WHEN ... IN (subquery) evaluated for every level link row.
+    per_level = {
+        str(level_id).lower(): n
+        for level_id, n in UserLvlLink.objects.filter(user__in=learners.values("id"))
+        .values_list("level_id")
+        .annotate(n=Count("id"))
+        .order_by()
+    }
+    level_distribution = []
+    for level in Level.objects.order_by("level_order"):
+        count = per_level.get(str(level.id).lower(), 0)
+        level_distribution.append({
             "level_id": str(level.id),
             "level_name": level.name,
             "level_order": level.level_order,
-            "count": level.learner_count,
-            "percentage": round((level.learner_count / total) * 100, 2) if total else 0,
-        }
-        for level in levels
-    ]
+            "count": count,
+            "percentage": round((count / total) * 100, 2) if total else 0,
+        })
 
     top_igs = (
         UserIgLink.objects.filter(user__in=learners, is_active=True)
@@ -451,7 +453,7 @@ class CompanyTalentPoolInsightsAPIView(APIView):
             response = HttpResponse(content_type="text/csv")
             response["Content-Disposition"] = 'attachment; filename="talent_pool_insights.csv"'
             writer = csv.writer(response)
-            writer.writerow(["Total Learners", learners.count()])
+            writer.writerow(["Total Learners", learners.values("id").count()])
             writer.writerow([])
             writer.writerow(["Top Skills", "Learner Count"])
             for row in top_skills:
@@ -463,7 +465,7 @@ class CompanyTalentPoolInsightsAPIView(APIView):
             return response
 
         return CustomResponse(response={
-            "total_learners": learners.count(),
+            "total_learners": learners.values("id").count(),
             "top_skills": top_skills,
             "top_colleges": top_colleges,
         }).get_success_response()

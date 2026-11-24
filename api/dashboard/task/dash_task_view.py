@@ -7,7 +7,7 @@ from rest_framework import status
 from rest_framework.views import APIView
 
 from db.organization import Organization, UserOrganizationLink
-from db.task import Channel, InterestGroup, Level, TaskList, TaskType, UserIgLink
+from db.task import Channel, InterestGroup, KarmaActivityLog, Level, TaskList, TaskType, UserIgLink
 from db.user import UserMentor
 from db.skill import Skill, TaskSkillLink
 from utils.permission import CustomizePermission, JWTUtils, OptionalAuthentication, role_required
@@ -99,14 +99,32 @@ def _build_task_queryset(active_filter=None):
         "created_by", "updated_by", "channel", "type", "level", "ig", "org", "requested_by"
     ).prefetch_related(
         "skill_links__skill"
-    ).annotate(
-        total_karma_gainers_count=Count(
-            "karma_activity_log_task", filter=Q(karma_activity_log_task__appraiser_approved=True)
-        )
     ).filter(is_deleted=False)
     if active_filter is not None:
         qs = qs.filter(active=active_filter)
     return qs
+
+
+def _with_gainer_counts(tasks):
+    """
+    Set total_karma_gainers_count (approved karma log rows per task, which
+    TaskListSerializer shows) on each task, with one grouped query for all of
+    them. This used to be a COUNT annotation joined into the list query, which
+    grouped every task's karma log rows on every request, and made the
+    paginator's count() wrap the whole grouped query.
+    """
+    tasks = list(tasks)
+    counts = dict(
+        KarmaActivityLog.objects.filter(
+            task_id__in=[task.id for task in tasks], appraiser_approved=True
+        )
+        .order_by()
+        .values_list("task_id")
+        .annotate(n=Count("id"))
+    ) if tasks else {}
+    for task in tasks:
+        task.total_karma_gainers_count = counts.get(task.id, 0)
+    return tasks
 
 
 def _apply_task_source_filter(task_queryset, task_source):
@@ -298,7 +316,7 @@ class TaskPublicListAPI(APIView):
             completed_task_ids = set(
                 KarmaActivityLog.objects.filter(
                     user_id=user_id, appraiser_approved=True
-                ).values_list("task_id", flat=True)
+                ).values_list("task_id", flat=True).distinct()
             )
         else:
             # Unauthenticated: global + company tasks only
@@ -427,7 +445,7 @@ class TaskListAPI(APIView):
         )
 
         task_serializer_data = TaskListSerializer(
-            paginated_queryset.get("queryset"), many=True
+            _with_gainer_counts(paginated_queryset.get("queryset")), many=True
         ).data
 
         return CustomResponse().paginated_response(
@@ -625,7 +643,7 @@ class TaskActiveListAPI(APIView):
         )
 
         task_serializer_data = TaskListSerializer(
-            paginated_queryset.get("queryset"), many=True
+            _with_gainer_counts(paginated_queryset.get("queryset")), many=True
         ).data
 
         return CustomResponse().paginated_response(
@@ -675,7 +693,7 @@ class TaskInactiveListAPI(APIView):
         )
 
         task_serializer_data = TaskListSerializer(
-            paginated_queryset.get("queryset"), many=True
+            _with_gainer_counts(paginated_queryset.get("queryset")), many=True
         ).data
 
         return CustomResponse().paginated_response(
@@ -725,7 +743,7 @@ class TaskListCSV(APIView):
                 )
             ).get_failure_response()
 
-        task_serializer_data = TaskListSerializer(task_queryset, many=True).data
+        task_serializer_data = TaskListSerializer(_with_gainer_counts(task_queryset), many=True).data
 
         return CommonUtils.generate_csv(task_serializer_data, "Task List")
 

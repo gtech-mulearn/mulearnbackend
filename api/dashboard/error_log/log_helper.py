@@ -103,9 +103,34 @@ class ManageURLPatterns:
         return grouped_apis
 
 
+_HANDLER_CACHE = {}  # path -> ((mtime_ns, size), logHandler); one entry per log file
+
+
+def get_log_handler(path):
+    """
+    A logHandler for the file at `path`, reused while the file is unchanged
+    (same mtime and size). The error-log page calls three endpoints that each
+    read and parsed the whole file; now it is parsed once per file version.
+    The key space is the fixed set of log files, and a write to the file makes
+    the next call re-read it. Raises OSError (IOError) like open() did.
+    """
+    import os
+
+    stat = os.stat(path)
+    stamp = (stat.st_mtime_ns, stat.st_size)
+    cached = _HANDLER_CACHE.get(path)
+    if cached and cached[0] == stamp:
+        return cached[1]
+    with open(path, "r") as file:
+        handler = logHandler(file.read())
+    _HANDLER_CACHE[path] = (stamp, handler)
+    return handler
+
+
 class logHandler:
     def __init__(self, log_data) -> None:
         self.log_data = log_data
+        self._memo = {}  # results that depend only on log_data
         self.log_pattern = (
             r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3} ERROR EXCEPTION INFO:"
             r".*?(?=\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3} ERROR EXCEPTION INFO:|\Z)"
@@ -130,6 +155,11 @@ class logHandler:
         Returns:
             list[dict]: formatted errors
         """
+        if "parse_logs" not in self._memo:
+            self._memo["parse_logs"] = self._parse_logs()
+        return self._memo["parse_logs"]
+
+    def _parse_logs(self):
         self.patch_pattern = (
             r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}) ERROR PATCHED : (\w+)"
         )
@@ -268,6 +298,11 @@ class logHandler:
         Returns:
             dict: the number of times each url is hit
         """
+        if "heatmap" not in self._memo:
+            self._memo["heatmap"] = self._get_urls_heatmap()
+        return self._memo["heatmap"]
+
+    def _get_urls_heatmap(self):
         url_hits = {}
 
         for url_hit in re.finditer(self.log_entries["path"]["regex"], self.log_data):
@@ -288,9 +323,12 @@ class logHandler:
         Returns:
             str: The time since the last incident in UTC.
         """
-        last_incident = re.findall(
-            self.log_entries["timestamp"]["regex"], self.log_data
-        )[-1]
+        # The file-derived part is memoized; "time since" uses the clock.
+        if "last_incident" not in self._memo:
+            self._memo["last_incident"] = re.findall(
+                self.log_entries["timestamp"]["regex"], self.log_data
+            )[-1]
+        last_incident = self._memo["last_incident"]
 
         last_incident_datetime = self.get_formatted_time(last_incident).replace(
             tzinfo=timezone.utc
@@ -310,8 +348,9 @@ class logHandler:
         Returns:
             int: The number of affected users.
         """
-        affected_users = set(
-            re.findall(r"\n *\"muid\" *: * \"(.+?@mulearn)\",", self.log_data)
-        )
+        if "affected_users" not in self._memo:
+            self._memo["affected_users"] = len(set(
+                re.findall(r"\n *\"muid\" *: * \"(.+?@mulearn)\",", self.log_data)
+            ))
 
-        return (len(affected_users) / User.objects.count()) * 100
+        return (self._memo["affected_users"] / User.objects.count()) * 100

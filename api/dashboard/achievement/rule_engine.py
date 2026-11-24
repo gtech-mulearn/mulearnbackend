@@ -30,6 +30,14 @@ class EligibilityResult:
     claimed: bool = False  # True when the user has already claimed this achievement
 
 
+def _ci_equal(a, b):
+    """Equality as the MySQL columns compare it: case-insensitive strings,
+    and None only matches None (`task__hashtag=None` is IS NULL)."""
+    if a is None or b is None:
+        return a is None and b is None
+    return str(a).lower() == str(b).lower()
+
+
 class RuleEvaluator:
     """
     Evaluates achievement rules against user state.
@@ -187,14 +195,11 @@ class RuleEvaluator:
         conditions = rule.conditions
         task_hashtag = conditions.get("task_hashtag")
         
-        # Check if user has completed the task
-        from db.task import KarmaActivityLog
-        
-        has_completed = KarmaActivityLog.objects.filter(
-            user_id=self.user_id,
-            task__hashtag=task_hashtag,
-            appraiser_approved=True
-        ).exists()
+        # Check if user has completed the task (from the per-evaluation log
+        # summary: one query for all rules instead of one exists() each)
+        has_completed = any(
+            _ci_equal(hashtag, task_hashtag) for hashtag, _, _ in self._get_log_summary()
+        )
 
         return EligibilityResult(
             eligible=has_completed,
@@ -336,12 +341,10 @@ class RuleEvaluator:
         event_name = conditions.get("event_name")
         required_attendance = conditions.get("required_attendance", 1)
 
-        # Count attendance from karma_activity_log
-        from db.task import KarmaActivityLog
-
-        attendance = KarmaActivityLog.objects.filter(
-            user_id=self.user_id, task__event=event_name, appraiser_approved=True
-        ).count()
+        # Count attendance from karma_activity_log (per-evaluation summary)
+        attendance = sum(
+            count for _, event, count in self._get_log_summary() if _ci_equal(event, event_name)
+        )
 
         percentage = (
             min(100, int(attendance / required_attendance * 100))
@@ -417,6 +420,24 @@ class RuleEvaluator:
         if "wallet" not in self._cache:
             self._cache["wallet"] = Wallet.objects.filter(user_id=self.user_id).first()
         return self._cache["wallet"]
+
+    def _get_log_summary(self):
+        """
+        [(task hashtag, task event, approved log count)] for this user, one
+        grouped query per evaluation. Task-completion and event rules read it
+        instead of querying karma_activity_log once per rule.
+        """
+        from django.db.models import Count
+        from db.task import KarmaActivityLog
+
+        if "log_summary" not in self._cache:
+            self._cache["log_summary"] = list(
+                KarmaActivityLog.objects.filter(user_id=self.user_id, appraiser_approved=True)
+                .values_list("task__hashtag", "task__event")
+                .annotate(n=Count("id"))
+                .order_by()
+            )
+        return self._cache["log_summary"]
 
     def _get_total_task_count(self) -> int:
         """Get user's total approved task count"""

@@ -24,10 +24,30 @@ class MentorshipSessionCalendarSerializer(serializers.ModelSerializer):
             'mentee_count',
         ]
 
+    @staticmethod
+    def _links(obj, role):
+        """
+        This session's participant links with `role`, from the views'
+        SESSION_PREFETCH when present (the .filter() calls here skipped it:
+        two queries per session). The column compares case-insensitively.
+        """
+        if 'participant_links' in getattr(obj, '_prefetched_objects_cache', {}):
+            return [
+                link for link in obj.participant_links.all()
+                if (link.participant_role or '').upper() == role
+            ]
+        return None
+
     def get_mentor_name(self, obj):
-        mentor_link = obj.participant_links.filter(
-            participant_role=MentorshipSessionUserLink.ParticipantRole.MENTOR
-        ).select_related('user').first()
+        role = MentorshipSessionUserLink.ParticipantRole.MENTOR
+        links = self._links(obj, role)
+        if links is not None:
+            # .first() picked the lowest pk
+            mentor_link = min(links, key=lambda link: link.pk) if links else None
+        else:
+            mentor_link = obj.participant_links.filter(
+                participant_role=role
+            ).select_related('user').first()
         if mentor_link:
             return mentor_link.user.full_name
         # Fallback for sessions created before the MENTOR participant link
@@ -35,9 +55,11 @@ class MentorshipSessionCalendarSerializer(serializers.ModelSerializer):
         return obj.created_by.full_name if obj.created_by_id else None
 
     def get_mentee_count(self, obj):
-        return obj.participant_links.filter(
-            participant_role=MentorshipSessionUserLink.ParticipantRole.MENTEE
-        ).count()
+        role = MentorshipSessionUserLink.ParticipantRole.MENTEE
+        links = self._links(obj, role)
+        if links is not None:
+            return len(links)
+        return obj.participant_links.filter(participant_role=role).count()
 
 
 class EventCalendarSerializer(serializers.ModelSerializer):

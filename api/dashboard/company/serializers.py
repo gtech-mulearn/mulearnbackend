@@ -521,13 +521,15 @@ class PublicCompanyProfileSerializer(serializers.ModelSerializer):
         collaborations; open/pending/declined/withdrawn are not a company's
         earned trust signal.
         """
+        from django.db.models import Count, Q
         from db.company import Collaboration
-        accepted = Collaboration.objects.filter(company=obj, status=Collaboration.Status.ACCEPTED)
-        return {
-            "total_partnerships": accepted.count(),
-            "campus_partnerships": accepted.filter(target_type=Collaboration.TargetType.CAMPUS).count(),
-            "ig_partnerships": accepted.filter(target_type=Collaboration.TargetType.IG).count(),
-        }
+        return Collaboration.objects.filter(
+            company=obj, status=Collaboration.Status.ACCEPTED
+        ).aggregate(
+            total_partnerships=Count("id"),
+            campus_partnerships=Count("id", filter=Q(target_type=Collaboration.TargetType.CAMPUS)),
+            ig_partnerships=Count("id", filter=Q(target_type=Collaboration.TargetType.IG)),
+        )
 
     def get_impact_summary(self, obj):
         """

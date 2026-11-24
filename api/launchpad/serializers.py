@@ -162,6 +162,50 @@ class LaunchpadJobTaskSerializer(serializers.ModelSerializer):
             'id', 'task_description', 'hashtags', 'is_verified', 'created_at', 'updated_at'
         ]
 
+def student_org_links_prefetch(prefix="student__"):
+    """Org links with org, district, zone and state, for college_link()."""
+    return Prefetch(
+        f"{prefix}user_organization_link_user",
+        queryset=UserOrganizationLink.objects.select_related("org__district__zone__state"),
+    )
+
+
+def college_link(user):
+    """
+    The user's first College link by pk, read from student_org_links_prefetch()
+    (it was `.filter(org__org_type="College").first()`, one query per row; the
+    column compares case-insensitively, so this does too).
+    """
+    links = [
+        link for link in user.user_organization_link_user.all()
+        if (link.org.org_type or "").lower() == "college"
+    ]
+    return min(links, key=lambda link: link.pk) if links else None
+
+
+def karma_distributions(user_ids, ordered=True):
+    """
+    {user_id: [{"task_type", "karma"}, ...]}: approved karma per task type for
+    a page of users in one grouped query (it was one query per row).
+    `ordered` sorts each list by karma, highest first, as the hire-request
+    view did; the eligible-students serializer never ordered its list.
+    """
+    rows = (
+        KarmaActivityLog.objects.filter(user_id__in=list(user_ids), appraiser_approved=True)
+        .values("user_id", task_type=F("task__type__title"))
+        .annotate(karma=Sum("karma"))
+    )
+    # task_type breaks karma ties (the old per-user query left them to MySQL).
+    rows = rows.order_by("user_id", "-karma", "task_type") if ordered else rows.order_by()
+    result = {}
+    for row in rows:
+        result.setdefault(row["user_id"], []).append(
+            {"task_type": row["task_type"], "karma": row["karma"]}
+        )
+    return result
+
+
+
 class EligibleStudentSerializer(serializers.ModelSerializer):
     karma = serializers.IntegerField(source='wallet_user.karma', default=0)
     level = serializers.CharField(source='user_lvl_link_user.level.name', default=None)
@@ -196,10 +240,8 @@ class EligibleStudentSerializer(serializers.ModelSerializer):
         return None 
     
     def get_college_name(self, obj):
-        college_link = obj.user_organization_link_user.filter(
-            org__org_type='College'
-        ).first()
-        return college_link.org.title if college_link else None
+        link = college_link(obj)
+        return link.org.title if link else None
     
     def get_interest_groups(self, obj):
         return [
@@ -243,30 +285,24 @@ class EligibleStudentSerializer(serializers.ModelSerializer):
             status = application_status_map[obj.id]['status']
             # Only return links if student has applied (not just invited)
             if status in ['applied', 'interview_scheduled', 'accepted', 'rejected']:
-                # Get the full application details
-                job = self.context.get('job')
-                if job:
-                    try:
-                        application = LaunchpadJobApplications.objects.get(
-                            job=job, 
-                            student_id=obj.id
+                # The status map already holds this application's links
+                # ((job, student) is unique), so no per-row query.
+                if self.context.get('job'):
+                    application = application_status_map[obj.id]
+                    return {
+                        'resume_link': application['resume_link'],
+                        'linkedin_link': application['linkedin_link'],
+                        'portfolio_link': application['portfolio_link'],
+                        'cover_letter': application['cover_letter'],
+                        'other_link': application['other_link'],
+                        'links_available': bool(
+                            application['resume_link'] or 
+                            application['linkedin_link'] or 
+                            application['portfolio_link'] or 
+                            application['cover_letter'] or 
+                            application['other_link']
                         )
-                        return {
-                            'resume_link': application.resume_link,
-                            'linkedin_link': application.linkedin_link,
-                            'portfolio_link': application.portfolio_link,
-                            'cover_letter': application.cover_letter,
-                            'other_link': application.other_link,
-                            'links_available': bool(
-                                application.resume_link or 
-                                application.linkedin_link or 
-                                application.portfolio_link or 
-                                application.cover_letter or 
-                                application.other_link
-                            )
-                        }
-                    except LaunchpadJobApplications.DoesNotExist:
-                        pass
+                    }
         
         return {
             'resume_link': None,
@@ -278,6 +314,9 @@ class EligibleStudentSerializer(serializers.ModelSerializer):
         }
     
     def get_karma_distribution(self, obj):
+        distributions = self.context.get("karma_distributions")
+        if distributions is not None:
+            return distributions.get(obj.id, [])
         return (
             KarmaActivityLog.objects.filter(user=obj, appraiser_approved=True)
             .values(task_type=F('task__type__title'))
@@ -313,17 +352,6 @@ class LaunchPadRankSerializer(serializers.ModelSerializer):
         fields = ["launchpad_rank"]
 
     def get_rank(self, obj):
-        total_karma_subquery = (
-            KarmaActivityLog.objects.filter(
-                user=OuterRef("id"),
-                task__event="launchpad",
-                appraiser_approved=True,
-            )
-            .values("user")
-            .annotate(total_karma=Sum("karma"))
-            .values("total_karma")
-        )
-
         intro_task_completed_users = KarmaActivityLog.objects.filter(
             task__event="launchpad",
             appraiser_approved=True,
@@ -336,21 +364,26 @@ class LaunchPadRankSerializer(serializers.ModelSerializer):
                 karma_activity_log_user__appraiser_approved=True,
                 id__in=intro_task_completed_users,
             )
+            # Sum and Max over the same join as the filter: each user's
+            # approved launchpad logs. Same karma as the correlated SUM
+            # subquery this replaces, without running it once per user.
             .annotate(
-                karma=Subquery(total_karma_subquery, output_field=IntegerField()),
+                karma=Sum("karma_activity_log_user__karma"),
                 time_=Max("karma_activity_log_user__created_at"),
             )
-            .order_by("-karma", "time_")
         )
 
-        # high complexity
-        rank = 0
-        for data in users:
-            rank += 1
-            if data.id == obj.id:
-                break
+        # Position of this user on the board, asked of MySQL (ROW_NUMBER over
+        # the same order) instead of walking every row in Python. A user who
+        # is not on the board got the board's length, so keep that.
+        from utils.utils import ranks_for_users
 
-        return rank
+        position = ranks_for_users(
+            users.annotate(user_id=F("id")), ["-karma", "time_"], [obj.id]
+        ).get(obj.id)
+        if position is None:
+            return users.count()
+        return position
 
 
 class LaunchpadLeaderBoardSerializer(serializers.ModelSerializer):
@@ -498,6 +531,9 @@ class LaunchpadUserListSerializer(serializers.ModelSerializer):
         )
 
     def get_colleges(self, obj):
+        if "launchpaduserlink_user" in getattr(obj, "_prefetched_objects_cache", {}):
+            # LaunchPadUser.get prefetches the links (it was one query per row).
+            return [(link.college_id, link.college.title) for link in obj.launchpaduserlink_user.all()]
         return LaunchPadUserCollegeLink.objects.filter(user=obj).values_list(
             "college_id", "college__title"
         )

@@ -57,14 +57,42 @@ class User(models.Model):
     def save(self, *args, **kwargs):
         if self.muid is None:
             full_name = self.full_name.replace(" ", "-").lower()
-            self.muid = f"{full_name}@mulearn"
-
-            counter = 0
-            while User.objects.filter(muid=self.muid).exists():
-                counter += 1
-                self.muid = f"{full_name}-{counter}@mulearn"
+            # User.every, not User.objects: muid is unique across suspended
+            # users too, so skipping them could pick a muid that fails on insert.
+            self.muid = first_free_muid(full_name)
 
         return super().save(*args, **kwargs)
+
+def first_free_muid(stem):
+    """
+    The first of "<stem>@mulearn", "<stem>-1@mulearn", "<stem>-2@mulearn", ...
+    that no user (suspended users included) has.
+
+    This used to be one exists() query per candidate, so a common name with
+    hundreds of existing muids ran hundreds of queries. Now one prefix query
+    (on the unique muid index) reads every muid that could collide, and the
+    first free candidate is picked in Python. The muid column compares
+    case- and accent-insensitively, so the Python check lowercases, and the
+    chosen candidate is confirmed with one exists() query; if the database
+    still sees a match (an accent difference), the next candidate is tried.
+    """
+    taken = {
+        muid.lower()
+        for muid in User.every.filter(muid__startswith=stem).values_list("muid", flat=True)
+    }
+    counter = 0
+    candidate = f"{stem}@mulearn"
+    if not taken:
+        # The prefix query uses the same collation, so nothing can collide.
+        return candidate
+    while True:
+        while candidate.lower() in taken:
+            counter += 1
+            candidate = f"{stem}-{counter}@mulearn"
+        if not User.every.filter(muid=candidate).exists():
+            return candidate
+        taken.add(candidate.lower())
+
 
 class UserDomains(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=lambda: str(uuid.uuid4()))

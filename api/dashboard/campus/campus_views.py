@@ -3,7 +3,6 @@ from django.db.models.functions import Coalesce
 from django.db.models import Q
 from django.db import transaction
 from rest_framework.views import APIView
-from collections import defaultdict
 import uuid
 from db.organization import Organization, UserOrganizationLink
 from db.task import Level, Wallet, InterestGroup, UserIgLink
@@ -13,7 +12,7 @@ from db.user import User, Role, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
-from utils.utils import CommonUtils
+from utils.utils import CommonUtils, ranks_for_users
 from . import serializers
 from .dash_campus_helper import get_user_college_link, get_campus_ig_chapters, campus_staff_required, assign_ig_campus_lead
 from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
@@ -245,13 +244,11 @@ class CampusStudentDetailsAPI(APIView):
             wallet_filters &= Q(user__user_ig_link_user__ig__category=category)
             user_filters &= Q(user_ig_link_user__ig__category=category)
 
-        rank = (
-            Wallet.objects.filter(wallet_filters)
-            .distinct()
-            .order_by("-karma", "-created_at")
-            .values("user_id", "karma")
+        # Rank set: every wallet matching the filters (one row per user).
+        # Only the ranks of the users on the requested page are fetched, below.
+        rank_set = Wallet.objects.filter(
+            user_id__in=Wallet.objects.filter(wallet_filters).values("user_id")
         )
-        ranks = {user["user_id"]: i + 1 for i, user in enumerate(rank)}
 
         # Correlated subqueries (not joined Counts) so they can't be inflated
         # by the ig_id/category .filter() calls applied to user_filters above,
@@ -309,8 +306,12 @@ class CampusStudentDetailsAPI(APIView):
             },
         )
 
+        page = paginated_queryset.get("queryset")
+        ranks = ranks_for_users(
+            rank_set, ["-karma", "-created_at"], [user.id for user in page]
+        )
         serializer = serializers.CampusStudentDetailsSerializer(
-            paginated_queryset.get("queryset"), many=True, context={"ranks": ranks}
+            page, many=True, context={"ranks": ranks}
         )
         return CustomResponse(
             response={
@@ -859,17 +860,14 @@ class CampusStudentLeaderboardAPI(APIView):
        
         # 1. Compute Campus rank BEFORE filters/pagination                    #
 
-        rank_qs = (
-            Wallet.objects.filter(
+        # Only the ranks of the users on the requested page are fetched (step 5).
+        rank_set = Wallet.objects.filter(
+            user_id__in=Wallet.objects.filter(
                 user__user_organization_link_user__org=org,
                 user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
                 user__user_organization_link_user__verified=True,
-            )
-            .distinct()
-            .order_by("-karma","-created_at")
-            .values("user_id")
+            ).values("user_id")
         )
-        ranks = {r["user_id"]: i + 1 for i, r in enumerate(rank_qs)}
 
 
         # 2. Base queryset - all students with annotations                    #
@@ -965,8 +963,12 @@ class CampusStudentLeaderboardAPI(APIView):
 
         # 5. Serialize and return                                              #
        
+        page = paginated_queryset.get("queryset")
+        ranks = ranks_for_users(
+            rank_set, ["-karma", "-created_at"], [user.id for user in page]
+        )
         serializer = serializers.CampusLeaderboardSerializer(
-            paginated_queryset.get("queryset"),
+            page,
             many=True,
             context={"ranks": ranks},
         )
@@ -1017,68 +1019,7 @@ class CampusKarmaByClusterAPI(APIView):
                 general_message="Campus not found"
             ).get_failure_response()
 
-        # Subquery: fetch each user's karma once — no JOIN fan-out
-        wallet_karma_sq = Wallet.objects.filter(
-            user=OuterRef("pk")
-        ).values("karma")[:1]
-
-        # Subquery: each user's single "primary" category — their earliest
-        # active LEARNER IG membership (mentor/lead/moderator assignments are
-        # staff roles, not personal category membership, so they're excluded
-        # here just like every other IG-membership count in this app). A
-        # member can belong to IGs spanning several categories; without
-        # picking exactly one, their full karma would get added to every
-        # category they touch, making the bucket totals sum to several times
-        # the campus's actual total_karma.
-        primary_category_sq = (
-            UserIgLink.objects.filter(
-                user_id=OuterRef("pk"),
-                is_active=True,
-                assignment_type=UserIgLink.AssignmentType.LEARNER,
-            )
-            .order_by("created_at")
-            .values("ig__category")[:1]
-        )
-
-        # Single query — LEFT JOIN via isnull=False removed
-        # users with NO IG will have category=None → goes to "unclustered"
-        all_rows = (
-            User.objects.filter(
-                user_organization_link_user__org=org,
-                user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-                user_organization_link_user__verified=True,
-            )
-            .annotate(
-                user_karma=Subquery(wallet_karma_sq),
-                primary_category=Subquery(primary_category_sq),
-            )
-            .values("id", "primary_category", "user_karma")
-            .distinct()   # 1 row per user — each user has exactly one primary_category
-        )
-
-        # Aggregate in Python
-        category_map = defaultdict(lambda: {"total_karma": 0, "member_count": 0, "seen_users": set()})
-
-        for row in all_rows:  # streams from DB — no list() memory spike
-            category = row["primary_category"] or "unclustered"
-            user_id  = row["id"]
-            karma    = row["user_karma"] or 0
-
-            # seen_users guards against edge case where a user appears more
-            # than once due to multiple org links
-            if user_id not in category_map[category]["seen_users"]:
-                category_map[category]["seen_users"].add(user_id)
-                category_map[category]["total_karma"]  += karma
-                category_map[category]["member_count"] += 1
-
-        # Build final response — strip seen_users from output
-        response = {
-            category: {
-                "total_karma":  data["total_karma"],
-                "member_count": data["member_count"],
-            }
-            for category, data in category_map.items()
-        }
+        response = serializers.get_karma_by_cluster(org)
 
         return CustomResponse(
             response=response

@@ -43,19 +43,9 @@ class KKEMBulkKarmaAPI(APIView):
                     "user_ig_link_user",
                     queryset=UserIgLink.objects.select_related("ig"),
                 ),
-                Prefetch(
-                    "karma_activity_log_user",
-                    queryset=KarmaActivityLog.objects.filter(
-                        appraiser_approved=True
-                    ).prefetch_related(
-                        Prefetch(
-                            "task",
-                            queryset=TaskList.objects.all().prefetch_related(
-                                Prefetch("ig", queryset=InterestGroup.objects.all())
-                            ),
-                        )
-                    ),
-                ),
+                # (Every approved karma log, with its task and IG, used to be
+                # prefetched here; the per-IG sums now come from one grouped
+                # query, KKEMUserSerializer.ig_karma_by_user.)
             )
             .distinct()
         )
@@ -73,7 +63,11 @@ class KKEMBulkKarmaAPI(APIView):
                     general_message="Invalid datetime format",
                 ).get_failure_response()
 
-        serialized_users = KKEMUserSerializer(base_queryset, many=True)
+        users = list(base_queryset)
+        serialized_users = KKEMUserSerializer(
+            users, many=True,
+            context={"ig_karma": KKEMUserSerializer.ig_karma_by_user([user.id for user in users])},
+        )
 
         return CustomResponse(response=serialized_users.data).get_success_response()
 
