@@ -346,7 +346,23 @@ NOTIFICATION_BROADCAST_THRESHOLD = decouple_config("NOTIFICATION_BROADCAST_THRES
 # TTL for the cached unread notification count (seconds).
 NOTIFICATION_UNREAD_COUNT_CACHE_TTL = decouple_config("NOTIFICATION_UNREAD_COUNT_CACHE_TTL", default=60, cast=int)
 
+# Push notifications (docs/push-notifications.md). FIREBASE_CREDENTIALS is the
+# Firebase service-account JSON (or a path to it); empty disables push without
+# breaking anything. PUSH_ENABLED is a deploy-level switch on top of the admin
+# kill switch.
+FIREBASE_CREDENTIALS = decouple_config("FIREBASE_CREDENTIALS", default="")
+PUSH_ENABLED = decouple_config("PUSH_ENABLED", default=True, cast=bool)
+
 DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
+
+# Public base URL of the R2 bucket (custom domain). Images are uploaded by the
+# media worker (mulearn-media-worker), which returns a key; the backend only
+# stores that key and builds the public URL from it (see utils/media_keys.py).
+# Upload modules (module -> R2 folder) are defined in utils/media_modules.py.
+# No R2 credentials are needed here.
+# Required (no default): without it image URLs would silently become relative
+# paths that 404, so a missing value must stop startup instead.
+R2_PUBLIC_BASE_URL = decouple_config("R2_PUBLIC_BASE_URL")
 
 import socket
 
@@ -362,6 +378,12 @@ CELERY_BEAT_SCHEDULE = {
     'intern-task-deadline-cron': {
         'task': 'mu_celery.intern_cron.intern_task_deadline_cron',
         'schedule': crontab(hour=0, minute=10),
+    },
+    # 18:35 UTC = 00:05 IST the next day, so it fires at the start of the IST
+    # day the monthly review window opens / closes.
+    'intern-monthly-review-window-cron': {
+        'task': 'mu_celery.intern_cron.intern_monthly_review_window_cron',
+        'schedule': crontab(hour=18, minute=35),
     },
     'update-alumni-status-cron': {
         'task': 'mu_celery.alumni_cron.update_alumni_status_cron',
@@ -405,5 +427,18 @@ CELERY_BEAT_SCHEDULE = {
     'refresh-leaderboards-cron': {
         'task': 'mu_celery.leaderboard_cron.refresh_leaderboards',
         'schedule': crontab(hour='0,12', minute=0),  # 00:00 and 12:00 UTC
+    },
+    # Push notifications (docs/push-notifications.md).
+    'push-engagement-hourly': {
+        'task': 'mu_celery.push_tasks.run_engagement',
+        'schedule': crontab(minute=5),
+    },
+    'push-dispatch-due-campaigns': {
+        'task': 'mu_celery.push_tasks.dispatch_due_campaigns',
+        'schedule': crontab(minute='*'),
+    },
+    'push-purge-logs-daily': {
+        'task': 'mu_celery.push_tasks.purge_push_logs',
+        'schedule': crontab(hour=1, minute=40),
     },
 }

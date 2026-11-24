@@ -24,7 +24,6 @@ from utils.permission import JWTUtils
 from utils.types import (
     OrganizationType,
     RoleType,
-    MainRoles,
     WebHookActions,
     WebHookCategory,
     UnitType,
@@ -216,6 +215,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
     lead_enabler_verified = serializers.SerializerMethodField()
     college_id = serializers.SerializerMethodField()
     college_code = serializers.SerializerMethodField()
+    company_id = serializers.SerializerMethodField()
+    company_name = serializers.SerializerMethodField()
     rank = serializers.SerializerMethodField()
     karma_distribution = serializers.SerializerMethodField()
     interest_groups = serializers.SerializerMethodField()
@@ -235,6 +236,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "lead_enabler_verified",
             "college_id",
             "college_code",
+            "company_id",
+            "company_name",
             "org_district_id",
             "karma",
             "rank",
@@ -249,7 +252,12 @@ class UserProfileSerializer(serializers.ModelSerializer):
         )
 
     def _get_user_org_link(self, obj, org_type):
-        if not getattr(self, "user_org_link", None):
+        # Cached per user and org type: a person can hold a college and a
+        # company link at once (a Student who is also a Mentor), and one
+        # serializer instance serves every row under many=True.
+        cache = self.__dict__.setdefault("_user_org_links", {})
+        key = (id(obj), org_type)
+        if key not in cache:
             # Filter and order the prefetched links in Python. Calling
             # .filter().order_by() on the related manager discards the prefetch
             # (and its select_related("org")) and runs two more queries.
@@ -259,16 +267,14 @@ class UserProfileSerializer(serializers.ModelSerializer):
                 if link.org.org_type == org_type
             ]
             links.sort(key=lambda link: (link.created_at, link.id), reverse=True)
-            self.user_org_link = links[0] if links else None
-        return self.user_org_link
+            cache[key] = links[0] if links else None
+        return cache[key]
 
-    def _get_org_type(self, obj):
-        roles = self.get_roles(obj)
-        return (
-            OrganizationType.COMPANY.value
-            if MainRoles.MENTOR.value in roles
-            else OrganizationType.COLLEGE.value
-        )
+    def _college_link(self, obj):
+        return self._get_user_org_link(obj, OrganizationType.COLLEGE.value)
+
+    def _company_link(self, obj):
+        return self._get_user_org_link(obj, OrganizationType.COMPANY.value)
 
     def get_percentile(self, obj):
         users_count_lt_user_karma = Wallet.objects.filter(
@@ -302,24 +308,32 @@ class UserProfileSerializer(serializers.ModelSerializer):
             for link in role_links
         ]
 
+    # college_* is always the person's college, whatever their roles. It used
+    # to switch to the company for anyone with the Mentor role, so a mentor's
+    # college_id was a company id (opening it as a campus gave "campus not
+    # found") and a Student who was also a Mentor lost their college.
     def get_college_id(self, obj):
-        org_type = self._get_org_type(obj)
-        user_org_link = self._get_user_org_link(obj, org_type)
-        return user_org_link.org.id if user_org_link else None
-
-    def get_org_district_id(self, obj):
-        org_type = self._get_org_type(obj)
-        user_org_link = self._get_user_org_link(obj, org_type)
-        # district_id is already on the org row; going through org.district
-        # loaded the District just to read its primary key.
-        return user_org_link.org.district_id if user_org_link else None
+        link = self._college_link(obj)
+        return link.org.id if link else None
 
     def get_college_code(self, obj):
-        org_type = self._get_org_type(obj)
-        if org_type == OrganizationType.COLLEGE.value:
-            user_org_link = self._get_user_org_link(obj, org_type)
-            return user_org_link.org.code if user_org_link else None
-        return None
+        link = self._college_link(obj)
+        return link.org.code if link else None
+
+    def get_company_id(self, obj):
+        link = self._company_link(obj)
+        return link.org.id if link else None
+
+    def get_company_name(self, obj):
+        link = self._company_link(obj)
+        return link.org.title if link else None
+
+    def get_org_district_id(self, obj):
+        # The college's district (it seeds the college picker), else the
+        # company's. district_id is already on the org row; going through
+        # org.district loaded the District just to read its primary key.
+        link = self._college_link(obj) or self._company_link(obj)
+        return link.org.district_id if link else None
 
     def get_rank(self, obj):
         return get_karma_rank(obj, self.get_roles(obj))
@@ -725,9 +739,14 @@ class LinkSocials(ModelSerializer):
                     )
 
                 else:
-                    KarmaActivityLog.objects.filter(
+                    karma_log = KarmaActivityLog.objects.filter(
                         task_id=task.id, user_id=user_id
-                    ).first().delete()
+                    ).first()
+                    if karma_log is None:
+                        # Nothing was awarded for this link, so there's
+                        # nothing to take back.
+                        return
+                    karma_log.delete()
                 Wallet.objects.filter(user_id=user_id).update(
                     karma=F("karma") + karma_value, updated_by_id=user_id
                 )

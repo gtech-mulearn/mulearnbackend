@@ -58,6 +58,25 @@ class BroadcastNotificationSerializer(serializers.ModelSerializer):
         ]
 
 
+def broadcast_source(row) -> str:
+    """Where an announcement came from: team | learning_circle | event | project | system."""
+    get = row.get if isinstance(row, dict) else (lambda k: getattr(row, k, None))
+    notif_type = get("notif_type")
+    if notif_type == "ADMIN_BROADCAST":
+        return "team"
+    if notif_type is None:
+        return {
+            "global": "team",
+            "campus": "learning_circle",
+            "interest_group": "project",
+        }.get(get("target_type"), "system")
+    if notif_type.startswith("EVENT_"):
+        return "event"
+    if notif_type.startswith("LC_"):
+        return "learning_circle"
+    return "system"
+
+
 class BroadcastNotificationAdminSerializer(serializers.ModelSerializer):
     """
     Extended serializer for admin CRUD on BroadcastNotification.
@@ -66,16 +85,20 @@ class BroadcastNotificationAdminSerializer(serializers.ModelSerializer):
     """
     target_details  = serializers.SerializerMethodField()
     created_by_name = serializers.CharField(source='created_by.full_name', read_only=True)
+    source          = serializers.SerializerMethodField()
 
     class Meta:
         model  = BroadcastNotification
         fields = [
             'id', 'title', 'description', 'url',
-            'target_type', 'target_id', 'target_details',
+            'target_type', 'target_id', 'target_details', 'source',
             'created_by', 'created_by_name',
             'created_at', 'expires_at',
         ]
-        read_only_fields = ['id', 'created_at', 'created_by', 'created_by_name', 'target_details']
+        read_only_fields = ['id', 'created_at', 'created_by', 'created_by_name', 'target_details', 'source']
+
+    def get_source(self, obj):
+        return broadcast_source(obj)
 
     def get_target_details(self, obj):
         tt  = obj.target_type

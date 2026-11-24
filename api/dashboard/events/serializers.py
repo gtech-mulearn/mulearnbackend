@@ -35,7 +35,7 @@ class MinimalIGSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = InterestGroup
-        fields = ['id', 'name', 'icon', 'cover_image', 'icon_image']
+        fields = ['id', 'name', 'cover_image_key', 'icon_image_key', 'cover_image', 'icon_image']
 
 
 class MinimalCampusSerializer(serializers.ModelSerializer):

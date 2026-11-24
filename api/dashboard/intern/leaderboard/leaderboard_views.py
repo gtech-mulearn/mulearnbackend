@@ -4,7 +4,7 @@ from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
-from utils.types import RoleType, InternLeaderboardWeights, InternGuildStatus
+from utils.types import RoleType, InternLeaderboardWeights, InternGuildStatus, COUNTED_TIMESHEET_STATUSES
 from db.intern import UserInternGuildLink, InternTask, InternDailyTimesheet, InternWeeklyReview
 from db.achievement import UserStreak
 
@@ -14,13 +14,14 @@ COMPLEXITY_WEIGHT = {'LOW': 1, 'MEDIUM': 2, 'HIGH': 3, 'CRITICAL': 5}
 def intern_scores(user_ids):
     """
     {user_id: leaderboard score} for these interns, in three grouped queries:
-    approved daily timesheets x 25 + approved weekly reviews x 50 + the sum of
+    counted daily timesheets (COUNTED_TIMESHEET_STATUSES) x 25 + approved
+    weekly reviews x 50 + the sum of
     karma_awarded x complexity weight over verified intern tasks. Shared by
     the leaderboard, "me" and overview top-3 views.
     """
     user_ids = list(user_ids)
     daily = dict(
-        InternDailyTimesheet.objects.filter(user_id__in=user_ids, status='APPROVED')
+        InternDailyTimesheet.objects.filter(user_id__in=user_ids, status__in=COUNTED_TIMESHEET_STATUSES)
         .values('user_id').annotate(total=Count('id')).values_list('user_id', 'total')
     )
     weekly = dict(

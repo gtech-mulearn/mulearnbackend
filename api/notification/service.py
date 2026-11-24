@@ -1,5 +1,6 @@
 import logging
 import uuid
+from dataclasses import replace
 from datetime import datetime
 from enum import Enum
 from typing import Optional
@@ -8,6 +9,7 @@ from django.conf import settings
 from django.db import transaction
 
 from api.notification.audience import Audience, AudienceResolver, AudienceSpec
+from api.notification.audit import AuditSpec
 from api.notification.templates import render_template
 from api.notification.types import TYPE_META, NotificationType
 
@@ -64,6 +66,7 @@ class NotificationService:
         entity_type: Optional[str] = None,
         redirect_url: Optional[str] = None,
         expires_at:  Optional[datetime] = None,
+        audit:       Optional["AuditSpec"] = None,
     ) -> None:
         """
         Register a notification to be written after the current DB transaction commits.
@@ -81,6 +84,9 @@ class NotificationService:
                          Notification.redirect_url / BroadcastNotification.url.
             expires_at:  Explicit expiry, overriding BroadcastUtils' EXPIRY_DAYS default —
                          admin-broadcast use only today (producers rely on the DB default).
+            audit:       When set, the deferred writer also logs this action (SystemActionLog)
+                         in the same transaction as its write, with audience_size set to the
+                         recipient count computed here. None for every other producer.
         """
 
         # Normalize once — every downstream use (dedupe_key, storage, logging)
@@ -140,6 +146,8 @@ class NotificationService:
             recipient_count = cls._resolver.count(audience, actor_id=actor_id)
             if recipient_count >= settings.NOTIFICATION_BROADCAST_THRESHOLD:
                 target_type, target_id = broadcast_target
+                if audit is not None:
+                    audit = replace(audit, audience_size=recipient_count)
                 transaction.on_commit(lambda: cls._write_broadcast(
                     notif_type   = notif_type_str,
                     category     = category_str,
@@ -153,6 +161,7 @@ class NotificationService:
                     target_id    = target_id,
                     url          = redirect_url,
                     expires_at   = expires_at,
+                    audit        = audit,
                 ))
                 logger.debug(
                     "dispatch: registered on_commit broadcast for type=%s target_type=%s recipients~=%d",
@@ -169,6 +178,9 @@ class NotificationService:
             logger.debug("dispatch: empty audience for type=%s — nothing to write", notif_type_str)
             return
 
+        if audit is not None:
+            audit = replace(audit, audience_size=len(recipient_ids))
+
         # ── Step 5: Register on_commit — nothing is written until COMMIT ─────
         # This is the safety net: if the business transaction rolls back
         # (e.g. LC save fails), this callback never fires and zero notification
@@ -184,6 +196,7 @@ class NotificationService:
             actor_id            = actor_id,
             dedupe_key          = dedupe_key,
             redirect_url        = redirect_url,
+            audit               = audit,
         ))
 
         logger.debug(
@@ -204,6 +217,7 @@ class NotificationService:
         actor_id:      Optional[str],
         dedupe_key:    Optional[str],
         redirect_url:  Optional[str] = None,
+        audit:         Optional["AuditSpec"] = None,
     ) -> None:
         """
         Bulk inserts notification rows after the business transaction has committed.
@@ -237,11 +251,26 @@ class NotificationService:
         # ignore_conflicts=True: if (user_id, dedupe_key) already exists
         # (e.g. Celery retry or double-click), the row is silently skipped.
         # No exception, no duplicate, no data corruption.
-        Notification.objects.bulk_create(
-            rows,
-            ignore_conflicts=True,
-            batch_size=1000,
-        )
+        def write_rows():
+            Notification.objects.bulk_create(
+                rows,
+                ignore_conflicts=True,
+                batch_size=1000,
+            )
+
+        if audit is None:
+            write_rows()
+        else:
+            from api.notification import audit as audit_module
+
+            with transaction.atomic():
+                write_rows()
+                audit_module.record(
+                    audit,
+                    entity_name = "notification",
+                    entity_id   = str(uuid.uuid4()),
+                    note        = f"sent as {len(recipient_ids)} personal notifications",
+                )
 
         # New unread rows landed — the cached unread_count for every
         # recipient is now stale. Bounded to this batch's recipient list,
@@ -253,6 +282,75 @@ class NotificationService:
             "_write_notifications: type=%s attempted=%d",
             notif_type, len(rows)
         )
+
+        cls._enqueue_push(
+            notif_type    = notif_type,
+            category      = category,
+            recipient_ids = recipient_ids,
+            rendered      = rendered,
+            context       = context,
+            entity_type   = entity_type,
+            entity_id     = entity_id,
+            dedupe_key    = dedupe_key,
+            redirect_url  = redirect_url,
+        )
+
+    @classmethod
+    def _enqueue_push(
+        cls,
+        notif_type:    str,
+        category:      str,
+        recipient_ids: list,
+        rendered:      dict,
+        context:       dict,
+        entity_type:   Optional[str],
+        entity_id:     Optional[str],
+        dedupe_key:    Optional[str],
+        redirect_url:  Optional[str],
+    ) -> None:
+        """
+        Also send this notification as a mobile push, when its type allows PUSH
+        (TypeMeta.eligible) and push is on for it (api.push.config). Queued to
+        Celery: never sends inside the request, and never lets a push problem
+        affect the in-app notification that was just written.
+
+        The payload carries the same fields the app's notification feed uses
+        (type, entity_type, entity_id, redirect_url), so tapping the push opens
+        the same screen as tapping the notification.
+
+        Broadcast-path notifications (very large audiences) are not pushed from
+        here; admins reach large audiences with push campaigns instead.
+        """
+        try:
+            from api.push.config import get_config, push_allowed_for_type
+            from api.push.fcm import is_configured
+
+            if not is_configured():
+                return
+            meta = TYPE_META.get(notif_type)
+            if not meta or not push_allowed_for_type(get_config(), notif_type, meta.eligible):
+                return
+            text = render_template(notif_type, "PUSH", context) or rendered
+            from mu_celery.push_tasks import send_activity_push
+
+            send_activity_push.delay(
+                notif_type,
+                category,
+                [str(uid) for uid in recipient_ids],
+                text["title"],
+                text["body"],
+                None,
+                dedupe_key or f"{notif_type}:{uuid.uuid4()}",
+                {
+                    "type": notif_type,
+                    "entity_type": entity_type or "",
+                    "entity_id": entity_id or "",
+                    "redirect_url": redirect_url or "",
+                },
+                variant=text.get("variant"),
+            )
+        except Exception:
+            logger.exception("_enqueue_push: failed for type=%s", notif_type)
 
     @classmethod
     def _write_broadcast(
@@ -269,6 +367,7 @@ class NotificationService:
         target_id:   Optional[str],
         url:         Optional[str] = None,
         expires_at:  Optional[datetime] = None,
+        audit:       Optional["AuditSpec"] = None,
     ) -> None:
         """
         Writes exactly one broadcast_notification row for a large audience,
@@ -287,23 +386,37 @@ class NotificationService:
             )
             return
 
-        BroadcastUtils.create_broadcast(
-            title        = rendered["title"],
-            description  = rendered["body"],
-            url          = url,
-            target_type  = target_type,
-            target_id    = target_id,
-            created_by   = writer,
-            expiry_key   = notif_type.lower(),
-            expires_at   = expires_at,
-            notif_type   = notif_type,
-            category     = category,
-            context      = context,
-            entity_type  = entity_type,
-            entity_id    = entity_id,
-            actor        = writer if actor_id else None,
-            dedupe_key   = dedupe_key,
-        )
+        def create():
+            return BroadcastUtils.create_broadcast(
+                title        = rendered["title"],
+                description  = rendered["body"],
+                url          = url,
+                target_type  = target_type,
+                target_id    = target_id,
+                created_by   = writer,
+                expiry_key   = notif_type.lower(),
+                expires_at   = expires_at,
+                notif_type   = notif_type,
+                category     = category,
+                context      = context,
+                entity_type  = entity_type,
+                entity_id    = entity_id,
+                actor        = writer if actor_id else None,
+                dedupe_key   = dedupe_key,
+            )
+
+        if audit is None:
+            create()
+        else:
+            from api.notification import audit as audit_module
+
+            with transaction.atomic():
+                broadcast = create()
+                audit_module.record(
+                    audit,
+                    entity_name = "broadcast_notification",
+                    entity_id   = str(broadcast.id),
+                )
 
         logger.info(
             "_write_broadcast: type=%s target_type=%s target_id=%s",
@@ -374,6 +487,10 @@ _ENTITY_TYPE_MAP: dict[str, str] = {
     NotificationType.SALT_MANGO_TREE_ANNOUNCED:       "media_content",
     NotificationType.INSPIRATION_STATION_ANNOUNCED:   "media_content",
     NotificationType.GRAB_YOUR_SUPERPOWERS_ANNOUNCED: "media_content",
+
+    # Intern
+    NotificationType.INTERN_MONTHLY_REVIEW_OPEN:     "intern_monthly_review",
+    NotificationType.INTERN_MONTHLY_REVIEW_LAST_DAY: "intern_monthly_review",
 
     # Add more as modules are built:
     # NotificationType.SESSION_BOOKED:    "session",

@@ -1,5 +1,6 @@
 from django.urls import path
 from . import notification_view
+from .activity_log_view import ActivityLogAPI
 
 urlpatterns = [
 
@@ -8,6 +9,8 @@ urlpatterns = [
     path('unread-count/',  notification_view.UnreadCountView.as_view(),        name='notification-unread-count'),
     path('read-all/',      notification_view.MarkAllReadView.as_view(),        name='notification-read-all'),
     path('read/',          notification_view.MarkReadBulkView.as_view(),       name='notification-read-bulk'),
+    # Must stay above '<str:notification_id>/', which would otherwise catch it.
+    path('activity-log/',  ActivityLogAPI.as_view(),                           name='notification-activity-log'),
     path('<str:notification_id>/read/',    notification_view.MarkReadView.as_view(),   name='notification-mark-read'),
     path('<str:notification_id>/archive/', notification_view.ArchiveView.as_view(),    name='notification-archive'),
     path('<str:notification_id>/',         notification_view.DeleteOneView.as_view(),  name='notification-delete-one'),

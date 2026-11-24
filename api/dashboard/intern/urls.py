@@ -4,6 +4,7 @@ from api.dashboard.intern.overview import overview_views
 urlpatterns = [
     path("timesheets/", include("api.dashboard.intern.timesheet.urls")),
     path("reviews/", include("api.dashboard.intern.weekly_review.urls")),
+    path("monthly-reviews/", include("api.dashboard.intern.monthly_review.urls")),
     path("overview/", include("api.dashboard.intern.overview.urls")),
     path("leaderboard/", include("api.dashboard.intern.leaderboard.urls")),
     path("tasks/", include("api.dashboard.intern.tasks.urls")),
