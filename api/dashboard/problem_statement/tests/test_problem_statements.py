@@ -577,3 +577,50 @@ def test_statement_delete_still_cascades(world):
     assert world["a"].delete(f"{BASE}company/{sid}/").status_code == 200
     assert not ProblemStatement.objects.filter(id=sid).exists()
     assert not ProblemStatementInteraction.objects.filter(problem_statement_id=sid).exists()
+
+
+# ----------------------------------------------------------------- on behalf of (muid)
+
+def test_admin_creates_on_behalf_of_user_and_notifies(world):
+    from db.notification import Notification
+    target = make_user("mentioned")
+    res = world["admin"].post(BASE + "admin/", {**PAYLOAD, "muid": target.muid}, format="json")
+    assert res.status_code == 200
+    body = res.json()["response"]
+    assert body["on_behalf_of"] == {"id": target.id, "muid": target.muid, "full_name": target.full_name}
+    assert Notification.objects.filter(user=target, title="Problem statement drafted for you").count() == 1
+
+
+def test_admin_unknown_muid_rejected(world):
+    res = world["admin"].post(BASE + "admin/", {**PAYLOAD, "muid": "nobody@mulearn"}, format="json")
+    assert res.status_code == 400
+    assert not ProblemStatement.objects.filter(title=PAYLOAD["title"]).exists()
+
+
+def test_company_route_rejects_muid(world):
+    target = make_user("mentioned2")
+    res = world["a"].post(BASE + "company/", {**PAYLOAD, "muid": target.muid}, format="json")
+    assert res.status_code == 400
+    assert "Unknown field." in res.json()["message"]["muid"]
+
+
+def test_admin_patch_change_and_clear_muid(world):
+    from db.notification import Notification
+    first, second = make_user("m1"), make_user("m2")
+    admin = world["admin"]
+    sid = admin.post(BASE + "admin/", {**PAYLOAD, "muid": first.muid}, format="json").json()["response"]["id"]
+    # same user again: no second notification
+    admin.patch(f"{BASE}admin/{sid}/", {"muid": first.muid}, format="json")
+    assert Notification.objects.filter(user=first).count() == 1
+    res = admin.patch(f"{BASE}admin/{sid}/", {"muid": second.muid}, format="json")
+    assert res.json()["response"]["on_behalf_of"]["muid"] == second.muid
+    assert Notification.objects.filter(user=second).count() == 1
+    res = admin.patch(f"{BASE}admin/{sid}/", {"muid": ""}, format="json")
+    assert res.json()["response"]["on_behalf_of"] is None
+
+
+def test_learner_view_hides_on_behalf_of(world):
+    target = make_user("m3")
+    sid = world["admin"].post(BASE + "admin/", {**PAYLOAD, "muid": target.muid}, format="json").json()["response"]["id"]
+    world["admin"].post(f"{BASE}admin/{sid}/publish/")
+    assert "on_behalf_of" not in world["learner"].get(f"{BASE}{sid}/").json()["response"]

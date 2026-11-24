@@ -1,10 +1,15 @@
 """Helpers shared by the problem statement company, admin and learner views."""
+import logging
+
 from django.db import transaction
 from django.db.models import Count
 from django.utils import timezone
 
+from db.user import User
 from db.problem_statement import ProblemStatement, ProblemStatementInteraction
 from utils.response import CustomResponse
+
+logger = logging.getLogger(__name__)
 
 EDITABLE_FIELDS = ("title", "description", "category", "skills", "deadline")
 
@@ -20,7 +25,7 @@ def not_found():
 
 
 def statement_queryset():
-    return ProblemStatement.objects.select_related("company")
+    return ProblemStatement.objects.select_related("company", "on_behalf_of")
 
 
 def filter_source(qs, params):
@@ -78,15 +83,63 @@ def my_interactions(user_id, statement_ids):
 # The three writers below lock the row and save only the columns they change, so a
 # concurrent edit / publish can never overwrite the other's fields with stale values.
 
-def apply_changes(statement_id, data, user_id):
-    """Returns an error response, or None on success."""
+_UNSET = object()
+
+
+def resolve_muid(raw):
+    """
+    (user, error). ``None``/blank clears the mention (user None). An unknown muid is a 400.
+    Suspended users are excluded (``User.objects``): they can't receive the notification.
+    """
+    muid = (raw or "").strip()
+    if not muid:
+        return None, None
+    user = User.objects.filter(muid=muid).only("id").first()
+    if not user:
+        return None, failure("No user found with this muid.")
+    return user, None
+
+
+def notify_on_behalf_of(user, statement, actor_id, created):
+    """
+    Best-effort in-app notification; a failure here must never fail the write.
+    No button/link: the statement may still be a Draft, which the user cannot open.
+    """
+    if user is None or user.id == actor_id:
+        return
+    try:
+        from api.notification.notifications_utils import NotificationUtils
+        if created:
+            title = "Problem statement drafted for you"
+            description = f'A problem statement "{statement.title}" was created on your behalf.'
+        else:
+            title = "Added to a problem statement"
+            description = f'You were added to the problem statement "{statement.title}" as the person it is on behalf of.'
+        NotificationUtils.insert_notification(
+            user=user, title=title, description=description,
+            button=None, url=None, created_by_id=actor_id,
+        )
+    except Exception:
+        logger.exception("Failed to notify on-behalf-of user for problem statement %s", statement.id)
+
+
+def apply_changes(statement_id, data, user_id, on_behalf_of_id=_UNSET, result=None):
+    """
+    Returns an error response, or None on success. ``on_behalf_of_id`` None clears the mention.
+    If a ``result`` dict is passed it receives ``previous_on_behalf_of_id``, read under the row lock.
+    """
     with transaction.atomic():
         statement = ProblemStatement.objects.select_for_update().filter(id=statement_id).first()
         if not statement:
             return not_found()
+        if result is not None:
+            result["previous_on_behalf_of_id"] = statement.on_behalf_of_id
         changed = [field for field in EDITABLE_FIELDS if field in data]
         for field in changed:
             setattr(statement, field, data[field])
+        if on_behalf_of_id is not _UNSET:
+            statement.on_behalf_of_id = on_behalf_of_id
+            changed.append("on_behalf_of")
         statement.updated_by_id = user_id
         statement.save(update_fields=[*changed, "updated_by", "updated_at"])
     return None
