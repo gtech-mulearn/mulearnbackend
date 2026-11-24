@@ -79,7 +79,10 @@ class ReferralListAPI(APIView):
     )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
+        # Prefetch, not select_related: the list has no ORDER BY, so adding
+        # joins to the main query could change the row order it returns.
         user_referral_link = UserReferralLink.objects.filter(
-            referral_id=user_id).all()
+            referral_id=user_id).prefetch_related(
+            "user", "user__wallet_user", "user__user_lvl_link_user__level")
         serializer = ReferralListSerializer(user_referral_link, many=True)
         return CustomResponse(response=serializer.data).get_success_response()

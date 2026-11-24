@@ -130,9 +130,6 @@ class InternOverviewLeaderboardTopAPI(APIView):
         responses={200: OpenApiResponse(description="Top 3 intern leaderboard entries.")},
     )
     def get(self, request):
-        from django.db.models import Count, Sum
-        from db.intern import InternDailyTimesheet, InternWeeklyReview
-
         interns = UserInternGuildLink.objects.filter(
             status__in=[
                 InternGuildStatus.ACTIVE.value,
@@ -141,41 +138,18 @@ class InternOverviewLeaderboardTopAPI(APIView):
             ]
         ).select_related('user')
 
-        intern_user_ids = [intern.user_id for intern in interns]
-        complexity_map = {'LOW': 1, 'MEDIUM': 2, 'HIGH': 3, 'CRITICAL': 5}
+        from api.dashboard.intern.leaderboard.leaderboard_views import intern_scores
 
-        # Batch fetch all scoring data
-        daily_ts_counts = dict(
-            InternDailyTimesheet.objects.filter(user_id__in=intern_user_ids, status='APPROVED')
-            .values('user_id').annotate(total=Count('id'))
-            .values_list('user_id', 'total')
-        )
-        weekly_rv_counts = dict(
-            InternWeeklyReview.objects.filter(user_id__in=intern_user_ids, status='APPROVED')
-            .values('user_id').annotate(total=Count('id'))
-            .values_list('user_id', 'total')
-        )
-        verified_tasks = InternTask.objects.filter(assigned_to_id__in=intern_user_ids, is_verified=True)
-        task_score_by_user = {}
-        for t in verified_tasks:
-            task_score_by_user[t.assigned_to_id] = task_score_by_user.get(t.assigned_to_id, 0) + (
-                t.karma_awarded * complexity_map.get(t.complexity, 1)
-            )
-
-        leaderboard_data = []
-        for intern in interns:
-            uid = intern.user_id
-            score = (
-                daily_ts_counts.get(uid, 0) * 25 +
-                weekly_rv_counts.get(uid, 0) * 50 +
-                task_score_by_user.get(uid, 0)
-            )
-            leaderboard_data.append({
-                "user_id": uid,
+        scores = intern_scores(intern.user_id for intern in interns)
+        leaderboard_data = [
+            {
+                "user_id": intern.user_id,
                 "full_name": intern.user.full_name,
                 "guild": intern.guild,
-                "score": score
-            })
+                "score": scores[intern.user_id],
+            }
+            for intern in interns
+        ]
 
         leaderboard_data.sort(key=lambda x: x['score'], reverse=True)
         top_three = leaderboard_data[:3]

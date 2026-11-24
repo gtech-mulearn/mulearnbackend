@@ -29,6 +29,47 @@ from PIL import Image
 MAX_PAGE_SIZE = 1000
 
 
+def ranks_for_users(ranked_qs, order_by, user_ids):
+    """
+    Return {user_id: position} for just `user_ids`, where position is the
+    1-based place of each row of `ranked_qs` when ordered by `order_by`.
+
+    Several list views used to load every row of a campus, district or zone
+    into Python to build a rank dict, then use only the 10-100 entries for the
+    current page. This asks the database for the positions of the page's users
+    only: ROW_NUMBER() over the whole set, filtered outside the window so the
+    filter does not change the numbering.
+
+    ranked_qs must have one row per user (e.g. a Wallet queryset) and a
+    `user_id` column. order_by is a list of field names as for order_by().
+    """
+    from django.db import connection
+    from django.db.models import F, Window
+    from django.db.models.functions import RowNumber
+
+    user_ids = list(dict.fromkeys(user_ids))
+    if not user_ids:
+        return {}
+    ordering = [
+        F(name[1:]).desc() if name.startswith("-") else F(name).asc()
+        for name in order_by
+    ]
+    inner = (
+        ranked_qs.order_by()
+        .annotate(row_position=Window(expression=RowNumber(), order_by=ordering))
+        .values("user_id", "row_position")
+    )
+    sql, params = inner.query.sql_with_params()
+    placeholders = ", ".join(["%s"] * len(user_ids))
+    with connection.cursor() as cursor:
+        cursor.execute(
+            f"SELECT ranked.user_id, ranked.row_position FROM ({sql}) ranked "
+            f"WHERE ranked.user_id IN ({placeholders})",
+            [*params, *user_ids],
+        )
+        return dict(cursor.fetchall())
+
+
 def check_alumni_status(graduation_year):
     """
     Returns True if graduation_year is a valid 4-digit year and is in the past.
@@ -698,3 +739,54 @@ def get_user_mentor_profile(user_id):
     """
     from db.user import UserMentor
     return UserMentor.objects.filter(user_id=user_id).first()
+
+
+def active_skill_ids(skill_ids):
+    """
+    The ids in `skill_ids` that name an active Skill, in the given order,
+    each once. One query instead of one `exists()` per id. The id column
+    compares case-insensitively, so the match and the de-duplication do too
+    (task_skill_link has a unique key on (task_id, skill_id), so a repeated
+    id used to fail the insert with a 500).
+    """
+    from db.skill import Skill
+
+    if not skill_ids:
+        return []
+    active = {
+        str(i).lower()
+        for i in Skill.objects.filter(id__in=skill_ids, is_active=True).values_list("id", flat=True)
+    }
+    result, seen = [], set()
+    for i in skill_ids:
+        key = str(i).lower()
+        if key in active and key not in seen:
+            seen.add(key)
+            result.append(i)
+    return result
+
+
+def task_skill_links_prefetch():
+    """
+    Prefetch for task lists whose serializer calls task_skills(). Ordered by
+    skill id: the per-task query it replaces had no ORDER BY and MySQL
+    returned the skills in that order.
+    """
+    from django.db.models import Prefetch
+    from db.skill import TaskSkillLink
+
+    return Prefetch(
+        "skill_links",
+        queryset=TaskSkillLink.objects.select_related("skill").order_by("skill_id"),
+    )
+
+
+def task_skills(task):
+    """A task's skills as {id, name, code}; uses task_skill_links_prefetch() when present."""
+    from db.skill import TaskSkillLink
+
+    if "skill_links" in getattr(task, "_prefetched_objects_cache", {}):
+        links = task.skill_links.all()
+    else:
+        links = TaskSkillLink.objects.filter(task_id=task.id).select_related("skill").order_by("skill_id")
+    return [{"id": link.skill.id, "name": link.skill.name, "code": link.skill.code} for link in links]

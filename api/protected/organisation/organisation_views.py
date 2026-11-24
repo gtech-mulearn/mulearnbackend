@@ -21,7 +21,11 @@ class GetInstitutionsAPI(APIView):
 
         district = District.objects.filter(name=district_name).first()
 
-        organisations = Organization.objects.filter(org_type=organisation_type, district=district)
+        # Prefetch (not select_related: the list has no ORDER BY, and a join
+        # could change its row order). It was ~5 lazy queries per row.
+        organisations = Organization.objects.filter(
+            org_type=organisation_type, district=district
+        ).prefetch_related("affiliation", "district__zone__state__country")
         organisation_serializer = OrganisationSerializer(organisations, many=True)
         return CustomResponse(response={'institutions': organisation_serializer.data}).get_success_response()
 
@@ -34,6 +38,8 @@ class RetrieveInstitutesAPI(APIView):
     )
     def get(self, request, district_name):
         district = District.objects.filter(name=district_name).first()
-        organisations = Organization.objects.filter(org_type__in=["School", "College"], district=district)
+        organisations = Organization.objects.filter(
+            org_type__in=["School", "College"], district=district
+        ).prefetch_related("district")
         serializer = InstitutesRetrivalSerializer(organisations, many=True)
         return CustomResponse(response=serializer.data).get_success_response()

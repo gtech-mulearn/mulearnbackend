@@ -36,10 +36,25 @@ class CommunityPartnerReadSerializer(serializers.ModelSerializer):
             'updated_at',
         ]
 
+    @staticmethod
+    def list_prefetch():
+        """Prefetch for list views (it was one query per partner)."""
+        from django.db.models import Prefetch
+        # Ordered by IG id: the per-partner query had no ORDER BY and MySQL
+        # returned rows in the order of its (community_partner_id, ig_id)
+        # unique index.
+        return Prefetch(
+            'ig_links',
+            queryset=IgCommunityPartnerLink.objects.select_related('interest_group').order_by('interest_group_id'),
+        )
+
     def get_interest_groups(self, obj):
-        links = IgCommunityPartnerLink.objects.filter(
-            community_partner=obj
-        ).select_related('interest_group')
+        if 'ig_links' in getattr(obj, '_prefetched_objects_cache', {}):
+            links = obj.ig_links.all()
+        else:
+            links = IgCommunityPartnerLink.objects.filter(
+                community_partner=obj
+            ).select_related('interest_group')
         return [
             {
                 'id': link.interest_group.id,

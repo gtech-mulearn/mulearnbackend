@@ -388,7 +388,9 @@ class EventDetailSerializer(serializers.ModelSerializer):
     def get_linked_tasks(self, obj):
         # Use event_fk_id (raw UUID) to avoid Django's FK type-check
         # which rejects a new `Event` object where old `Events` is expected.
-        tasks = TaskList.objects.filter(event_fk_id=obj.id)
+        # prefetch the IG (one query) instead of one per task; prefetch, not
+        # select_related, so the unordered task query and its order stay as is.
+        tasks = TaskList.objects.filter(event_fk_id=obj.id).prefetch_related('ig')
         return LinkedTaskSerializer(tasks, many=True).data
 
     def _get_viewer_info(self, obj):

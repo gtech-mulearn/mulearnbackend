@@ -6,11 +6,11 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes,
 from rest_framework import serializers as s
 
 from db.task import TaskList, InterestGroup, UserIgLink
-from db.skill import Skill, TaskSkillLink
+from db.skill import TaskSkillLink
 from utils.permission import CustomizePermission, JWTUtils, role_required, mentor_active_required
 from utils.response import CustomResponse
 from utils.types import RoleType
-from utils.utils import CommonUtils, DateTimeUtils
+from utils.utils import active_skill_ids, task_skill_links_prefetch, CommonUtils, DateTimeUtils
 
 from .task_serializers import (
     MentorIGDropdownSerializer,
@@ -22,14 +22,10 @@ from .task_serializers import (
 def _save_task_skills(task_id, skill_ids, user_id):
     """Clear and re-create TaskSkillLink rows — mirrors admin implementation."""
     TaskSkillLink.objects.filter(task_id=task_id).delete()
-    for skill_id in skill_ids:
-        if Skill.objects.filter(id=skill_id, is_active=True).exists():
-            TaskSkillLink.objects.create(
-                id=str(uuid.uuid4()),
-                task_id=task_id,
-                skill_id=skill_id,
-                created_by_id=user_id,
-            )
+    TaskSkillLink.objects.bulk_create([
+        TaskSkillLink(id=str(uuid.uuid4()), task_id=task_id, skill_id=skill_id, created_by_id=user_id)
+        for skill_id in active_skill_ids(skill_ids)
+    ])
 
 class MentorIGDropdownAPI(APIView):
     authentication_classes = [CustomizePermission]
@@ -99,7 +95,7 @@ class MentorTaskListCreateAPI(APIView):
 
         queryset = TaskList.objects.select_related(
             "channel", "type", "level", "ig", "org", "requested_by"
-        ).filter(requested_by_id=user_id)
+        ).prefetch_related(task_skill_links_prefetch()).filter(requested_by_id=user_id)
 
         approval_status = request.query_params.get("approval_status")
         if approval_status:

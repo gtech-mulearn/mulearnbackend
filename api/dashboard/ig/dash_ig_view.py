@@ -223,10 +223,12 @@ class InterestGroupAPI(APIView):
         responses={200: InterestGroupSerializer},
     )
     def get(self, request):
+        # Prefetching user_ig_link_ig loaded every member of every IG on the
+        # page; the serializer only reads the active mentors.
         ig_queryset = (
-            InterestGroup.objects.select_related("created_by", "updated_by")
-            .prefetch_related("user_ig_link_ig")
-            .annotate(members=Count("user_ig_link_ig"))
+            InterestGroup.objects.select_related("created_by", "updated_by", "sponsor_company")
+            .prefetch_related(*ig_serializer_prefetches())
+            .annotate(members=_ig_member_count())
             .all()
         )
         paginated_queryset = CommonUtils.get_paginated_queryset(
@@ -248,8 +250,9 @@ class InterestGroupAPI(APIView):
             },
         )
 
+        page = list(paginated_queryset.get("queryset"))
         ig_serializer_data = InterestGroupSerializer(
-            paginated_queryset.get("queryset"), many=True
+            page, many=True, context=get_ig_list_context(page)
         ).data
 
         return CustomResponse().paginated_response(
@@ -584,14 +587,15 @@ class InterestGroupCSV(APIView):
         responses={200: InterestGroupSerializer},
     )
     def get(self, request):
-        ig_serializer = (
-            InterestGroup.objects.select_related("created_by", "updated_by")
-            .prefetch_related("user_ig_link_ig")
-            .annotate(members=Count("user_ig_link_ig"))
-            .all()
+        ig_serializer = list(
+            InterestGroup.objects.select_related("created_by", "updated_by", "sponsor_company")
+            .prefetch_related(*ig_serializer_prefetches())
+            .annotate(members=_ig_member_count())
         )
 
-        ig_serializer_data = InterestGroupSerializer(ig_serializer, many=True).data
+        ig_serializer_data = InterestGroupSerializer(
+            ig_serializer, many=True, context=get_ig_list_context(ig_serializer)
+        ).data
 
         return CommonUtils.generate_csv(ig_serializer_data, "Interest Group")
 
@@ -607,7 +611,13 @@ class InterestGroupGetAPI(APIView):
     def get(self, request, pk):
         """Allow Admin or any IG lead to load the IG."""
         roles = JWTUtils.fetch_role(request)
-        ig_data = InterestGroup.objects.filter(id=pk).first()
+        ig_data = (
+            InterestGroup.objects.filter(id=pk)
+            .select_related("created_by", "updated_by", "sponsor_company")
+            .prefetch_related(*ig_serializer_prefetches())
+            .annotate(members=_ig_member_count())
+            .first()
+        )
 
         if not ig_data:
             return CustomResponse(
@@ -619,7 +629,9 @@ class InterestGroupGetAPI(APIView):
                 general_message="You do not have permission to view this Interest Group"
             ).get_failure_response()
 
-        serializer = InterestGroupSerializer(ig_data, many=False)
+        serializer = InterestGroupSerializer(
+            ig_data, many=False, context=get_ig_list_context([ig_data])
+        )
 
         return CustomResponse(
             response={"interestGroup": serializer.data}
@@ -864,12 +876,12 @@ class InterestGroupRequestAPI(APIView):
         is_admin = RoleType.ADMIN.value in roles
 
         ig_queryset = InterestGroup.objects.select_related(
-            "created_by", "updated_by"
+            "created_by", "updated_by", "sponsor_company"
         ).prefetch_related(
-            "user_ig_link_ig",
+            *ig_serializer_prefetches(),
             "created_by__user_role_link_user__role",
             "created_by__user_organization_link_user__org"
-        )
+        ).annotate(members=_ig_member_count())
         
         if target_user_id:
             if target_user_id != user_id and not is_admin:
@@ -907,8 +919,9 @@ class InterestGroupRequestAPI(APIView):
             },
         )
 
+        page = list(paginated_queryset.get("queryset"))
         ig_serializer_data = InterestGroupRequestGetSerializer(
-            paginated_queryset.get("queryset"), many=True
+            page, many=True, context=get_ig_list_context(page)
         ).data
         
         return CustomResponse().paginated_response(
@@ -1166,15 +1179,49 @@ def get_ig_list_context(ig_queryset):
             "dribble", "behance", "stackoverflow", "medium", "hackerrank"
         )
         socials_map = {s["user_id"]: s for s in socials_qs}
+        # mentor_profiles_map stays empty: no serializer field reads it.
 
-        mentor_profiles = UserMentor.objects.filter(user_id__in=all_user_ids)
-        mentor_profiles_map = {m.user_id: m for m in mentor_profiles}
+    # 5. Approved mentor applications of every mentor on the page (this was
+    #    one query per IG inside _resolve_ig_mentors).
+    from db.user import MentorApplication
+    mentor_user_ids = set()
+    for ig in ig_queryset:
+        if hasattr(ig, "_prefetched_objects_cache") and "user_ig_link_ig" in ig._prefetched_objects_cache:
+            mentor_user_ids.update(
+                link.user_id for link in ig.user_ig_link_ig.all()
+                if link.assignment_type == UserIgLink.AssignmentType.MENTOR and link.is_active
+            )
+    mentor_applications_map = {
+        a.user_id: a
+        for a in MentorApplication.objects.filter(
+            user_id__in=mentor_user_ids,
+            status=MentorApplication.Status.APPROVED,
+        ).select_related("org")
+    } if mentor_user_ids else {}
+
+    # Company of each mentor whose application has no org: the user's
+    # lowest-id Company link, as get_mentor_company looks it up (it ran two
+    # queries per such mentor).
+    from db.organization import UserOrganizationLink
+    from utils.types import OrganizationType
+    no_org_ids = [uid for uid, a in mentor_applications_map.items() if a.org_id is None]
+    mentor_company_map = {uid: None for uid in no_org_ids}
+    if no_org_ids:
+        for uid, title in (
+            UserOrganizationLink.objects.filter(
+                user_id__in=no_org_ids, org__org_type=OrganizationType.COMPANY.value
+            ).order_by("pk").values_list("user_id", "org__title")
+        ):
+            if mentor_company_map[uid] is None:
+                mentor_company_map[uid] = title
 
     return {
         "user_map": user_map,
         "socials_map": socials_map,
         "mentor_profiles_map": mentor_profiles_map,
         "mentor_socials_map": socials_map,
+        "mentor_applications_map": mentor_applications_map,
+        "mentor_company_map": mentor_company_map,
     }
 
 
@@ -1200,6 +1247,69 @@ def _mentor_links_prefetch():
         queryset=UserIgLink.objects.filter(
             assignment_type=UserIgLink.AssignmentType.MENTOR, is_active=True
         ).select_related("user"),
+    )
+
+
+def ig_serializer_prefetches():
+    """
+    Everything InterestGroupSerializer reads per IG, loaded once for the
+    whole page: active mentor links, upcoming media content, community
+    partners and impact projects. Use with
+    select_related("created_by", "updated_by", "sponsor_company") and pass
+    get_ig_list_context(page) as the serializer context.
+    """
+    from datetime import date
+    from django.db.models import Prefetch
+    from db.community_partner import IgCommunityPartnerLink
+    from db.events import IgMediaContentLink
+    from db.impact_project import ImpactProject, ImpactProjectUserLink
+
+    return [
+        _mentor_links_prefetch(),
+        Prefetch(
+            "media_content_links",
+            queryset=IgMediaContentLink.objects.filter(
+                media_content__deleted_at__isnull=True,
+                media_content__date__gte=date.today(),
+            ).select_related("media_content").order_by("media_content__date"),
+            to_attr="upcoming_media_links",
+        ),
+        Prefetch(
+            "community_partner_links",
+            queryset=IgCommunityPartnerLink.objects.select_related("community_partner"),
+            to_attr="partner_links",
+        ),
+        Prefetch(
+            "impact_project_ig",
+            queryset=ImpactProject.objects.select_related("created_by", "updated_by").prefetch_related(
+                Prefetch(
+                    "impact_project_user_link_project",
+                    # Same team order the per-project query returned.
+                    queryset=ImpactProjectUserLink.objects.select_related("user").order_by("user_id"),
+                ),
+                "impact_project_link_project",
+            ),
+        ),
+    ]
+
+
+def _ig_member_count():
+    """Every user_ig_link row of the IG (any type, active or not), as
+    InterestGroupSerializer.get_members counted. A per-row subquery, so the
+    page's IGs are counted without loading their member links."""
+    from django.db.models import IntegerField, OuterRef, Subquery
+    from django.db.models.functions import Coalesce
+
+    return Coalesce(
+        Subquery(
+            UserIgLink.objects.filter(ig_id=OuterRef("pk"))
+            .order_by()
+            .values("ig_id")
+            .annotate(n=Count("id"))
+            .values("n"),
+            output_field=IntegerField(),
+        ),
+        0,
     )
 
 
@@ -1233,9 +1343,9 @@ class InterestGroupListApi(APIView):
         from utils.types import InterestGroupStatus
         ig = list(
             InterestGroup.objects.filter(status=InterestGroupStatus.ACTIVE.value)
-            .select_related("created_by", "updated_by")
-            .prefetch_related(_mentor_links_prefetch())
-            .annotate(members=Count("user_ig_link_ig"))
+            .select_related("created_by", "updated_by", "sponsor_company")
+            .prefetch_related(*ig_serializer_prefetches())
+            .annotate(members=_ig_member_count())
         )
 
         context = get_ig_list_context(ig)
@@ -1276,7 +1386,7 @@ class PublicInterestGroupListApi(APIView):
                     )
                 )
             )
-            .annotate(members=Count("user_ig_link_ig"))
+            .annotate(members=_ig_member_count())
         )
 
         context = get_ig_list_context(ig)

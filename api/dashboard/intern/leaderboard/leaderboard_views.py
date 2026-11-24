@@ -6,8 +6,45 @@ from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType, InternLeaderboardWeights, InternGuildStatus
 from db.intern import UserInternGuildLink, InternTask, InternDailyTimesheet, InternWeeklyReview
-from db.task import KarmaActivityLog
 from db.achievement import UserStreak
+
+COMPLEXITY_WEIGHT = {'LOW': 1, 'MEDIUM': 2, 'HIGH': 3, 'CRITICAL': 5}
+
+
+def intern_scores(user_ids):
+    """
+    {user_id: leaderboard score} for these interns, in three grouped queries:
+    approved daily timesheets x 25 + approved weekly reviews x 50 + the sum of
+    karma_awarded x complexity weight over verified intern tasks. Shared by
+    the leaderboard, "me" and overview top-3 views.
+    """
+    user_ids = list(user_ids)
+    daily = dict(
+        InternDailyTimesheet.objects.filter(user_id__in=user_ids, status='APPROVED')
+        .values('user_id').annotate(total=Count('id')).values_list('user_id', 'total')
+    )
+    weekly = dict(
+        InternWeeklyReview.objects.filter(user_id__in=user_ids, status='APPROVED')
+        .values('user_id').annotate(total=Count('id')).values_list('user_id', 'total')
+    )
+    tasks = {}
+    for assigned_to_id, karma_awarded, complexity in InternTask.objects.filter(
+        assigned_to_id__in=user_ids, is_verified=True
+    ).values_list('assigned_to_id', 'karma_awarded', 'complexity'):
+        tasks[assigned_to_id] = tasks.get(assigned_to_id, 0) + karma_awarded * COMPLEXITY_WEIGHT.get(complexity, 1)
+    return {
+        user_id: daily.get(user_id, 0) * 25 + weekly.get(user_id, 0) * 50 + tasks.get(user_id, 0)
+        for user_id in user_ids
+    }
+
+
+def intern_streaks(user_ids):
+    """({user_id: daily streak}, {user_id: weekly streak}) in one query."""
+    streaks = UserStreak.objects.filter(user_id__in=list(user_ids)).only('user_id', 'streak_type', 'current_streak')
+    daily = {s.user_id: s.current_streak for s in streaks if s.streak_type == 'intern_timesheet'}
+    weekly = {s.user_id: s.current_streak for s in streaks if s.streak_type == 'intern_weekly_review'}
+    return daily, weekly
+
 
 class InternLeaderboardAPI(APIView):
     authentication_classes = [CustomizePermission]
@@ -28,68 +65,22 @@ class InternLeaderboardAPI(APIView):
         ).select_related('user')
         
         intern_user_ids = [intern.user_id for intern in interns]
-        
-        streaks = UserStreak.objects.filter(user_id__in=intern_user_ids)
-        daily_streaks = {s.user_id: s.current_streak for s in streaks if s.streak_type == 'intern_timesheet'}
-        weekly_streaks = {s.user_id: s.current_streak for s in streaks if s.streak_type == 'intern_weekly_review'}
-        
-        karma_logs = KarmaActivityLog.objects.filter(user_id__in=intern_user_ids, task__hashtag__startswith='#intern-')
-        karma_by_user = karma_logs.values('user_id').annotate(total=Sum('karma'))
-        karma_dict = {item['user_id']: item['total'] for item in karma_by_user}
-        
-        completed_tasks = InternTask.objects.filter(assigned_to_id__in=intern_user_ids, status='COMPLETED')
-        tasks_by_user = {}
-        for t in completed_tasks:
-            tasks_by_user.setdefault(t.assigned_to_id, []).append(t)
-            
-        approved_daily_timesheets = InternDailyTimesheet.objects.filter(user_id__in=intern_user_ids, status='APPROVED').values('user_id').annotate(total=Count('id'))
-        daily_ts_counts = {item['user_id']: item['total'] for item in approved_daily_timesheets}
-        
-        approved_weekly_reviews = InternWeeklyReview.objects.filter(user_id__in=intern_user_ids, status='APPROVED').values('user_id').annotate(total=Count('id'))
-        weekly_rv_counts = {item['user_id']: item['total'] for item in approved_weekly_reviews}
-        
-        verified_tasks = InternTask.objects.filter(assigned_to_id__in=intern_user_ids, is_verified=True)
-        verified_tasks_by_user = {}
-        for t in verified_tasks:
-            verified_tasks_by_user.setdefault(t.assigned_to_id, []).append(t)
+        # (Intern karma and completed-task lists were also loaded here but
+        # never used in the response; dropped.)
+        daily_streaks, weekly_streaks = intern_streaks(intern_user_ids)
+        scores = intern_scores(intern_user_ids)
 
-            
-        leaderboard_data = []
-        for intern in interns:
-            user_id = intern.user_id
-            
-            d_streak_val = daily_streaks.get(user_id, 0)
-            w_streak_val = weekly_streaks.get(user_id, 0)
-            total_intern_karma = karma_dict.get(user_id, 0)
-            
-            user_tasks = tasks_by_user.get(user_id, [])
-            completed_count = len(user_tasks)
-            
-            complexity_map = {'LOW': 1, 'MEDIUM': 2, 'HIGH': 3, 'CRITICAL': 5}
-            complexity_score = sum([complexity_map.get(t.complexity, 1) for t in user_tasks])
-            
-            approved_daily_timesheets_count = daily_ts_counts.get(user_id, 0)
-            approved_weekly_reviews_count = weekly_rv_counts.get(user_id, 0)
-            
-            user_verified_tasks = verified_tasks_by_user.get(user_id, [])
-            verified_intern_tasks_score = sum(
-                [t.karma_awarded * complexity_map.get(t.complexity, 1) for t in user_verified_tasks]
-            )
-            
-            score = (
-                approved_daily_timesheets_count * 25 +
-                approved_weekly_reviews_count * 50 +
-                verified_intern_tasks_score
-            )
-            
-            leaderboard_data.append({
-                "user_id": user_id,
+        leaderboard_data = [
+            {
+                "user_id": intern.user_id,
                 "full_name": intern.user.full_name,
                 "guild": intern.guild,
-                "score": score,
-                "daily_streak": d_streak_val,
-                "weekly_streak": w_streak_val
-            })
+                "score": scores[intern.user_id],
+                "daily_streak": daily_streaks.get(intern.user_id, 0),
+                "weekly_streak": weekly_streaks.get(intern.user_id, 0),
+            }
+            for intern in interns
+        ]
             
         leaderboard_data.sort(key=lambda x: x['score'], reverse=True)
         
@@ -137,65 +128,18 @@ class InternLeaderboardMeAPI(APIView):
         )
         
         intern_user_ids = [intern.user_id for intern in interns]
-        
-        streaks = UserStreak.objects.filter(user_id__in=intern_user_ids)
-        daily_streaks = {s.user_id: s.current_streak for s in streaks if s.streak_type == 'intern_timesheet'}
-        weekly_streaks = {s.user_id: s.current_streak for s in streaks if s.streak_type == 'intern_weekly_review'}
-        
-        karma_logs = KarmaActivityLog.objects.filter(user_id__in=intern_user_ids, task__hashtag__startswith='#intern-')
-        karma_by_user = karma_logs.values('user_id').annotate(total=Sum('karma'))
-        karma_dict = {item['user_id']: item['total'] for item in karma_by_user}
-        
-        completed_tasks = InternTask.objects.filter(assigned_to_id__in=intern_user_ids, status='COMPLETED')
-        tasks_by_user = {}
-        for t in completed_tasks:
-            tasks_by_user.setdefault(t.assigned_to_id, []).append(t)
-            
-        approved_daily_timesheets = InternDailyTimesheet.objects.filter(user_id__in=intern_user_ids, status='APPROVED').values('user_id').annotate(total=Count('id'))
-        daily_ts_counts = {item['user_id']: item['total'] for item in approved_daily_timesheets}
-        
-        approved_weekly_reviews = InternWeeklyReview.objects.filter(user_id__in=intern_user_ids, status='APPROVED').values('user_id').annotate(total=Count('id'))
-        weekly_rv_counts = {item['user_id']: item['total'] for item in approved_weekly_reviews}
-        
-        verified_tasks = InternTask.objects.filter(assigned_to_id__in=intern_user_ids, is_verified=True)
-        verified_tasks_by_user = {}
-        for t in verified_tasks:
-            verified_tasks_by_user.setdefault(t.assigned_to_id, []).append(t)
-            
-        leaderboard_data = []
-        for intern in interns:
-            uid = intern.user_id
-            
-            d_streak_val = daily_streaks.get(uid, 0)
-            w_streak_val = weekly_streaks.get(uid, 0)
-            total_intern_karma = karma_dict.get(uid, 0)
-            
-            user_tasks = tasks_by_user.get(uid, [])
-            completed_count = len(user_tasks)
-            
-            complexity_map = {'LOW': 1, 'MEDIUM': 2, 'HIGH': 3, 'CRITICAL': 5}
-            complexity_score = sum([complexity_map.get(t.complexity, 1) for t in user_tasks])
-            
-            approved_daily_timesheets_count = daily_ts_counts.get(uid, 0)
-            approved_weekly_reviews_count = weekly_rv_counts.get(uid, 0)
-            
-            user_verified_tasks = verified_tasks_by_user.get(uid, [])
-            verified_intern_tasks_score = sum(
-                [t.karma_awarded * complexity_map.get(t.complexity, 1) for t in user_verified_tasks]
-            )
-            
-            score = (
-                approved_daily_timesheets_count * 25 +
-                approved_weekly_reviews_count * 50 +
-                verified_intern_tasks_score
-            )
-            
-            leaderboard_data.append({
-                "user_id": uid,
-                "score": score,
-                "daily_streak": d_streak_val,
-                "weekly_streak": w_streak_val
-            })
+        daily_streaks, weekly_streaks = intern_streaks(intern_user_ids)
+        scores = intern_scores(intern_user_ids)
+
+        leaderboard_data = [
+            {
+                "user_id": intern.user_id,
+                "score": scores[intern.user_id],
+                "daily_streak": daily_streaks.get(intern.user_id, 0),
+                "weekly_streak": weekly_streaks.get(intern.user_id, 0),
+            }
+            for intern in interns
+        ]
             
         leaderboard_data.sort(key=lambda x: x['score'], reverse=True)
         

@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from django.db.models import Count, Max, Sum
+from django.db.models import Count, Max, Q, Sum
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.views import APIView
@@ -37,18 +37,28 @@ def _period_start(request, default_days=30):
 
 
 def _member_funnel(org):
-    registered = UserOrganizationLink.objects.filter(org=org).count()
-    onboarded = UserOrganizationLink.objects.filter(org=org, verified=True).count()
-    active = UserOrganizationLink.objects.filter(
-        org=org,
-        verified=True,
-        user__wallet_user__karma_last_updated_at__gte=timezone.now() - timedelta(days=30),
-    ).count()
-    level_2_plus = UserOrganizationLink.objects.filter(
-        org=org,
-        verified=True,
-        user__user_lvl_link_user__level__level_order__gte=2,
-    ).count()
+    # The four link counts come from one conditional aggregate (they were four
+    # COUNT queries). wallet and user_lvl_link are one row per user, so the
+    # joins do not change any count.
+    counts = UserOrganizationLink.objects.filter(org=org).aggregate(
+        registered=Count("id"),
+        onboarded=Count("id", filter=Q(verified=True)),
+        active=Count(
+            "id",
+            filter=Q(
+                verified=True,
+                user__wallet_user__karma_last_updated_at__gte=timezone.now() - timedelta(days=30),
+            ),
+        ),
+        level_2_plus=Count(
+            "id",
+            filter=Q(verified=True, user__user_lvl_link_user__level__level_order__gte=2),
+        ),
+    )
+    registered = counts["registered"]
+    onboarded = counts["onboarded"]
+    active = counts["active"]
+    level_2_plus = counts["level_2_plus"]
     circle_leads = UserCircleLink.objects.filter(
         circle__org=org,
         lead=True,
@@ -77,23 +87,40 @@ def _member_funnel(org):
 
 
 def _circle_health(org, since):
-    circles = LearningCircle.objects.filter(org=org).select_related("ig")
+    circles = list(LearningCircle.objects.filter(org=org).select_related("ig"))
+    circle_ids = [circle.id for circle in circles]
+    # Meeting stats and member counts for every circle in two grouped queries
+    # (this was two queries per circle).
+    meeting_stats = {
+        row["circle_id"]: row
+        for row in CircleMeetingLog.objects.filter(
+            circle_id__in=circle_ids,
+            meet_time__gte=since,
+        )
+        .values("circle_id")
+        .annotate(count=Count("id"), last=Max("meet_time"))
+        .order_by()
+    } if circle_ids else {}
+    member_counts = dict(
+        UserCircleLink.objects.filter(circle_id__in=circle_ids, accepted=True)
+        .values_list("circle_id")
+        .annotate(n=Count("id"))
+        .order_by()
+    ) if circle_ids else {}
     data = []
     for circle in circles:
-        meeting_stats = CircleMeetingLog.objects.filter(
-            circle_id=circle,
-            meet_time__gte=since,
-        ).aggregate(count=Count("id"), last=Max("meet_time"))
-        sessions = meeting_stats["count"] or 0
+        stats = meeting_stats.get(circle.id, {})
+        sessions = stats.get("count") or 0
+        last = stats.get("last")
         status_value = "active" if sessions >= 2 else "slow" if sessions == 1 else "inactive"
         data.append({
             "circle_id": str(circle.id),
             "circle_name": circle.title,
             "ig_id": str(circle.ig_id),
             "ig_name": circle.ig.name if circle.ig else None,
-            "member_count": UserCircleLink.objects.filter(circle=circle, accepted=True).count(),
+            "member_count": member_counts.get(circle.id, 0),
             "sessions_per_month": sessions,
-            "last_session_at": meeting_stats["last"].isoformat() if meeting_stats["last"] else None,
+            "last_session_at": last.isoformat() if last else None,
             "status": status_value,
         })
     return data
@@ -120,9 +147,13 @@ def _recent_activity(org, limit):
 
 
 def _campus_stats(org, since):
-    members = UserOrganizationLink.objects.filter(org=org, verified=True)
-    active_members = members.filter(user__wallet_user__karma_last_updated_at__gte=since).count()
-    total_karma = members.aggregate(total=Sum("user__wallet_user__karma")).get("total") or 0
+    # Active members and total karma in one aggregate (was a COUNT and a SUM).
+    member_stats = UserOrganizationLink.objects.filter(org=org, verified=True).aggregate(
+        active=Count("id", filter=Q(user__wallet_user__karma_last_updated_at__gte=since)),
+        total=Sum("user__wallet_user__karma"),
+    )
+    active_members = member_stats["active"]
+    total_karma = member_stats["total"] or 0
     active_circles = LearningCircle.objects.filter(org=org).count()
     period_karma = KarmaActivityLog.objects.filter(
         user__user_organization_link_user__org=org,

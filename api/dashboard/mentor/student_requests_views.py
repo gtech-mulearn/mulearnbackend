@@ -92,20 +92,26 @@ class StudentSessionRequestListAPI(APIView):
             sessions = sessions.filter(status=status_filter)
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            sessions, request,
+            sessions.select_related("requested_by"), request,
             search_fields=["title", "description"],
             sort_fields={"created_at": "created_at", "starts_at": "starts_at"},
         )
+        return _request_list_response(paginated_queryset)
 
-        serializer = serializers.StudentSessionRequestListSerializer(
-            paginated_queryset.get("queryset"), many=True
-        )
-        return CustomResponse(
-            response={
-                "data": serializer.data,
-                "pagination": paginated_queryset.get("pagination"),
-            }
-        ).get_success_response()
+
+def _request_list_response(paginated_queryset):
+    """Serialize a page of session requests with the IG/org names loaded once."""
+    page = list(paginated_queryset.get("queryset"))
+    ig_map, org_map = serializers.SessionListSerializer.build_entity_maps(page)
+    serializer = serializers.StudentSessionRequestListSerializer(
+        page, many=True, context={"ig_map": ig_map, "org_map": org_map}
+    )
+    return CustomResponse(
+        response={
+            "data": serializer.data,
+            "pagination": paginated_queryset.get("pagination"),
+        }
+    ).get_success_response()
 
 
 class MentorStudentRequestListAPI(APIView):
@@ -175,20 +181,11 @@ class MentorStudentRequestListAPI(APIView):
                 )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            sessions, request,
+            sessions.select_related("requested_by"), request,
             search_fields=["title", "requested_by__full_name"],
             sort_fields={"created_at": "created_at", "starts_at": "starts_at"},
         )
-
-        serializer = serializers.StudentSessionRequestListSerializer(
-            paginated_queryset.get("queryset"), many=True
-        )
-        return CustomResponse(
-            response={
-                "data": serializer.data,
-                "pagination": paginated_queryset.get("pagination"),
-            }
-        ).get_success_response()
+        return _request_list_response(paginated_queryset)
 
 
 class MentorStudentRequestVerifyAPI(APIView):

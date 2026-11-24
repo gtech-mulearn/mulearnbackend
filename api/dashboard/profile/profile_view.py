@@ -382,9 +382,12 @@ class UserLogAPI(APIView):
             JWTUtils.is_jwt_authenticated(request)
             user_id = JWTUtils.fetch_user_id(request)
 
+        # The response is the whole approved log (the frontend does not page
+        # it), so only the three columns the serializer reads are loaded.
         karma_activity_log = (
             KarmaActivityLog.objects.filter(user=user_id, appraiser_approved=True)
             .select_related("task")
+            .only("karma", "created_at", "task__title")
             .order_by("-created_at")
         )
 
@@ -697,11 +700,18 @@ class BadgesAPI(APIView):
             user = User.objects.get(muid=muid)
             hastags = TFPTasksHashtags.get_all_values()
             response_data = {"full_name": user.full_name, "completed_tasks": []}
+            # One query for all hashtags (was one per hashtag). For each
+            # hashtag the lowest-id log wins, the row .first() returned.
+            first_title = {}
+            for tag, title in (
+                KarmaActivityLog.objects.filter(user=user, task__hashtag__in=hastags)
+                .order_by("pk")
+                .values_list("task__hashtag", "task__title")
+            ):
+                first_title.setdefault(tag, title)
             for tag in hastags:
-                if log := KarmaActivityLog.objects.filter(
-                    user=user, task__hashtag=tag
-                ).first():
-                    response_data["completed_tasks"].append(log.task.title)
+                if tag in first_title:
+                    response_data["completed_tasks"].append(first_title[tag])
             return CustomResponse(response=response_data).get_success_response()
         except User.DoesNotExist:
             return CustomResponse(

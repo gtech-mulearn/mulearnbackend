@@ -137,7 +137,9 @@ class DynamicUserListSerializer(serializers.ModelSerializer):
     users = serializers.SerializerMethodField()
 
     def get_users(self, obj):
-        dynamic_users = DynamicUser.objects.filter(type=obj['type'])
+        # prefetch, not select_related: same query (and row order) as before,
+        # plus one query for the users instead of one per dynamic user.
+        dynamic_users = DynamicUser.objects.filter(type=obj['type']).prefetch_related('user')
         return [
             {
                 'dynamic_user_id': dynamic_user.id,
