@@ -88,40 +88,52 @@ _UNSET = object()
 
 def resolve_muid(raw):
     """
-    (user_id, error). ``None``/blank clears the mention (user_id None). An unknown muid is a 400.
+    (user, error). ``None``/blank clears the mention (user None). An unknown muid is a 400.
     Suspended users are excluded (``User.objects``): they can't receive the notification.
     """
     muid = (raw or "").strip()
     if not muid:
         return None, None
-    user_id = User.objects.filter(muid=muid).values_list("id", flat=True).first()
-    if not user_id:
+    user = User.objects.filter(muid=muid).only("id").first()
+    if not user:
         return None, failure("No user found with this muid.")
-    return user_id, None
+    return user, None
 
 
-def notify_on_behalf_of(user_id, statement, actor_id):
-    """Best-effort in-app notification; a failure here must never fail the write."""
-    if not user_id or user_id == actor_id:
+def notify_on_behalf_of(user, statement, actor_id, created):
+    """
+    Best-effort in-app notification; a failure here must never fail the write.
+    No button/link: the statement may still be a Draft, which the user cannot open.
+    """
+    if user is None or user.id == actor_id:
         return
     try:
         from api.notification.notifications_utils import NotificationUtils
+        if created:
+            title = "Problem statement drafted for you"
+            description = f'A problem statement "{statement.title}" was created on your behalf.'
+        else:
+            title = "Added to a problem statement"
+            description = f'You were added to the problem statement "{statement.title}" as the person it is on behalf of.'
         NotificationUtils.insert_notification(
-            user=User.objects.get(id=user_id),
-            title="Problem statement created for you",
-            description=f'A problem statement "{statement.title}" was created on your behalf.',
-            button="View", url=None, created_by_id=actor_id,
+            user=user, title=title, description=description,
+            button=None, url=None, created_by_id=actor_id,
         )
     except Exception:
         logger.exception("Failed to notify on-behalf-of user for problem statement %s", statement.id)
 
 
-def apply_changes(statement_id, data, user_id, on_behalf_of_id=_UNSET):
-    """Returns an error response, or None on success. ``on_behalf_of_id`` None clears the mention."""
+def apply_changes(statement_id, data, user_id, on_behalf_of_id=_UNSET, result=None):
+    """
+    Returns an error response, or None on success. ``on_behalf_of_id`` None clears the mention.
+    If a ``result`` dict is passed it receives ``previous_on_behalf_of_id``, read under the row lock.
+    """
     with transaction.atomic():
         statement = ProblemStatement.objects.select_for_update().filter(id=statement_id).first()
         if not statement:
             return not_found()
+        if result is not None:
+            result["previous_on_behalf_of_id"] = statement.on_behalf_of_id
         changed = [field for field in EDITABLE_FIELDS if field in data]
         for field in changed:
             setattr(statement, field, data[field])

@@ -132,7 +132,7 @@ class ListCreateBase(ManageBase):
         if not serializer.is_valid():
             return CustomResponse(message=serializer.errors).get_failure_response()
         data = serializer.validated_data
-        on_behalf_of_id, error = ps_utils.resolve_muid(data.get("muid"))
+        on_behalf_of, error = ps_utils.resolve_muid(data.get("muid"))
         if error:
             return error
         source = ProblemStatement.Source.COMPANY if company else ProblemStatement.Source.MULEARN
@@ -147,7 +147,7 @@ class ListCreateBase(ManageBase):
                     deadline=data.get("deadline"),
                     status=ProblemStatement.Status.DRAFT,
                     source=source,
-                    on_behalf_of_id=on_behalf_of_id,
+                    on_behalf_of=on_behalf_of,
                     created_by_id=user_id,
                     updated_by_id=user_id,
                 )
@@ -159,7 +159,7 @@ class ListCreateBase(ManageBase):
             if not User.objects.filter(id=user_id).exists():
                 return ps_utils.failure("User not found.", 404)
             raise
-        ps_utils.notify_on_behalf_of(on_behalf_of_id, statement, user_id)
+        ps_utils.notify_on_behalf_of(on_behalf_of, statement, user_id, created=True)
         statement = self.fresh(statement.id)
         return CustomResponse(
             general_message="Problem statement created.", response=self.render(statement)
@@ -187,17 +187,19 @@ class DetailBase(ManageBase):
             return CustomResponse(message=serializer.errors).get_failure_response()
         data = serializer.validated_data
         user_id = JWTUtils.fetch_user_id(request)
-        kwargs = {}
+        kwargs, mentioned = {}, None
         if "muid" in data:
-            kwargs["on_behalf_of_id"], error = ps_utils.resolve_muid(data["muid"])
+            mentioned, error = ps_utils.resolve_muid(data["muid"])
             if error:
                 return error
-        error = ps_utils.apply_changes(statement.id, data, user_id, **kwargs)
+            kwargs["on_behalf_of_id"] = mentioned.id if mentioned else None
+        outcome = {}
+        error = ps_utils.apply_changes(statement.id, data, user_id, result=outcome, **kwargs)
         if error:
             return error
-        new_id = kwargs.get("on_behalf_of_id")
-        if new_id and new_id != statement.on_behalf_of_id:
-            ps_utils.notify_on_behalf_of(new_id, statement, user_id)
+        # Compare with the value read under the row lock, not the one read before it.
+        if mentioned and mentioned.id != outcome.get("previous_on_behalf_of_id"):
+            ps_utils.notify_on_behalf_of(mentioned, statement, user_id, created=False)
         return CustomResponse(
             general_message="Problem statement updated.", response=self.render(self.fresh(statement.id))
         ).get_success_response()
