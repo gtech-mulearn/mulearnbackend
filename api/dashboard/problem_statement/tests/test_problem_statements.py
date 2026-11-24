@@ -588,7 +588,7 @@ def test_admin_creates_on_behalf_of_user_and_notifies(world):
     assert res.status_code == 200
     body = res.json()["response"]
     assert body["on_behalf_of"] == {"id": target.id, "muid": target.muid, "full_name": target.full_name}
-    assert Notification.objects.filter(user=target, title="Problem statement created for you").count() == 1
+    assert Notification.objects.filter(user=target, title="Problem statement drafted for you").count() == 1
 
 
 def test_admin_unknown_muid_rejected(world):
