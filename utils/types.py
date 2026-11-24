@@ -251,6 +251,8 @@ class InternHashtag(Enum):
     DAILY_LOG_HASHTAG = "#intern-daily-log"
     WEEKLY_REVIEW_KARMA = 0
     WEEKLY_REVIEW_HASHTAG = "#intern-weekly-review"
+    MONTHLY_REVIEW_KARMA = 0
+    MONTHLY_REVIEW_HASHTAG = "#intern-monthly-review"
     TASK_VERIFIED_HASHTAG = "#intern-task-verified"
     STREAK_7_KARMA = 7
     STREAK_7_HASHTAG = "#intern-streak-7"
@@ -305,6 +307,21 @@ class InternSubmissionStatus(Enum):
     PENDING = "PENDING"
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
+    # Daily timesheets no longer go through admin review: a new timesheet is
+    # stored as SUBMITTED and counts immediately. Weekly reviews still use
+    # PENDING/APPROVED/REJECTED.
+    SUBMITTED = "SUBMITTED"
+
+
+# Daily timesheet statuses that count toward the streak, milestone karma and
+# the intern leaderboard. PENDING is included so timesheets that were still
+# awaiting review when admin approval was removed are counted without a data
+# migration. REJECTED never counts.
+COUNTED_TIMESHEET_STATUSES = [
+    InternSubmissionStatus.APPROVED.value,
+    InternSubmissionStatus.SUBMITTED.value,
+    InternSubmissionStatus.PENDING.value,
+]
 
 class InternLeaveType(Enum):
     SICK = "SICK"

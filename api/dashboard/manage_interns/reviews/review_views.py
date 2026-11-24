@@ -1,99 +1,37 @@
-from datetime import timedelta
+from datetime import date
 import uuid
 
 from django.db import transaction
 from django.utils.timezone import now
 from rest_framework.views import APIView
-from drf_spectacular.utils import extend_schema, OpenApiResponse
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse
 
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
-from utils.types import RoleType, InternSubmissionStatus, InternGuildStatus, InternHashtag
-from db.intern import InternDailyTimesheet, UserInternGuildLink, InternWeeklyReview
+from utils.types import RoleType, InternSubmissionStatus, InternHashtag
+from db.intern import InternDailyTimesheet, InternWeeklyReview, InternMonthlyReview
 from db.task import KarmaActivityLog, TaskList, Wallet
 from db.achievement import UserStreak
 from utils.utils import CommonUtils
 from utils.karma import notify_karma_change
 from api.notification.types import NotificationType
-from .serializers import ManageInternWeeklyReviewSerializer, ManageInternTimesheetSerializer
+from api.dashboard.intern.monthly_review.leave import leave_days_by_review
+from .serializers import (
+    ManageInternWeeklyReviewSerializer,
+    ManageInternTimesheetSerializer,
+    ManageInternMonthlyReviewSerializer,
+)
+
+REVIEW_NOTE_MAX_LENGTH = 300
+# Monthly review admin endpoints leave out the plain Intern role that the
+# older manage-interns endpoints allow, so an intern cannot approve their own
+# monthly review.
+MONTHLY_REVIEW_ADMIN_ROLES = [RoleType.ADMIN.value, RoleType.INTERN_LEAD.value]
 
 
 # ============================================================================
 # Streak Recalculation Helpers
 # ============================================================================
-
-def recalculate_intern_timesheet_streak(user_id: str) -> dict:
-    """
-    Recalculates the intern_timesheet streak from scratch by looking at the
-    entire history of approved timesheets, sorted chronologically.
-
-    This is order-independent: the result is identical regardless of the
-    order the admin approved individual timesheets.
-
-    Returns:
-        dict with keys:
-            - current_streak (int): The streak ending at the latest entry_date
-            - longest_streak (int): The overall longest continuous streak
-            - last_active (date | None): The most recent approved entry_date
-            - milestone_hits (dict): {milestone_days: count_of_times_reached}
-    """
-    approved_dates = list(
-        InternDailyTimesheet.objects.filter(
-            user_id=user_id,
-            status=InternSubmissionStatus.APPROVED.value,
-        )
-        .order_by('entry_date')
-        .values_list('entry_date', flat=True)
-        .distinct()  # Guard against duplicate approvals for the same date
-    )
-
-    if not approved_dates:
-        return {
-            'current_streak': 0,
-            'longest_streak': 0,
-            'last_active': None,
-            'milestone_hits': {},
-        }
-
-    milestones = [7, 14, 30, 60, 90]
-    milestone_hits = {m: 0 for m in milestones}
-
-    current = 1
-    longest = 1
-    for m in milestones:
-        if current >= m:
-            milestone_hits[m] += 1
-
-    for i in range(1, len(approved_dates)):
-        prev = approved_dates[i - 1]
-        curr = approved_dates[i]
-        diff = (curr - prev).days
-
-        # Consecutive: next calendar day, OR Friday→Monday (skipping weekend)
-        is_consecutive = (
-            diff == 1 or
-            (diff == 3 and curr.weekday() == 0 and prev.weekday() == 4)
-        )
-
-        if is_consecutive:
-            current += 1
-        elif diff > 0:
-            # Gap — streak resets
-            current = 1
-        # diff == 0 means duplicate date (already deduped, but just in case)
-
-        longest = max(longest, current)
-        for m in milestones:
-            if current == m:
-                milestone_hits[m] += 1
-
-    return {
-        'current_streak': current,
-        'longest_streak': longest,
-        'last_active': approved_dates[-1],
-        'milestone_hits': milestone_hits,
-    }
-
 
 def recalculate_intern_weekly_streak(user_id: str) -> dict:
     """
@@ -149,78 +87,23 @@ def recalculate_intern_weekly_streak(user_id: str) -> dict:
     }
 
 
-def _award_missing_milestone_karma(user_id: str, admin_id: str, milestone_hits: dict, milestone_map: dict):
-    """
-    Awards milestone karma for any gaps between expected and actual hits.
-
-    Uses "Expected vs Actual" logic:
-      - expected_hits: how many times the streak crossed a milestone (from recalculation)
-      - actual_hits:   how many times we already gave karma for that milestone
-
-    Only awards the *difference*, so this is idempotent and safe to call on
-    every approval regardless of order.
-
-    Args:
-        user_id:       The intern's user ID
-        admin_id:      The admin performing the approval (used as created_by)
-        milestone_hits: {milestone_days: expected_hit_count} from recalculate_*
-        milestone_map:  {milestone_days: (hashtag, bonus_karma)}
-    """
-    from django.db.models import F
-
-    for milestone_days, (hashtag, bonus_karma) in milestone_map.items():
-        expected = milestone_hits.get(milestone_days, 0)
-        if expected == 0:
-            continue
-
-        task_list = TaskList.objects.filter(hashtag=hashtag).first()
-        if not task_list:
-            continue
-
-        actual = KarmaActivityLog.objects.filter(
-            user_id=user_id,
-            task=task_list,
-            appraiser_approved=True,
-        ).count()
-
-        missing = expected - actual
-        if missing <= 0:
-            continue
-
-        wallet, _ = Wallet.objects.get_or_create(
-            user_id=user_id,
-            defaults={'created_by_id': admin_id, 'updated_by_id': admin_id}
-        )
-
-        for _ in range(missing):
-            kal = KarmaActivityLog.objects.create(
-                id=str(uuid.uuid4()),
-                user_id=user_id,
-                task=task_list,
-                karma=bonus_karma,
-                appraiser_approved=True,
-                updated_by_id=admin_id,
-                updated_at=now(),
-                created_by_id=admin_id,
-                created_at=now(),
-            )
-            notify_karma_change(
-                NotificationType.KARMA_AWARDED, user_id, admin_id, task_list.title, bonus_karma, kal.id
-            )
-        Wallet.objects.filter(id=wallet.id).update(karma=F('karma') + (bonus_karma * missing))
-
-
 class InternTimesheetReviewAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
+    # Read-only: daily timesheets are no longer approved or rejected by admins —
+    # they count as soon as the intern submits them. The former PATCH
+    # (approve/reject) has been removed; its streak/karma logic now runs on
+    # submit (api/dashboard/intern/timesheet/streak.py).
+    # Plain interns are excluded: this returns any intern's timesheet by id.
+    # Interns read their own through intern/timesheets/.
+    @role_required([RoleType.ADMIN.value, RoleType.INTERN_LEAD.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
-        description="Retrieve a timesheet for review.",
+        description="Retrieve a single intern timesheet (read-only).",
         responses={200: ManageInternTimesheetSerializer},
     )
     def get(self, request, timesheet_id):
-        timesheet = InternDailyTimesheet.objects.filter(id=timesheet_id).first()
+        timesheet = InternDailyTimesheet.objects.select_related('user').filter(id=timesheet_id).first()
         if not timesheet:
             return CustomResponse(general_message="Timesheet not found.").get_failure_response()
         serializer = ManageInternTimesheetSerializer(timesheet)
@@ -229,98 +112,16 @@ class InternTimesheetReviewAPI(APIView):
     @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
-        description="Approve or reject a timesheet.",
-        responses={200: OpenApiResponse(description="Timesheet reviewed successfully.")},
+        description="Deprecated: daily timesheets no longer require approval. Always returns a failure.",
+        responses={400: OpenApiResponse(description="Timesheet approval has been removed.")},
     )
     def patch(self, request, timesheet_id):
-        admin_id = JWTUtils.fetch_user_id(request)
-        action = request.data.get("action")
-        review_note = request.data.get("review_note")
-        
-        if action not in ["approve", "reject"]:
-            return CustomResponse(general_message="Invalid action. Must be 'approve' or 'reject'.").get_failure_response()
-            
-        timesheet = InternDailyTimesheet.objects.filter(id=timesheet_id, status=InternSubmissionStatus.PENDING.value).first()
-        if not timesheet:
-            return CustomResponse(general_message="Pending timesheet not found.").get_failure_response()
-            
-        with transaction.atomic():
-            if action == "approve":
-                timesheet.status = InternSubmissionStatus.APPROVED.value
-                timesheet.reviewed_by_id = admin_id
-                timesheet.reviewed_at = now()
-                # Save the approved status first so the recalculation includes this timesheet
-                timesheet.save()
+        # Kept so clients still calling approve/reject get the standard
+        # envelope with a clear message instead of a bare 405.
+        return CustomResponse(
+            general_message="Daily timesheets no longer require approval; they count as soon as they are submitted."
+        ).get_failure_response()
 
-                user_id = timesheet.user_id
-
-                # --- Ground-up streak recalculation (order-independent) ---
-                recalc = recalculate_intern_timesheet_streak(user_id)
-
-                streak, _ = UserStreak.objects.get_or_create(user_id=user_id, streak_type='intern_timesheet')
-                streak.current_streak = recalc['current_streak']
-                streak.longest_streak = recalc['longest_streak']
-                streak.last_active = recalc['last_active']
-                streak.save()
-
-                # --- Base karma with streak multiplier ---
-                base_karma = InternHashtag.DAILY_LOG_KARMA.value
-                multiplier = 1.0
-                if streak.current_streak >= 30:
-                    multiplier = 2.0
-                elif streak.current_streak >= 14:
-                    multiplier = 1.5
-                elif streak.current_streak >= 7:
-                    multiplier = 1.2
-
-                karma_to_award = int(base_karma * multiplier)
-
-                task_list = TaskList.objects.filter(hashtag=InternHashtag.DAILY_LOG_HASHTAG.value).first()
-                if task_list:
-                    kal = KarmaActivityLog.objects.create(
-                        id=str(uuid.uuid4()),
-                        user_id=user_id,
-                        task=task_list,
-                        karma=karma_to_award,
-                        appraiser_approved=True,
-                        updated_by_id=admin_id,
-                        updated_at=now(),
-                        created_by_id=admin_id,
-                        created_at=now(),
-                    )
-                    from django.db.models import F
-                    wallet, _ = Wallet.objects.get_or_create(user_id=user_id, defaults={'created_by_id': admin_id, 'updated_by_id': admin_id})
-                    Wallet.objects.filter(id=wallet.id).update(karma=F('karma') + karma_to_award)
-                    notify_karma_change(
-                        NotificationType.KARMA_AWARDED, user_id, admin_id, task_list.title, karma_to_award, kal.id
-                    )
-
-                # --- Milestone karma (Expected vs Actual — idempotent) ---
-                milestone_map = {
-                    7:  (InternHashtag.STREAK_7_HASHTAG.value,  InternHashtag.STREAK_7_KARMA.value),
-                    14: (InternHashtag.STREAK_14_HASHTAG.value, InternHashtag.STREAK_14_KARMA.value),
-                    30: (InternHashtag.STREAK_30_HASHTAG.value, InternHashtag.STREAK_30_KARMA.value),
-                    60: (InternHashtag.STREAK_60_HASHTAG.value, InternHashtag.STREAK_60_KARMA.value),
-                    90: (InternHashtag.STREAK_90_HASHTAG.value, InternHashtag.STREAK_90_KARMA.value),
-                }
-                _award_missing_milestone_karma(user_id, admin_id, recalc['milestone_hits'], milestone_map)
-
-                guild_link = UserInternGuildLink.objects.filter(user_id=user_id).first()
-                if guild_link and guild_link.status == InternGuildStatus.AT_RISK.value:
-                    guild_link.status = InternGuildStatus.ACTIVE.value
-                    guild_link.save()
-
-                # timesheet was already saved above; return early
-                return CustomResponse(general_message="Timesheet approved successfully.").get_success_response()
-
-            elif action == "reject":
-                timesheet.status = InternSubmissionStatus.REJECTED.value
-                timesheet.reviewed_by_id = admin_id
-                timesheet.reviewed_at = now()
-                timesheet.review_note = review_note
-
-            timesheet.save()
-            return CustomResponse(general_message="Timesheet rejected successfully.").get_success_response()
 
 class InternWeeklyReviewReviewAPI(APIView):
     authentication_classes = [CustomizePermission]
@@ -448,23 +249,51 @@ class InternWeeklyReviewListAPI(APIView):
 class InternTimesheetListAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
+    # Plain interns are excluded: this lists every intern's timesheets.
+    # Interns read their own through intern/timesheets/.
+    @role_required([RoleType.ADMIN.value, RoleType.INTERN_LEAD.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
-        description="List timesheets with filters.",
+        description=(
+            "List intern timesheets (read-only). Optional filters: "
+            "`muid` (exact), `date_from` / `date_to` (YYYY-MM-DD, on entry_date, inclusive), "
+            "`status` (legacy rows may be APPROVED/REJECTED/PENDING; new ones are SUBMITTED)."
+        ),
+        parameters=[
+            OpenApiParameter(name='muid', description='Intern muid', required=False, type=str),
+            OpenApiParameter(name='date_from', description='entry_date >= (YYYY-MM-DD)', required=False, type=str),
+            OpenApiParameter(name='date_to', description='entry_date <= (YYYY-MM-DD)', required=False, type=str),
+            OpenApiParameter(name='status', description='Timesheet status', required=False, type=str),
+        ],
         responses={200: ManageInternTimesheetSerializer(many=True)},
     )
     def get(self, request):
-        timesheets = InternDailyTimesheet.objects.all().order_by('-created_at')
-        
+        timesheets = InternDailyTimesheet.objects.select_related('user').order_by('-created_at')
+
+        muid = request.query_params.get('muid')
+        if muid:
+            timesheets = timesheets.filter(user__muid=muid)
+
+        for param, lookup in (('date_from', 'entry_date__gte'), ('date_to', 'entry_date__lte')):
+            value = request.query_params.get(param)
+            if not value:
+                continue
+            try:
+                parsed = date.fromisoformat(value)
+            except ValueError:
+                return CustomResponse(
+                    general_message=f"Invalid {param}. Use YYYY-MM-DD."
+                ).get_failure_response()
+            timesheets = timesheets.filter(**{lookup: parsed})
+
         status = request.query_params.get('status')
         if status:
             timesheets = timesheets.filter(status=status)
-            
+
         paginated_queryset = CommonUtils.get_paginated_queryset(
             timesheets, request,
-            ['user__full_name', 'status'],
-            {'created_at': 'created_at', 'status': 'status'}
+            ['user__full_name', 'user__muid', 'status'],
+            {'created_at': 'created_at', 'entry_date': 'entry_date', 'status': 'status'}
         )
         
         serializer = ManageInternTimesheetSerializer(paginated_queryset.get("queryset"), many=True)
@@ -473,4 +302,179 @@ class InternTimesheetListAPI(APIView):
                 "data": serializer.data,
                 "pagination": paginated_queryset.get("pagination")
             }
+        ).get_success_response()
+
+
+# ============================================================================
+# Monthly reviews
+# ============================================================================
+
+def log_monthly_review_activity(user_id: str, actor_id: str):
+    """
+    Writes the #intern-monthly-review activity row so an approved review shows
+    in the intern's Quest Log. Skipped when the task_list row is missing.
+    Karma is InternHashtag.MONTHLY_REVIEW_KARMA (currently 0); the wallet and
+    a karma notification are only touched when it is > 0. No streak.
+    """
+    task_list = TaskList.objects.filter(hashtag=InternHashtag.MONTHLY_REVIEW_HASHTAG.value).first()
+    if not task_list:
+        return
+
+    karma = InternHashtag.MONTHLY_REVIEW_KARMA.value
+    kal = KarmaActivityLog.objects.create(
+        id=str(uuid.uuid4()),
+        user_id=user_id,
+        task=task_list,
+        karma=karma,
+        appraiser_approved=True,
+        updated_by_id=actor_id,
+        updated_at=now(),
+        created_by_id=actor_id,
+        created_at=now(),
+    )
+
+    if karma > 0:
+        from django.db.models import F
+        wallet, _ = Wallet.objects.get_or_create(
+            user_id=user_id, defaults={'created_by_id': actor_id, 'updated_by_id': actor_id}
+        )
+        Wallet.objects.filter(id=wallet.id).update(karma=F('karma') + karma)
+        notify_karma_change(
+            NotificationType.KARMA_AWARDED, user_id, actor_id, task_list.title, karma, kal.id
+        )
+
+
+class InternMonthlyReviewListAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required(MONTHLY_REVIEW_ADMIN_ROLES)
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description=(
+            "List intern monthly reviews, newest month first. Optional filters: "
+            "`status` (PENDING/APPROVED/REJECTED), `year`, `month` (1-12), `muid` (exact). "
+            "`search` matches name, muid and team. `leave_days` is the intern's approved "
+            "leave days (WFH included) in the review month, worked out from leave requests."
+        ),
+        parameters=[
+            OpenApiParameter(name='status', description='Review status', required=False, type=str),
+            OpenApiParameter(name='year', description='Reviewed year, e.g. 2026', required=False, type=int),
+            OpenApiParameter(name='month', description='Reviewed month, 1-12', required=False, type=int),
+            OpenApiParameter(name='muid', description='Intern muid', required=False, type=str),
+        ],
+        responses={200: ManageInternMonthlyReviewSerializer(many=True)},
+    )
+    def get(self, request):
+        reviews = InternMonthlyReview.objects.select_related('user').order_by('-year', '-month', '-created_at')
+
+        status = request.query_params.get('status')
+        if status:
+            reviews = reviews.filter(status=status)
+
+        muid = request.query_params.get('muid')
+        if muid:
+            reviews = reviews.filter(user__muid=muid)
+
+        for param, low, high in (('year', 2000, 2100), ('month', 1, 12)):
+            value = request.query_params.get(param)
+            if not value:
+                continue
+            try:
+                parsed = int(value)
+            except ValueError:
+                parsed = None
+            if parsed is None or not low <= parsed <= high:
+                return CustomResponse(
+                    general_message=f"Invalid {param}. Use a number from {low} to {high}."
+                ).get_failure_response()
+            reviews = reviews.filter(**{param: parsed})
+
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            reviews, request,
+            ['user__full_name', 'user__muid', 'team'],
+            {'created_at': 'created_at', 'year': 'year', 'month': 'month', 'status': 'status'}
+        )
+
+        # One leave query for the whole page instead of one per review.
+        page = list(paginated_queryset.get("queryset"))
+        serializer = ManageInternMonthlyReviewSerializer(
+            page, many=True, context={'leave_days': leave_days_by_review(page)}
+        )
+        return CustomResponse(
+            response={
+                "data": serializer.data,
+                "pagination": paginated_queryset.get("pagination")
+            }
+        ).get_success_response()
+
+
+class InternMonthlyReviewReviewAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required(MONTHLY_REVIEW_ADMIN_ROLES)
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="Retrieve one intern monthly review.",
+        responses={200: ManageInternMonthlyReviewSerializer},
+    )
+    def get(self, request, review_id):
+        review = InternMonthlyReview.objects.select_related('user').filter(id=review_id).first()
+        if not review:
+            return CustomResponse(general_message="Monthly review not found.").get_failure_response()
+        return CustomResponse(
+            response=ManageInternMonthlyReviewSerializer(review).data
+        ).get_success_response()
+
+    @role_required(MONTHLY_REVIEW_ADMIN_ROLES)
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description=(
+            "Approve or reject a pending monthly review. Body: "
+            "`{\"action\": \"approve\" | \"reject\", \"review_note\": \"...\"}` "
+            "(review_note optional, max 300 characters). A rejected review can be "
+            "resubmitted by the intern while its window is still open."
+        ),
+        responses={200: ManageInternMonthlyReviewSerializer},
+    )
+    def patch(self, request, review_id):
+        admin_id = JWTUtils.fetch_user_id(request)
+        action = request.data.get("action")
+        review_note = request.data.get("review_note")
+
+        if action not in ("approve", "reject"):
+            return CustomResponse(general_message="Invalid action. Must be 'approve' or 'reject'.").get_failure_response()
+        if review_note is not None and not isinstance(review_note, str):
+            return CustomResponse(general_message="review_note must be text.").get_failure_response()
+        review_note = (review_note or "").strip() or None
+        if review_note and len(review_note) > REVIEW_NOTE_MAX_LENGTH:
+            return CustomResponse(
+                general_message=f"review_note cannot exceed {REVIEW_NOTE_MAX_LENGTH} characters."
+            ).get_failure_response()
+
+        with transaction.atomic():
+            review = (
+                # No select_related here: FOR UPDATE would also lock the joined user row.
+                InternMonthlyReview.objects.select_for_update()
+                .filter(id=review_id, status=InternSubmissionStatus.PENDING.value)
+                .first()
+            )
+            if not review:
+                return CustomResponse(general_message="Pending monthly review not found.").get_failure_response()
+
+            review.status = (
+                InternSubmissionStatus.APPROVED.value if action == "approve"
+                else InternSubmissionStatus.REJECTED.value
+            )
+            review.reviewed_by_id = admin_id
+            review.reviewed_at = now()
+            review.review_note = review_note
+            review.updated_by_id = admin_id
+            review.save(update_fields=['status', 'reviewed_by', 'reviewed_at', 'review_note', 'updated_by', 'updated_at'])
+
+            if action == "approve":
+                log_monthly_review_activity(review.user_id, admin_id)
+
+        return CustomResponse(
+            general_message=f"Monthly review {action}d successfully.",
+            response=ManageInternMonthlyReviewSerializer(review).data,
         ).get_success_response()

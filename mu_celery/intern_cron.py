@@ -1,10 +1,15 @@
+import calendar
+
 from celery import shared_task
-from django.utils.timezone import now
 from datetime import timedelta
-from db.intern import UserInternGuildLink, InternDailyTimesheet, InternTask
-from utils.types import InternGuildStatus, InternTaskStatus
-from db.intern import UserInternGuildLink, InternDailyTimesheet, InternLeaveRequest
-from utils.types import InternGuildStatus, InternLeaveStatus
+from db.intern import UserInternGuildLink, InternDailyTimesheet, InternTask, InternLeaveRequest
+from utils.types import InternGuildStatus, InternTaskStatus, InternLeaveStatus
+from utils.utils import DateTimeUtils
+
+# Interns may still submit yesterday's timesheet today (IST), so the missed-day
+# scan starts from the day before yesterday — a day that can still be
+# submitted is never counted as missed.
+MISSED_DAY_SCAN_START_OFFSET = 2
 
 @shared_task
 def intern_daily_status_cron():
@@ -13,12 +18,14 @@ def intern_daily_status_cron():
     Rules:
     - >= 6 missed timesheets (out of last 10 working days) -> AT_RISK
     - >= 10 missed timesheets (out of last 10 working days) -> INACTIVE
+    Working days are counted back from the day before yesterday (IST).
     """
     active_interns = UserInternGuildLink.objects.filter(
         status__in=[InternGuildStatus.ACTIVE.value, InternGuildStatus.AT_RISK.value]
     )
     
-    today = now().date()
+    # Same IST day boundaries as timesheet submission.
+    today = DateTimeUtils.get_ist_today()
     
     # 1. Batch fetch all timesheets for the last 20 days (to cover 10 working days)
     date_range_start = today - timedelta(days=20)
@@ -59,7 +66,7 @@ def intern_daily_status_cron():
     for intern in active_interns:
         missed_count = 0
         days_checked = 0
-        days_back = 1
+        days_back = MISSED_DAY_SCAN_START_OFFSET
         
         while days_checked < 10:
             check_date = today - timedelta(days=days_back)
@@ -142,9 +149,9 @@ def intern_task_deadline_cron():
     """
     Cron job to evaluate intern tasks deadline.
     Rules:
-    - If deadline < today and status != COMPLETED and not verified -> OVERDUE
+    - If deadline < today (IST) and status != COMPLETED and not verified -> OVERDUE
     """
-    today = now().date()
+    today = DateTimeUtils.get_ist_today()
     overdue_tasks = InternTask.objects.filter(
         deadline__lt=today,
         is_verified=False
@@ -153,3 +160,67 @@ def intern_task_deadline_cron():
     for task in overdue_tasks:
         task.status = InternTaskStatus.OVERDUE.value
         task.save()
+
+
+@shared_task
+def intern_monthly_review_window_cron():
+    """
+    Monthly review window notifications. Scheduled daily at 00:05 IST.
+
+    - Window's first day: "review is open" to every intern who isn't INACTIVE
+      (ON_LEAVE included — the notification waits in their list).
+    - Window's last day: "last day" to the same interns, minus those who
+      already have a PENDING or APPROVED review for the month.
+    - Any other day: returns without querying.
+
+    Idempotent: the dedupe key is "<type>:<YYYY-MM>:<open|last_day>", and the
+    notification table is unique on (user_id, dedupe_key), so a re-run or a
+    retry never notifies anyone twice.
+    """
+    from django.db import transaction
+
+    from api.dashboard.intern.monthly_review.window import get_monthly_review_window
+    from api.notification.audience import Audience
+    from api.notification.service import NotificationService
+    from api.notification.types import NotificationType
+    from db.intern import InternMonthlyReview
+    from utils.types import InternSubmissionStatus
+
+    today = DateTimeUtils.get_ist_today()
+    window = get_monthly_review_window(today)
+    if not window.is_open:
+        return
+
+    if today == window.opens_on:
+        notif_type, occurrence = NotificationType.INTERN_MONTHLY_REVIEW_OPEN, "open"
+    elif today == window.closes_on:
+        notif_type, occurrence = NotificationType.INTERN_MONTHLY_REVIEW_LAST_DAY, "last_day"
+    else:
+        return
+
+    recipients = UserInternGuildLink.objects.exclude(status=InternGuildStatus.INACTIVE.value)
+    if occurrence == "last_day":
+        already_submitted = (
+            InternMonthlyReview.objects
+            .filter(year=window.year, month=window.month)
+            .exclude(status=InternSubmissionStatus.REJECTED.value)
+            .values('user_id')
+        )
+        recipients = recipients.exclude(user_id__in=already_submitted)
+
+    user_ids = [str(uid) for uid in recipients.values_list('user_id', flat=True).distinct()]
+    if not user_ids:
+        return
+
+    with transaction.atomic():
+        NotificationService.dispatch(
+            notif_type=notif_type,
+            audience=Audience.users(user_ids),
+            context={
+                "month_name": calendar.month_name[window.month],
+                "year": window.year,
+                "closes_on": window.closes_on.strftime("%d %b"),
+            },
+            entity_id=f"{window.year}-{window.month:02d}",
+            occurrence=occurrence,
+        )

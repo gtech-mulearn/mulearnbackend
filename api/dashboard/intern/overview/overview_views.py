@@ -4,7 +4,7 @@ from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
-from utils.types import RoleType, InternLeaderboardWeights, InternGuildStatus
+from utils.types import RoleType, InternLeaderboardWeights, InternGuildStatus, COUNTED_TIMESHEET_STATUSES
 from utils.utils import CommonUtils
 from db.intern import UserInternGuildLink, InternTask, InternDailyTimesheet, InternWeeklyReview
 from db.task import KarmaActivityLog
@@ -44,10 +44,10 @@ class InternOverviewStatusAPI(APIView):
         w_longest_streak = weekly_streak.longest_streak if weekly_streak else 0
 
         # Score formula — identical to both leaderboard endpoints:
-        # approved_daily_timesheets × 25 + approved_weekly_reviews × 50
+        # counted_daily_timesheets × 25 + approved_weekly_reviews × 50
         # + sum(karma_awarded × complexity_weight) for each verified intern task
         approved_daily_count = InternDailyTimesheet.objects.filter(
-            user_id=user_id, status='APPROVED'
+            user_id=user_id, status__in=COUNTED_TIMESHEET_STATUSES
         ).count()
         approved_weekly_count = InternWeeklyReview.objects.filter(
             user_id=user_id, status='APPROVED'
@@ -146,7 +146,7 @@ class InternOverviewLeaderboardTopAPI(APIView):
 
         # Batch fetch all scoring data
         daily_ts_counts = dict(
-            InternDailyTimesheet.objects.filter(user_id__in=intern_user_ids, status='APPROVED')
+            InternDailyTimesheet.objects.filter(user_id__in=intern_user_ids, status__in=COUNTED_TIMESHEET_STATUSES)
             .values('user_id').annotate(total=Count('id'))
             .values_list('user_id', 'total')
         )
