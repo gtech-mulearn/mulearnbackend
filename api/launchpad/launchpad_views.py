@@ -18,7 +18,7 @@ from api.dashboard.profile.profile_serializer import (
     UserProfileSerializer, LinkSocials, UserLevelSerializer, UserLogSerializer,
 )
 from utils.response import CustomResponse
-from utils.utils import CommonUtils, ImportCSV
+from utils.utils import CommonUtils, ImportCSV, ranks_for_users
 from utils.types import LaunchPadLevels, LaunchPadRoles
 from utils.permission import JWTUtils
 from db.user import User, UserRoleLink, Role, Socials
@@ -30,6 +30,7 @@ from db.launchpad import LaunchPadUsers, LaunchPadUserCollegeLink, LaunchPad , L
 from rest_framework import status
 from db.launchpad import LaunchpadCompanies, LaunchpadRecruiters, LaunchpadJobs , LaunchpadJobTasks
 from .serializers import LaunchpadCompaniesSerializer, LaunchpadRecruiterSerializer, LaunchpadJobsSerializer, EligibleStudentSerializer
+from .serializers import college_link, karma_distributions, student_org_links_prefetch
 from django.contrib.auth.hashers import make_password, check_password
 from django.db import IntegrityError
 from utils.permission import CustomizePermission
@@ -122,6 +123,33 @@ import json
 
 # Public launchpad boards are cached for this long (fixed keys, no parameters).
 LAUNCHPAD_BOARD_TTL = 60 * 5
+
+APPLICATION_STATUSES = ["invited", "applied", "interview_scheduled", "accepted", "rejected", "withdrawn"]
+
+
+def work_ranks_for_karma(karma_values):
+    """
+    {karma: rank} where rank = 1 + wallets of users interested in work with
+    more karma. One conditional count for all of a page's karma values (it
+    was one COUNT over the wallet table per row).
+    """
+    distinct = sorted(set(karma_values))
+    if not distinct:
+        return {}
+    counts = Wallet.objects.filter(user__interested_in_work=True).aggregate(**{
+        f"k{i}": Count("id", filter=Q(karma__gt=karma)) for i, karma in enumerate(distinct)
+    })
+    return {karma: counts[f"k{i}"] + 1 for i, karma in enumerate(distinct)}
+
+
+def status_counts(applications, **extra):
+    """`total` plus one count per application status (and any `extra`
+    aggregates) in one query, instead of one COUNT each."""
+    return applications.aggregate(
+        total=Count("id"),
+        **{status: Count("id", filter=Q(status=status)) for status in APPLICATION_STATUSES},
+        **extra,
+    )
 
 
 class RegisterCompanyAPI(APIView):
@@ -230,9 +258,9 @@ class CompanyListVerifiedAPI(APIView):
         responses={200: LaunchpadCompanyPublicSerializer},
     )
     def get(self, request):
-        companies = LaunchpadCompanies.objects.filter(is_verified=True)
+        companies = list(LaunchpadCompanies.objects.filter(is_verified=True))
 
-        if not companies.exists():
+        if not companies:
             return CustomResponse(
                 general_message="No verified companies found."
             ).get_failure_response()
@@ -618,7 +646,7 @@ class ListJobsAPI(APIView):
         
         if user_type == "recruiter":
             try:
-                recruiter = LaunchpadRecruiters.objects.get(id=user_id)
+                recruiter = LaunchpadRecruiters.objects.select_related("company").get(id=user_id)
                 jobs = jobs_query.filter(company_id=recruiter.company_id)
             except LaunchpadRecruiters.DoesNotExist:
                 return CustomResponse(general_message="Recruiter not found.").get_failure_response()
@@ -659,16 +687,11 @@ class ListJobsAPI(APIView):
             data.append(job_data)
         
         if user_type == "recruiter":
-            try:
-                recruiter = LaunchpadRecruiters.objects.get(id=user_id)
-                company_name = recruiter.company.name if recruiter.company else "Unknown Company"
-                total_company_jobs = len(data)
-                own_jobs = len([job for job in data if job['recruiter_id'] == user_id])
-                other_recruiters_jobs = total_company_jobs - own_jobs
-            except LaunchpadRecruiters.DoesNotExist:
-                company_name = "Unknown Company"
-                own_jobs = 0
-                other_recruiters_jobs = 0
+            # `recruiter` was loaded (with its company) above.
+            company_name = recruiter.company.name if recruiter.company else "Unknown Company"
+            total_company_jobs = len(data)
+            own_jobs = len([job for job in data if job['recruiter_id'] == user_id])
+            other_recruiters_jobs = total_company_jobs - own_jobs
                 
             summary = {
                 'total_jobs': len(data),
@@ -1111,7 +1134,7 @@ class ListLaunchpadStudentsAPI(APIView):
                     'wallet_user', 'user_lvl_link_user__level'
                 ).prefetch_related(
                     'user_ig_link_user__ig',
-                    'user_organization_link_user__org',
+                    student_org_links_prefetch(prefix=""),
                     'user_role_link_user__role'
                 ).distinct().annotate(
                     user_id=F("id"),
@@ -1132,19 +1155,9 @@ class ListLaunchpadStudentsAPI(APIView):
 
         else:
 
-            rank = (
-                Wallet.objects.filter(
-                    user__interested_in_work=True,
-                    karma__gte=job.minimum_karma
-                )
-                .order_by("-karma", "-updated_at", "created_at")
-                .values(
-                    "user_id",
-                    "karma",
-                )
-            )
-
-            ranks = {user["user_id"]: i + 1 for i, user in enumerate(rank)}
+            # Ranked after pagination, for the page's users only (this
+            # loaded every eligible wallet to build a rank dict).
+            ranks = None
 
             eligible_students = User.objects.filter(
                 interested_in_work=True,
@@ -1153,7 +1166,7 @@ class ListLaunchpadStudentsAPI(APIView):
                 'wallet_user', 'user_lvl_link_user__level'
             ).prefetch_related(
                 'user_ig_link_user__ig',
-                'user_organization_link_user__org',
+                student_org_links_prefetch(prefix=""),
                 'user_role_link_user__role'
             ).distinct().annotate(
                 user_id=F("id"),
@@ -1182,13 +1195,25 @@ class ListLaunchpadStudentsAPI(APIView):
             },
         )
 
+        page = list(paginated_queryset.get("queryset"))
+        if ranks is None:
+            ranks = ranks_for_users(
+                Wallet.objects.filter(
+                    user__interested_in_work=True, karma__gte=job.minimum_karma
+                ),
+                ["-karma", "-updated_at", "created_at"],
+                [user.id for user in page],
+            )
         serializer = EligibleStudentSerializer(
-            paginated_queryset.get("queryset"),
+            page,
             many=True,
             context={
                 "ranks": ranks,
                 "job": job,
-                "application_status_map": application_status_map
+                "application_status_map": application_status_map,
+                "karma_distributions": karma_distributions(
+                    [user.id for user in page], ordered=False
+                ),
             }
         )
 
@@ -1231,13 +1256,17 @@ class HireRequestsAPI(APIView):
         
         # Base query for applications
         applications = LaunchpadJobApplications.objects.select_related(
-            'job', 'job__company', 'job__recruiter', 'student', 'student__wallet_user'
+            'job', 'job__company', 'job__recruiter', 'student', 'student__wallet_user',
+            'student__user_lvl_link_user__level',
         ).prefetch_related(
-            'student__user_organization_link_user__org',
+            # job.task is declared NOT NULL but General jobs store NULL, so a
+            # select_related INNER JOIN would drop them; prefetch instead.
+            'job__task',
+            student_org_links_prefetch(),
             'student__user_ig_link_user__ig',
             'student__user_role_link_user__role'
         )
-        
+
         # Filter by user type
         if user_type == "recruiter":
             applications = applications.filter(job__recruiter_id=user_id)
@@ -1286,15 +1315,19 @@ class HireRequestsAPI(APIView):
         )
         
         data = []
-        for application in paginated_queryset.get("queryset"):
+        page = list(paginated_queryset.get("queryset"))
+        # Karma distribution and rank for the whole page at once.
+        distributions = karma_distributions({a.student_id for a in page})
+        ranks = work_ranks_for_karma(
+            a.student.wallet_user.karma if a.student.wallet_user else 0 for a in page
+        )
+        for application in page:
             student = application.student
             job = application.job
-            
+
             # Get student's college info
-            college_link = student.user_organization_link_user.filter(
-                org__org_type='College'
-            ).first()
-            
+            college_link_ = college_link(student)
+
             # Get student's interest groups
             interest_groups = [
                 {
@@ -1303,34 +1336,19 @@ class HireRequestsAPI(APIView):
                 }
                 for ig_link in student.user_ig_link_user.all()
             ]
-            
-            # Get student's roles
+
+            # Get student's roles (verified only, from the prefetch)
             roles = [
                 {
                     'id': role_link.role.id,
                     'title': role_link.role.title
                 }
-                for role_link in student.user_role_link_user.filter(verified=True)
+                for role_link in student.user_role_link_user.all() if role_link.verified
             ]
-            
-            # Get student's karma distribution
-            karma_distribution = list(
-                KarmaActivityLog.objects.filter(
-                    user=student, 
-                    appraiser_approved=True
-                ).values(
-                    task_type=F('task__type__title')
-                ).annotate(
-                    karma=Sum('karma')
-                ).order_by('-karma')
-            )
-            
-            # Calculate student's rank
-            rank = Wallet.objects.filter(
-                user__interested_in_work=True,
-                karma__gt=student.wallet_user.karma if student.wallet_user else 0
-            ).count() + 1
-            
+
+            karma_distribution = distributions.get(student.id, [])
+            rank = ranks[student.wallet_user.karma if student.wallet_user else 0]
+
             application_data = {
                 'application_id': application.id,
                 'status': application.status,
@@ -1349,9 +1367,9 @@ class HireRequestsAPI(APIView):
                     'rank': rank,
                     'level': student.user_lvl_link_user.level.name if hasattr(student, 'user_lvl_link_user') and student.user_lvl_link_user else None,
                     'interested_in_work': student.interested_in_work,
-                    'college_name': college_link.org.title if college_link else None,
-                    'college_district': college_link.org.district.name if college_link and college_link.org.district else None,
-                    'college_state': college_link.org.district.zone.state.name if college_link and college_link.org.district and college_link.org.district.zone else None,
+                    'college_name': college_link_.org.title if college_link_ else None,
+                    'college_district': college_link_.org.district.name if college_link_ and college_link_.org.district else None,
+                    'college_state': college_link_.org.district.zone.state.name if college_link_ and college_link_.org.district and college_link_.org.district.zone else None,
                     'interest_groups': interest_groups,
                     'roles': roles,
                     'karma_distribution': karma_distribution,
@@ -1416,8 +1434,16 @@ class HireRequestsAPI(APIView):
             
             data.append(application_data)
         
-        # Prepare summary statistics
-        total_applications = applications.count()
+        # Prepare summary statistics: every count in one query.
+        week_ago = timezone.now() - timedelta(days=7)
+        counts = status_counts(
+            applications,
+            applications_this_week=Count("id", filter=Q(applied_at__gte=week_ago)),
+            interviews_this_week=Count(
+                "id", filter=Q(status="interview_scheduled", updated_at__gte=week_ago)
+            ),
+        )
+        total_applications = counts["total"]
         
         if job_id:
             # Stats for specific job
@@ -1427,12 +1453,12 @@ class HireRequestsAPI(APIView):
                 'company_name': job.company.name,
                 'recruiter_name': job.recruiter.name,
                 'total_applications': total_applications,
-                'invited': applications.filter(status='invited').count(),
-                'applied': applications.filter(status='applied').count(),
-                'interview_scheduled': applications.filter(status='interview_scheduled').count(),
-                'accepted': applications.filter(status='accepted').count(),
-                'rejected': applications.filter(status='rejected').count(),
-                'withdrawn': applications.filter(status='withdrawn').count(),
+                'invited': counts['invited'],
+                'applied': counts['applied'],
+                'interview_scheduled': counts['interview_scheduled'],
+                'accepted': counts['accepted'],
+                'rejected': counts['rejected'],
+                'withdrawn': counts['withdrawn'],
                 'filtered_count': len(data),
                 'filter_applied': {
                     'job_id': job_id,
@@ -1442,7 +1468,7 @@ class HireRequestsAPI(APIView):
         else:
             # Overall stats for user
             if user_type == "recruiter":
-                recruiter = LaunchpadRecruiters.objects.get(id=user_id)
+                recruiter = LaunchpadRecruiters.objects.select_related("company").get(id=user_id)
                 user_jobs = LaunchpadJobs.objects.filter(recruiter_id=user_id)
                 user_name = recruiter.name
                 company_name = recruiter.company.name if recruiter.company else None
@@ -1458,24 +1484,19 @@ class HireRequestsAPI(APIView):
                 'company_name': company_name,
                 'total_jobs': user_jobs.count(),
                 'total_applications': total_applications,
-                'invited': applications.filter(status='invited').count(),
-                'applied': applications.filter(status='applied').count(),
-                'interview_scheduled': applications.filter(status='interview_scheduled').count(),
-                'accepted': applications.filter(status='accepted').count(),
-                'rejected': applications.filter(status='rejected').count(),
-                'withdrawn': applications.filter(status='withdrawn').count(),
+                'invited': counts['invited'],
+                'applied': counts['applied'],
+                'interview_scheduled': counts['interview_scheduled'],
+                'accepted': counts['accepted'],
+                'rejected': counts['rejected'],
+                'withdrawn': counts['withdrawn'],
                 'filtered_count': len(data),
                 'filter_applied': {
                     'status': status_filter
                 },
                 'recent_activity': {
-                    'applications_this_week': applications.filter(
-                        applied_at__gte=timezone.now() - timedelta(days=7)
-                    ).count(),
-                    'interviews_this_week': applications.filter(
-                        status='interview_scheduled',
-                        updated_at__gte=timezone.now() - timedelta(days=7)
-                    ).count()
+                    'applications_this_week': counts['applications_this_week'],
+                    'interviews_this_week': counts['interviews_this_week'],
                 }
             }
         
@@ -1546,10 +1567,16 @@ class SendJobInvitationsAPI(APIView):
         invitations = []
         already_invited = []
         
+        # Existing invitations for all these students in one query ((job,
+        # student) is unique, so at most one each).
+        existing_by_student = {
+            app.student_id: app
+            for app in LaunchpadJobApplications.objects.filter(
+                job=job, student_id__in=[student.id for student in eligible_students]
+            )
+        }
         for student in eligible_students:
-            existing_invitation = LaunchpadJobApplications.objects.filter(
-                job=job, student=student
-            ).first()
+            existing_invitation = existing_by_student.get(student.id)
             
             if existing_invitation:
                 already_invited.append({
@@ -1571,13 +1598,18 @@ class SendJobInvitationsAPI(APIView):
         if invitations:
             LaunchpadJobApplications.objects.bulk_create(invitations)
         
-        # Prepare response data
+        # Prepare response data (wallets in one query; every eligible
+        # student has one, since the filter above reads wallet karma)
+        karma_by_student = dict(
+            Wallet.objects.filter(user_id__in=[inv.student.id for inv in invitations])
+            .values_list("user_id", "karma")
+        ) if invitations else {}
         invited_students = [
             {
                 'student_id': inv.student.id,
                 'student_name': inv.student.full_name,
                 'student_email': inv.student.email,
-                'student_karma': inv.student.wallet_user.karma if inv.student.wallet_user else 0
+                'student_karma': karma_by_student.get(inv.student.id, 0)
             }
             for inv in invitations
         ]
@@ -1615,7 +1647,7 @@ class StudentJobInvitationsAPI(APIView):
         
         invitations = LaunchpadJobApplications.objects.select_related(
             'job', 'job__company', 'job__recruiter'
-        ).filter(student_id=user_id)
+        ).prefetch_related('job__task').filter(student_id=user_id)  # see HireRequestsAPI
         
         if status_filter:
             invitations = invitations.filter(status=status_filter)
@@ -1783,6 +1815,9 @@ class AcceptedStudentsAPI(APIView):
         # Base query for applications
         applications = LaunchpadJobApplications.objects.select_related(
             'job', 'job__company', 'student', 'student__wallet_user'
+        ).prefetch_related(
+            'job__task',  # not select_related: see HireRequestsAPI
+            student_org_links_prefetch(), 'student__user_ig_link_user__ig',
         ).filter(
             job__recruiter_id=recruiter_id
         )
@@ -1823,10 +1858,8 @@ class AcceptedStudentsAPI(APIView):
             student = application.student
             job = application.job
             
-            # Get student's college info
-            college_link = student.user_organization_link_user.filter(
-                org__org_type='College'
-            ).first()
+            # Get student's college info (from the prefetch)
+            college_link_ = college_link(student)
             
             # Get student's interest groups
             interest_groups = [
@@ -1846,7 +1879,7 @@ class AcceptedStudentsAPI(APIView):
                     'muid': student.muid,
                     'profile_pic': student.profile_pic,
                     'karma': student.wallet_user.karma if student.wallet_user else 0,
-                    'college_name': college_link.org.title if college_link else None,
+                    'college_name': college_link_.org.title if college_link_ else None,
                     'interest_groups': interest_groups
                 },
                 'job_info': {
@@ -1891,23 +1924,25 @@ class AcceptedStudentsAPI(APIView):
         # Prepare summary statistics
         if job_id:
             # Stats for specific job
+            counts = status_counts(LaunchpadJobApplications.objects.filter(job_id=job_id))
             job_stats = {
                 'job_id': job_id,
                 'job_title': job.title,
                 'company_name': job.company.name,
-                'total_invited': LaunchpadJobApplications.objects.filter(job_id=job_id, status='invited').count(),
-                'total_applied': LaunchpadJobApplications.objects.filter(job_id=job_id, status='applied').count(),
-                'total_accepted': LaunchpadJobApplications.objects.filter(job_id=job_id, status='accepted').count(),
-                'total_rejected': LaunchpadJobApplications.objects.filter(job_id=job_id, status='rejected').count(),
+                'total_invited': counts['invited'],
+                'total_applied': counts['applied'],
+                'total_accepted': counts['accepted'],
+                'total_rejected': counts['rejected'],
                 'filtered_count': len(data)
             }
         else:
             # Overall stats for recruiter
+            counts = status_counts(LaunchpadJobApplications.objects.filter(job__recruiter_id=recruiter_id))
             job_stats = {
-                'total_invited': LaunchpadJobApplications.objects.filter(job__recruiter_id=recruiter_id, status='invited').count(),
-                'total_applied': LaunchpadJobApplications.objects.filter(job__recruiter_id=recruiter_id, status='applied').count(),
-                'total_accepted': LaunchpadJobApplications.objects.filter(job__recruiter_id=recruiter_id, status='accepted').count(),
-                'total_rejected': LaunchpadJobApplications.objects.filter(job__recruiter_id=recruiter_id, status='rejected').count(),
+                'total_invited': counts['invited'],
+                'total_applied': counts['applied'],
+                'total_accepted': counts['accepted'],
+                'total_rejected': counts['rejected'],
                 'total_jobs': LaunchpadJobs.objects.filter(recruiter_id=recruiter_id).count(),
                 'filtered_count': len(data)
             }
@@ -2639,7 +2674,14 @@ class LaunchPadUser(APIView):
             email=auth_mail, role=LaunchPadRoles.ADMIN.value
         ).exists():
             return CustomResponse(general_message="Unauthorized").get_failure_response()
-        users = LaunchPadUsers.objects.all()
+        users = LaunchPadUsers.objects.prefetch_related(
+            Prefetch(
+                "launchpaduserlink_user",
+                queryset=LaunchPadUserCollegeLink.objects.select_related("college").only(
+                    "user_id", "college_id", "college__title"
+                ),
+            )
+        )
         paginated_queryset = CommonUtils.get_paginated_queryset(
             users,
             request,
@@ -3058,10 +3100,13 @@ class UserLogAPI(BaseAPI):
         query = Q(user=user.id, appraiser_approved=True)
         if launchpad_log:
             query &= Q(task__event="launchpad")
-        karma_activity_log = KarmaActivityLog.objects.filter(query).order_by(
-            "-created_at"
+        karma_activity_log = list(
+            KarmaActivityLog.objects.filter(query)
+            .select_related("task")
+            .only("karma", "created_at", "task__title")
+            .order_by("-created_at")
         )
-        if not karma_activity_log.exists():
+        if not karma_activity_log:
             return CustomResponse(
                 general_message="No karma details available for user"
             ).get_success_response()

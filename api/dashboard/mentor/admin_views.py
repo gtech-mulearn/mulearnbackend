@@ -31,6 +31,7 @@ class MentorDeactivatedListAPI(APIView):
         mentors = (
             UserMentor.objects.filter(is_active=False)
             .select_related("user")
+            .prefetch_related(MentorDetailSerializer.list_prefetches())
             .order_by("-updated_at")
         )
         paginated = CommonUtils.get_paginated_queryset(
@@ -39,7 +40,11 @@ class MentorDeactivatedListAPI(APIView):
             search_fields=["user__full_name", "user__muid", "user__email"],
             sort_fields={"updated_at": "updated_at"},
         )
-        serializer = self.serializer_class(paginated.get("queryset"), many=True)
+        page = list(paginated.get("queryset"))
+        serializer = self.serializer_class(
+            page, many=True,
+            context={"rating_map": MentorDetailSerializer.build_rating_map(page)},
+        )
         return CustomResponse(
             response={"data": serializer.data, "pagination": paginated.get("pagination")}
         ).get_success_response()

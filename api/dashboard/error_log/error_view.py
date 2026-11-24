@@ -9,7 +9,7 @@ from utils.permission import CustomizePermission, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType
 
-from .log_helper import ManageURLPatterns, logHandler
+from .log_helper import get_log_handler
 from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
 from rest_framework import serializers as s
 
@@ -149,12 +149,10 @@ class LoggerAPI(APIView):
         """
         error_log = f"{settings.LOG_PATH}/error.log"
         try:
-            with open(error_log, "r") as file:
-                log_data = file.read()
+            log_handler = get_log_handler(error_log)
         except IOError as e:
             return CustomResponse(response=str(e)).get_failure_response()
 
-        log_handler = logHandler(log_data)
         formatted_errors = log_handler.parse_logs()
         return CustomResponse(response=formatted_errors).get_success_response()
 
@@ -237,10 +235,7 @@ class ErrorGraphAPI(APIView):
         try:
             error_log = f"{settings.LOG_PATH}/error.log"
 
-            with open(error_log, "r") as file:
-                log_data = file.read()
-
-            log_handler = logHandler(log_data)
+            log_handler = get_log_handler(error_log)
 
             formatted_errors = {
                 "heatmap": log_handler.get_urls_heatmap(),
@@ -295,14 +290,10 @@ class ErrorTabAPI(APIView):
         try:
             error_log = f"{settings.LOG_PATH}/error.log"
 
-            with open(error_log, "r") as file:
-                log_data = file.read()
-
-            log_handler = logHandler(log_data)
+            log_handler = get_log_handler(error_log)
             parsed_errors = log_handler.parse_logs()
-        
-            urlpatterns = ManageURLPatterns().urlpatterns
-            grouped_patterns = ManageURLPatterns.group_patterns(urlpatterns)
+            # (The URL patterns used to be walked and grouped here too, but
+            # the result was never returned; dropped.)
 
             return CustomResponse(response=parsed_errors).get_success_response()
 

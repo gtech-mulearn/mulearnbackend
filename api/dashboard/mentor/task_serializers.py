@@ -3,7 +3,7 @@ import uuid
 from rest_framework import serializers
 
 from db.task import TaskList, InterestGroup, UserIgLink
-from db.skill import Skill, TaskSkillLink
+from db.skill import Skill
 from utils.validators import validate_safe_text, enforce_max_length
 
 
@@ -180,11 +180,8 @@ class MentorTaskListSerializer(serializers.ModelSerializer):
 
     def get_skills(self, obj):
         """Return skills linked to this task — same as admin TaskListSerializer."""
-        skill_links = TaskSkillLink.objects.filter(task_id=obj.id).select_related("skill")
-        return [
-            {"id": link.skill.id, "name": link.skill.name, "code": link.skill.code}
-            for link in skill_links
-        ]
+        from utils.utils import task_skills
+        return task_skills(obj)
 
 
 class MentorIGDropdownSerializer(serializers.ModelSerializer):

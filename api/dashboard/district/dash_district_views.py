@@ -9,7 +9,7 @@ from db.user import User
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType, OrganizationType
-from utils.utils import CommonUtils
+from utils.utils import CommonUtils, ranks_for_users
 from . import dash_district_serializer
 from .dash_district_helper import get_user_college_link
 from drf_spectacular.utils import extend_schema
@@ -138,20 +138,13 @@ class DistrictStudentDetailsAPI(APIView):
                 general_message="No college organization linked to this user."
             ).get_failure_response()
 
-        rank = (
-            Wallet.objects.filter(
+        # Only the ranks of the users on the requested page are fetched, below.
+        rank_set = Wallet.objects.filter(
+            user_id__in=Wallet.objects.filter(
                 user__user_organization_link_user__org__district=user_org_link.org.district,
                 user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-            )
-            .distinct()
-            .order_by("-karma", "-updated_at", "created_at")
-            .values(
-                "user_id",
-                "karma",
-            )
+            ).values("user_id")
         )
-
-        ranks = {user["user_id"]: i + 1 for i, user in enumerate(rank)}
 
         user_org_links = (
             User.objects.filter(
@@ -178,8 +171,12 @@ class DistrictStudentDetailsAPI(APIView):
             },
         )
 
+        page = paginated_queryset.get("queryset")
+        ranks = ranks_for_users(
+            rank_set, ["-karma", "-updated_at", "created_at"], [user.id for user in page]
+        )
         serializer = dash_district_serializer.DistrictStudentDetailsSerializer(
-            paginated_queryset.get("queryset"), many=True, context={"ranks": ranks}
+            page, many=True, context={"ranks": ranks}
         )
 
         return CustomResponse(

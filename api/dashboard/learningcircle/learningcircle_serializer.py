@@ -551,6 +551,9 @@ class CircleMeetupInfoSerializer(serializers.ModelSerializer):
             obj.circle_meeting_attendance_meet_id.select_related("user_id")
             .prefetch_related("user_id__user_organization_link_user")
             .only(
+                # meet_id: Django sets the reverse relation on each row and,
+                # with it deferred, ran one query per attendee to load it.
+                "meet_id",
                 "user_id__full_name",
                 "is_joined",
                 "is_report_submitted",
@@ -574,11 +577,12 @@ class CircleMeetupInfoSerializer(serializers.ModelSerializer):
             except Exception:
                 pass
         for attendee in query:
-            attendee_orgs = set(
-                attendee.user_id.user_organization_link_user.all().values_list(
-                    "org_id", flat=True
-                )
-            )
+            # Read the prefetched links; .values_list() on them ran a new
+            # query for every attendee.
+            attendee_orgs = {
+                link.org_id
+                for link in attendee.user_id.user_organization_link_user.all()
+            }
             data.append(
                 {
                     "user_id": attendee.user_id.id,

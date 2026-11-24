@@ -34,31 +34,52 @@ class KKEMUserSerializer(serializers.ModelSerializer):
         )
         return karma
 
-    def get_interest_groups(self, obj):
-        user_ig_links = obj.user_ig_link_user.all()
+    @staticmethod
+    def ig_karma_by_user(user_ids, approved_only=True):
+        """
+        {user_id: {ig name: approved karma}} in one grouped query. It replaces
+        loading every approved karma log (with task and IG) per user and
+        summing in Python. Grouped by IG id and summed by exact name here, as
+        the old loop did (two IGs sharing a name add up).
 
-        # Extract ig_ids for filtering KarmaActivityLog in one go
+        approved_only=False counts every log: the individual endpoint read the
+        user's unfiltered karma log, unlike the bulk one (kept as it was).
+        """
+        from django.db.models import Sum
+        from db.task import KarmaActivityLog
+
+        result = {}
+        rows = (
+            KarmaActivityLog.objects.filter(
+                user_id__in=list(user_ids), task__ig__isnull=False,
+                **({"appraiser_approved": True} if approved_only else {}),
+            )
+            .values_list("user_id", "task__ig_id", "task__ig__name")
+            .annotate(total=Sum("karma"))
+            .order_by()
+        )
+        for user_id, _, ig_name, total in rows:
+            per_user = result.setdefault(user_id, {})
+            per_user[ig_name] = per_user.get(ig_name, 0) + total
+        return result
+
+    def get_interest_groups(self, obj):
+        if "user_ig_link_user" in getattr(obj, "_prefetched_objects_cache", {}):
+            user_ig_links = obj.user_ig_link_user.all()
+        else:
+            user_ig_links = obj.user_ig_link_user.select_related("ig")
         interest_groups = [ig_link.ig for ig_link in user_ig_links]
 
-        # Aggregate karma for each interest group in one query
-        aggregated_karma = obj.karma_activity_log_user.all()
+        ig_karma = self.context.get("ig_karma")
+        if ig_karma is None:
+            # Individual endpoint: every log, as before (see ig_karma_by_user).
+            ig_karma = self.ig_karma_by_user([obj.id], approved_only=False)
+        user_karma = ig_karma.get(obj.id, {})
 
-        aggregated_karma = [
-            {
-                "task__ig__id": karma.task.ig.id,
-                "task__ig__name": karma.task.ig.name,
-                "karma": karma.karma,
-            }
-            for karma in aggregated_karma
-            if hasattr(karma.task, "ig") and karma.task.ig
-        ]
-
+        # Only the IGs the user is linked to, in link order (as before).
         ig_details = {ig.name: 0 for ig in interest_groups}
-
-        for karma in aggregated_karma:
-            ig_name = karma["task__ig__name"]
-            if ig_name in ig_details:
-                ig_details[ig_name] += karma["karma"]
+        for ig_name in ig_details:
+            ig_details[ig_name] += user_karma.get(ig_name, 0)
 
         return [{"name": key, "karma": value} for key, value in ig_details.items()]
 

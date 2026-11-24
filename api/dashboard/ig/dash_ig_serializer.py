@@ -90,7 +90,20 @@ def _resolve_muid_list(muid_list, user_map=None, socials_map=None):
     return enriched
 
 
-def _resolve_ig_mentors(ig, mentor_links=None, mentor_socials_map=None, mentor_profiles_map=None):
+def _mentor_company(application, company_map, get_mentor_company):
+    """get_mentor_company, but read from company_map (built once per page by
+    get_ig_list_context) when the application has no org of its own."""
+    if not application:
+        return None
+    if application.org_id:
+        return application.org.title
+    if company_map is not None and application.user_id in company_map:
+        return company_map[application.user_id]
+    return get_mentor_company(application)
+
+
+def _resolve_ig_mentors(ig, mentor_links=None, mentor_socials_map=None, mentor_profiles_map=None,
+                        applications_map=None, company_map=None):
     """
     Active IG mentors for this IG, read from UserIgLink (authoritative)
     rather than the legacy InterestGroup.mentors JSON column, enriched with
@@ -98,7 +111,6 @@ def _resolve_ig_mentors(ig, mentor_links=None, mentor_socials_map=None, mentor_p
     """
     from db.task import UserIgLink
     from api.dashboard.mentor.dash_mentor_helper import get_mentor_company
-    from db.user import UserMentor
 
     if mentor_links is None:
         links = UserIgLink.objects.filter(
@@ -117,22 +129,20 @@ def _resolve_ig_mentors(ig, mentor_links=None, mentor_socials_map=None, mentor_p
         )
         mentor_socials_map = {s["user_id"]: s for s in socials_qs}
 
-    if mentor_profiles_map is None:
-        mentor_profiles = {
-            m.user_id: m
-            for m in UserMentor.objects.filter(user_id__in=user_ids)
-        }
-    else:
-        mentor_profiles = mentor_profiles_map
+    # mentor_profiles_map is accepted for older callers but not read: no
+    # output field uses UserMentor (the per-IG lookup that filled it was a
+    # wasted query).
 
-    from db.user import MentorApplication
-    applications = {
-        a.user_id: a
-        for a in MentorApplication.objects.filter(
-            user_id__in=user_ids,
-            status=MentorApplication.Status.APPROVED,
-        ).select_related("org")
-    }
+    if applications_map is None:
+        from db.user import MentorApplication
+        applications_map = {
+            a.user_id: a
+            for a in MentorApplication.objects.filter(
+                user_id__in=user_ids,
+                status=MentorApplication.Status.APPROVED,
+            ).select_related("org")
+        }
+    applications = applications_map
 
     mentors = []
     for link in links:
@@ -149,7 +159,7 @@ def _resolve_ig_mentors(ig, mentor_links=None, mentor_socials_map=None, mentor_p
             "full_name": user.full_name,
             "email": user.email,
             "profile_pic": user.profile_pic,
-            "company": get_mentor_company(application) if application else None,
+            "company": _mentor_company(application, company_map, get_mentor_company),
             "socials": socials,
         })
     return mentors
@@ -220,7 +230,10 @@ class InterestGroupSerializer(serializers.ModelSerializer):
     def get_members(self, obj):
         if hasattr(obj, "members"):
             return obj.members
-        return obj.user_ig_link_ig.all().count()
+        # Not .user_ig_link_ig.all().count(): list views prefetch only the
+        # mentor links into that relation, which would count mentors only.
+        from db.task import UserIgLink
+        return UserIgLink.objects.filter(ig_id=obj.id).count()
 
     def get_media_content_links(self, obj):
         """
@@ -229,10 +242,14 @@ class InterestGroupSerializer(serializers.ModelSerializer):
         Only upcoming and ongoing (today) content is included.
         """
         today = date.today()
-        links = obj.media_content_links.filter(
-            media_content__deleted_at__isnull=True,
-            media_content__date__gte=today,
-        ).select_related("media_content").order_by("media_content__date")
+        if hasattr(obj, "upcoming_media_links"):
+            # Loaded for the whole page by ig_serializer_prefetches().
+            links = obj.upcoming_media_links
+        else:
+            links = obj.media_content_links.filter(
+                media_content__deleted_at__isnull=True,
+                media_content__date__gte=today,
+            ).select_related("media_content").order_by("media_content__date")
 
         return [
             {
@@ -251,7 +268,11 @@ class InterestGroupSerializer(serializers.ModelSerializer):
         """
         Community partners linked to this IG via ig_community_partner_link.
         """
-        links = obj.community_partner_links.select_related("community_partner")
+        if hasattr(obj, "partner_links"):
+            # Loaded for the whole page by ig_serializer_prefetches().
+            links = obj.partner_links
+        else:
+            links = obj.community_partner_links.select_related("community_partner")
         return [
             {
                 "id": link.community_partner.id,
@@ -328,7 +349,9 @@ class InterestGroupSerializer(serializers.ModelSerializer):
             instance,
             mentor_links=mentor_links,
             mentor_socials_map=mentor_socials_map,
-            mentor_profiles_map=mentor_profiles_map
+            mentor_profiles_map=mentor_profiles_map,
+            applications_map=self.context.get("mentor_applications_map"),
+            company_map=self.context.get("mentor_company_map"),
         )
 
         return self.apply_privacy(data)
@@ -411,14 +434,21 @@ class InterestGroupRequestGetSerializer(InterestGroupSerializer):
 
     def get_company_name(self, obj):
         from utils.types import RoleType, OrganizationType
+        # Reads the role and org links the list view prefetches (.values_list()
+        # and .filter() on them ran two new queries per row). The lowest-id
+        # company link wins, as with .filter(...).first().
         if obj.created_by:
-            roles = obj.created_by.user_role_link_user.all().values_list("role__title", flat=True)
+            roles = [link.role.title for link in obj.created_by.user_role_link_user.all()]
             if RoleType.COMPANY.value in roles:
-                company_link = obj.created_by.user_organization_link_user.filter(
-                    org__org_type=OrganizationType.COMPANY.value
-                ).first()
-                if company_link:
-                    return company_link.org.title
+                company_links = sorted(
+                    (
+                        link for link in obj.created_by.user_organization_link_user.all()
+                        if link.org.org_type == OrganizationType.COMPANY.value
+                    ),
+                    key=lambda link: link.pk,
+                )
+                if company_links:
+                    return company_links[0].org.title
         return None
 
 
@@ -482,7 +512,9 @@ class PublicInterestGroupSerializer(serializers.ModelSerializer):
             instance,
             mentor_links=mentor_links,
             mentor_socials_map=mentor_socials_map,
-            mentor_profiles_map=mentor_profiles_map
+            mentor_profiles_map=mentor_profiles_map,
+            applications_map=self.context.get("mentor_applications_map"),
+            company_map=self.context.get("mentor_company_map"),
         ))
 
         return data

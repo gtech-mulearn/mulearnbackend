@@ -56,11 +56,31 @@ class HackathonRetrievalSerializer(serializers.ModelSerializer):
     def get_event_logo(self, obj):
         return f"{settings.MEDIA_URL}{media}" if (media := obj.event_logo) else None
 
+    @staticmethod
+    def list_context(user_id):
+        """
+        Context for the list view: the viewer's organised and applied
+        hackathon ids, two queries in total instead of two exists() per row.
+        """
+        return {
+            "user_id": user_id,
+            "editable_ids": set(
+                HackathonOrganiserLink.objects.filter(organiser=user_id).values_list("hackathon_id", flat=True)
+            ),
+            "applied_ids": set(
+                HackathonUserSubmission.objects.filter(user=user_id).values_list("hackathon_id", flat=True)
+            ),
+        }
+
     def get_editable(self, obj):
+        if (ids := self.context.get("editable_ids")) is not None:
+            return obj.id in ids
         user_id = self.context.get("user_id")
         return HackathonOrganiserLink.objects.filter(organiser=user_id, hackathon=obj).exists()
 
     def get_is_applied(self, obj):
+        if (ids := self.context.get("applied_ids")) is not None:
+            return obj.id in ids
         user_id = self.context.get("user_id")
         return HackathonUserSubmission.objects.filter(user=user_id, hackathon=obj).exists()
 
@@ -411,6 +431,11 @@ class HackathonOrganiserSerializer(serializers.ModelSerializer):
         obj.delete()
 
 
+def _is_active(user):
+    """What User.objects (ActiveUserManager) would return: not suspended."""
+    return user.suspended_at is None and user.suspended_by_id is None
+
+
 class ListApplicantsSerializer(serializers.ModelSerializer):
     data = serializers.SerializerMethodField()
 
@@ -424,7 +449,11 @@ class ListApplicantsSerializer(serializers.ModelSerializer):
             for field, value in DEFAULT_HACKATHON_FORM_FIELDS.items():
                 if value == 'system' and not data.get(field):
 
-                    user = User.objects.filter(id=obj.user.id).first()
+                    # The view prefetches the user and their org links (this
+                    # was a user query, an org-link query and an org query per
+                    # field). User.objects hid suspended users, so they still
+                    # resolve to None here, as before.
+                    user = obj.user if _is_active(obj.user) else None
                     if field == 'gender':
                         data[field] = user.gender
                     elif field == 'email':
@@ -434,8 +463,9 @@ class ListApplicantsSerializer(serializers.ModelSerializer):
                     elif field == 'name':
                         data[field] = user.full_name
                     elif field == 'college':
-                        data[field] = UserOrganizationLink.objects.filter(
-                            user_id=user.id).first().org.title
+                        links = list(user.user_organization_link_user.all())
+                        # .first() picked the lowest pk; no link raised, still does.
+                        data[field] = (min(links, key=lambda link: link.pk) if links else None).org.title
             return data
         except json.JSONDecodeError:
             return {}
