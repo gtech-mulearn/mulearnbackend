@@ -42,6 +42,17 @@ class ProblemStatementWriteSerializer(serializers.ModelSerializer):
         return value
 
 
+class AdminProblemStatementWriteSerializer(ProblemStatementWriteSerializer):
+    """
+    Admin payload: also accepts ``muid`` to create / edit the statement on behalf of a user.
+    Blank or null clears it. Resolution to a user happens in the view.
+    """
+    muid = serializers.CharField(max_length=100, required=False, allow_null=True, allow_blank=True)
+
+    class Meta(ProblemStatementWriteSerializer.Meta):
+        fields = [*ProblemStatementWriteSerializer.Meta.fields, "muid"]
+
+
 class InteractionWriteSerializer(serializers.ModelSerializer):
     """
     `status` is optional and only "Trying" is accepted: Submitted is reachable
@@ -83,12 +94,13 @@ class ProblemStatementSerializer(serializers.ModelSerializer):
     interaction_counts = serializers.SerializerMethodField()
     my_interaction = serializers.SerializerMethodField()
     is_open = serializers.SerializerMethodField()
+    on_behalf_of = serializers.SerializerMethodField()
 
     class Meta:
         model = ProblemStatement
         fields = [
             "id", "title", "description", "category", "skills", "deadline", "status",
-            "company", "is_open", "interaction_counts", "my_interaction",
+            "company", "on_behalf_of", "is_open", "interaction_counts", "my_interaction",
             "created_by", "created_at", "updated_by", "updated_at",
             "published_by", "published_at",
         ]
@@ -96,7 +108,7 @@ class ProblemStatementSerializer(serializers.ModelSerializer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if not self.context.get("show_audit"):
-            for field in ("created_by", "updated_by", "published_by"):
+            for field in ("created_by", "updated_by", "published_by", "on_behalf_of"):
                 self.fields.pop(field)
         if "my_interactions" not in self.context:
             self.fields.pop("my_interaction")
@@ -107,6 +119,12 @@ class ProblemStatementSerializer(serializers.ModelSerializer):
         if obj.source == ProblemStatement.Source.MULEARN or obj.company is None:
             return {"id": None, "name": "muLearn", "logo": None}
         return {"id": obj.company_id, "name": obj.company.name, "logo": obj.company.logo}
+
+    def get_on_behalf_of(self, obj):
+        user = obj.on_behalf_of
+        if user is None:
+            return None
+        return {"id": user.id, "muid": user.muid, "full_name": user.full_name}
 
     def get_interaction_counts(self, obj):
         counts = self.context.get("counts", {}).get(obj.id, {})
