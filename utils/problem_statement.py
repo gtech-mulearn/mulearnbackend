@@ -1,7 +1,7 @@
 """Helpers shared by the problem statement company, admin and learner views."""
 import logging
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Count
 from django.utils import timezone
 
@@ -179,12 +179,31 @@ def notify_company(company, statement, actor_id, event):
         logger.exception("Failed to notify company %s for problem statement %s", company.id, statement.id)
 
 
-def apply_changes(statement_id, data, user_id, on_behalf_of_id=_UNSET, company=_UNSET, result=None):
+def notify_company_after_edit(statement, data, outcome, actor_id, relink_requested):
+    """Best-effort notifications to the companies affected by an admin edit; never raises."""
+    try:
+        previous_id = outcome.get("previous_company_id")
+        if relink_requested and "company" in outcome:  # the link actually changed
+            if outcome["company"]:
+                notify_company(outcome["company"], statement, actor_id, "assigned")
+            if previous_id:
+                previous = Company.objects.select_related("company_user").filter(id=previous_id).first()
+                notify_company(previous, statement, actor_id, "removed")
+        elif previous_id and any(f in data for f in EDITABLE_FIELDS):
+            owner = Company.objects.select_related("company_user").filter(id=previous_id).first()
+            notify_company(owner, statement, actor_id, "updated")
+    except Exception:
+        logger.exception("Failed to notify companies for problem statement %s", statement.id)
+
+
+def apply_changes(statement_id, data, user_id, on_behalf_of_id=_UNSET, company_id=_UNSET, result=None):
     """
     Returns an error response, or None on success. ``on_behalf_of_id`` None clears the mention.
-    ``company`` (a Company or None) re-links the statement and sets ``source`` to match.
-    If a ``result`` dict is passed it receives ``previous_on_behalf_of_id`` and
-    ``previous_company_id``, read under the row lock.
+    ``company_id`` re-links the statement and sets ``source`` to match; None unlinks it. The
+    company is re-checked (verified, not deleted) and locked inside the transaction, so it
+    can't be un-verified or deleted between the check and the write. A link to the company it
+    already has is a no-op. If a ``result`` dict is passed it receives ``previous_on_behalf_of_id``,
+    ``previous_company_id`` (read under the row lock) and ``company`` (the new Company or None).
     """
     with transaction.atomic():
         statement = ProblemStatement.objects.select_for_update().filter(id=statement_id).first()
@@ -199,14 +218,27 @@ def apply_changes(statement_id, data, user_id, on_behalf_of_id=_UNSET, company=_
         if on_behalf_of_id is not _UNSET:
             statement.on_behalf_of_id = on_behalf_of_id
             changed.append("on_behalf_of")
-        if company is not _UNSET:
+        if company_id is not _UNSET and str(company_id or "") != str(statement.company_id or ""):
+            company = None
+            if company_id:
+                company = Company.objects.select_for_update().select_related("company_user").filter(
+                    id=company_id, status="verified", deleted_at__isnull=True
+                ).first()
+                if not company:
+                    return failure("Verified company not found.", 404)
             statement.company = company
             statement.source = (
                 ProblemStatement.Source.COMPANY if company else ProblemStatement.Source.MULEARN
             )
             changed.extend(["company", "source"])
+            if result is not None:
+                result["company"] = company
         statement.updated_by_id = user_id
-        statement.save(update_fields=[*changed, "updated_by", "updated_at"])
+        try:
+            statement.save(update_fields=[*changed, "updated_by", "updated_at"])
+        except IntegrityError:
+            # FK failure: the company or the acting user was deleted under us.
+            return failure("Company or user not found.", 404)
     return None
 
 
