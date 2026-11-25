@@ -1,10 +1,11 @@
 """Helpers shared by the problem statement company, admin and learner views."""
 import logging
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Count
 from django.utils import timezone
 
+from db.company import Company
 from db.user import User
 from db.problem_statement import ProblemStatement, ProblemStatementInteraction
 from utils.response import CustomResponse
@@ -123,10 +124,86 @@ def notify_on_behalf_of(user, statement, actor_id, created):
         logger.exception("Failed to notify on-behalf-of user for problem statement %s", statement.id)
 
 
-def apply_changes(statement_id, data, user_id, on_behalf_of_id=_UNSET, result=None):
+def resolve_company(raw):
+    """
+    (company, error) for an admin-supplied ``company_id``. Blank/None gives (None, None),
+    meaning "no company" (a muLearn statement). Only verified, non-deleted companies qualify.
+    """
+    company_id = (raw or "").strip()
+    if not company_id:
+        return None, None
+    company = Company.objects.select_related("company_user").filter(
+        id=company_id, status="verified", deleted_at__isnull=True
+    ).first()
+    if not company:
+        return None, failure("Verified company not found.", 404)
+    return company, None
+
+
+def notify_company(company, statement, actor_id, event):
+    """
+    Best-effort in-app notification to the company's user; never fails the write.
+    ``event`` is "created", "updated", "assigned" or "removed". Skipped when the
+    company user is the actor (a company editing its own statement).
+    """
+    if company is None or company.company_user_id is None or company.company_user_id == actor_id:
+        return
+    title_text = statement.title
+    messages = {
+        "created": (
+            "Problem statement created for your company",
+            f'An admin created the problem statement "{title_text}" on behalf of {company.name}. '
+            "It is in Draft; review and publish it.",
+        ),
+        "updated": (
+            "Your company's problem statement was updated",
+            f'An admin updated the problem statement "{title_text}".',
+        ),
+        "assigned": (
+            "A problem statement was assigned to your company",
+            f'The problem statement "{title_text}" was assigned to {company.name}.',
+        ),
+        "removed": (
+            "A problem statement was moved from your company",
+            f'The problem statement "{title_text}" is no longer linked to {company.name}.',
+        ),
+    }
+    title, description = messages[event]
+    try:
+        from api.notification.notifications_utils import NotificationUtils
+        NotificationUtils.insert_notification(
+            user=company.company_user, title=title, description=description,
+            button=None, url=None, created_by_id=actor_id,
+        )
+    except Exception:
+        logger.exception("Failed to notify company %s for problem statement %s", company.id, statement.id)
+
+
+def notify_company_after_edit(statement, data, outcome, actor_id, relink_requested):
+    """Best-effort notifications to the companies affected by an admin edit; never raises."""
+    try:
+        previous_id = outcome.get("previous_company_id")
+        if relink_requested and "company" in outcome:  # the link actually changed
+            if outcome["company"]:
+                notify_company(outcome["company"], statement, actor_id, "assigned")
+            if previous_id:
+                previous = Company.objects.select_related("company_user").filter(id=previous_id).first()
+                notify_company(previous, statement, actor_id, "removed")
+        elif previous_id and any(f in data for f in EDITABLE_FIELDS):
+            owner = Company.objects.select_related("company_user").filter(id=previous_id).first()
+            notify_company(owner, statement, actor_id, "updated")
+    except Exception:
+        logger.exception("Failed to notify companies for problem statement %s", statement.id)
+
+
+def apply_changes(statement_id, data, user_id, on_behalf_of_id=_UNSET, company_id=_UNSET, result=None):
     """
     Returns an error response, or None on success. ``on_behalf_of_id`` None clears the mention.
-    If a ``result`` dict is passed it receives ``previous_on_behalf_of_id``, read under the row lock.
+    ``company_id`` re-links the statement and sets ``source`` to match; None unlinks it. The
+    company is re-checked (verified, not deleted) and locked inside the transaction, so it
+    can't be un-verified or deleted between the check and the write. A link to the company it
+    already has is a no-op. If a ``result`` dict is passed it receives ``previous_on_behalf_of_id``,
+    ``previous_company_id`` (read under the row lock) and ``company`` (the new Company or None).
     """
     with transaction.atomic():
         statement = ProblemStatement.objects.select_for_update().filter(id=statement_id).first()
@@ -134,14 +211,34 @@ def apply_changes(statement_id, data, user_id, on_behalf_of_id=_UNSET, result=No
             return not_found()
         if result is not None:
             result["previous_on_behalf_of_id"] = statement.on_behalf_of_id
+            result["previous_company_id"] = statement.company_id
         changed = [field for field in EDITABLE_FIELDS if field in data]
         for field in changed:
             setattr(statement, field, data[field])
         if on_behalf_of_id is not _UNSET:
             statement.on_behalf_of_id = on_behalf_of_id
             changed.append("on_behalf_of")
+        if company_id is not _UNSET and str(company_id or "") != str(statement.company_id or ""):
+            company = None
+            if company_id:
+                company = Company.objects.select_for_update().select_related("company_user").filter(
+                    id=company_id, status="verified", deleted_at__isnull=True
+                ).first()
+                if not company:
+                    return failure("Verified company not found.", 404)
+            statement.company = company
+            statement.source = (
+                ProblemStatement.Source.COMPANY if company else ProblemStatement.Source.MULEARN
+            )
+            changed.extend(["company", "source"])
+            if result is not None:
+                result["company"] = company
         statement.updated_by_id = user_id
-        statement.save(update_fields=[*changed, "updated_by", "updated_at"])
+        try:
+            statement.save(update_fields=[*changed, "updated_by", "updated_at"])
+        except IntegrityError:
+            # FK failure: the company or the acting user was deleted under us.
+            return failure("Company or user not found.", 404)
     return None
 
 
