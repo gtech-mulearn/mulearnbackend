@@ -334,6 +334,22 @@ def test_admin_edit_notifies_company_and_relinks(world):
     assert _notes(world["company_b"], "moved from").count() == 1
 
 
+def test_admin_patch_blank_company_id_keeps_link_and_same_id_is_noop(world):
+    admin = world["admin"]
+    sid = admin.post(BASE + "admin/", {**PAYLOAD, "company_id": world["company_a"].id}, format="json").json()["response"]["id"]
+    res = admin.patch(f"{BASE}admin/{sid}/", {"company_id": "", "title": "Same company"}, format="json")
+    assert res.status_code == 200 and res.json()["response"]["company"]["id"] == str(world["company_a"].id)
+    before = _notes(world["company_a"], "assigned").count() + _notes(world["company_a"], "moved from").count()
+    assert admin.patch(f"{BASE}admin/{sid}/", {"company_id": world["company_a"].id}, format="json").status_code == 200
+    after = _notes(world["company_a"], "assigned").count() + _notes(world["company_a"], "moved from").count()
+    assert before == after == 0
+    # relinking to a company that is not verified is rejected under the lock, link unchanged
+    world["company_b"].status = "pending"
+    world["company_b"].save()
+    assert admin.patch(f"{BASE}admin/{sid}/", {"company_id": world["company_b"].id}, format="json").status_code == 404
+    assert str(ProblemStatement.objects.get(id=sid).company_id) == str(world["company_a"].id)
+
+
 def test_company_notification_failure_does_not_fail_create(world, monkeypatch):
     from api.notification.notifications_utils import NotificationUtils
 

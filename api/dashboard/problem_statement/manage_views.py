@@ -194,18 +194,16 @@ class DetailBase(ManageBase):
             return CustomResponse(message=serializer.errors).get_failure_response()
         data = serializer.validated_data
         user_id = JWTUtils.fetch_user_id(request)
-        kwargs, mentioned, new_company = {}, None, None
+        kwargs, mentioned = {}, None
         if "muid" in data:
             mentioned, error = ps_utils.resolve_muid(data["muid"])
             if error:
                 return error
             kwargs["on_behalf_of_id"] = mentioned.id if mentioned else None
-        relink = "company_id" in data  # only the admin serializer has this field
-        if relink:
-            new_company, error = ps_utils.resolve_company(data["company_id"])
-            if error:
-                return error
-            kwargs["company"] = new_company
+        # Only the admin serializer has company_id. Blank means "not provided" (a form that
+        # sends the field empty must not unlink the company); explicit null unlinks.
+        if data.get("company_id", "") != "" or ("company_id" in data and data["company_id"] is None):
+            kwargs["company_id"] = data["company_id"]
         outcome = {}
         error = ps_utils.apply_changes(statement.id, data, user_id, result=outcome, **kwargs)
         if error:
@@ -214,19 +212,7 @@ class DetailBase(ManageBase):
         if mentioned and mentioned.id != outcome.get("previous_on_behalf_of_id"):
             ps_utils.notify_on_behalf_of(mentioned, statement, user_id, created=False)
         if company is None:  # admin caller: tell the company side
-            previous_id = outcome.get("previous_company_id")
-            new_id = new_company.id if new_company else None
-            if relink and new_id != previous_id:
-                if new_company:
-                    ps_utils.notify_company(new_company, statement, user_id, "assigned")
-                if previous_id:
-                    previous = Company.objects.select_related("company_user").filter(id=previous_id).first()
-                    ps_utils.notify_company(previous, statement, user_id, "removed")
-            elif previous_id and any(f in data for f in ps_utils.EDITABLE_FIELDS):
-                owner = statement.company if statement.company_id == previous_id else (
-                    Company.objects.select_related("company_user").filter(id=previous_id).first()
-                )
-                ps_utils.notify_company(owner, statement, user_id, "updated")
+            ps_utils.notify_company_after_edit(statement, data, outcome, user_id, "company_id" in kwargs)
         return CustomResponse(
             general_message="Problem statement updated.", response=self.render(self.fresh(statement.id))
         ).get_success_response()
