@@ -13,11 +13,16 @@ class ProblemStatement(models.Model):
     class Source(models.TextChoices):
         COMPANY = "company"
         MULEARN = "mulearn"
+        COMMUNITY = "community"
 
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     # Null for admin-authored (source=MULEARN) statements, which aren't attributed to any company.
     company = models.ForeignKey('Company', on_delete=models.CASCADE, null=True, blank=True,
                                 related_name='problem_statements')
+    # Set only on admin-authored statements created for a community (an Organization with
+    # org_type 'Community'). A statement has a company OR a community, never both.
+    community = models.ForeignKey('Organization', on_delete=models.SET_NULL, null=True, blank=True,
+                                  related_name='problem_statements')
     title = models.CharField(max_length=150)
     description = models.TextField()
     category = models.CharField(max_length=100)
