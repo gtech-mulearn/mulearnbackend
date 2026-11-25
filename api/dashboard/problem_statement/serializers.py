@@ -44,13 +44,15 @@ class ProblemStatementWriteSerializer(serializers.ModelSerializer):
 
 class AdminProblemStatementWriteSerializer(ProblemStatementWriteSerializer):
     """
-    Admin payload: also accepts ``muid`` to create / edit the statement on behalf of a user.
-    Blank or null clears it. Resolution to a user happens in the view.
+    Admin payload: also accepts ``muid`` to create / edit the statement on behalf of a user,
+    and ``company_id`` to create / edit it on behalf of a verified company.
+    Blank or null clears them. Resolution happens in the view.
     """
     muid = serializers.CharField(max_length=100, required=False, allow_null=True, allow_blank=True)
+    company_id = serializers.CharField(max_length=36, required=False, allow_null=True, allow_blank=True)
 
     class Meta(ProblemStatementWriteSerializer.Meta):
-        fields = [*ProblemStatementWriteSerializer.Meta.fields, "muid"]
+        fields = [*ProblemStatementWriteSerializer.Meta.fields, "muid", "company_id"]
 
 
 class InteractionWriteSerializer(serializers.ModelSerializer):
