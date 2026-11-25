@@ -6,9 +6,11 @@ from django.db.models import Count
 from django.utils import timezone
 
 from db.company import Company
+from db.organization import Organization
 from db.user import User
 from db.problem_statement import ProblemStatement, ProblemStatementInteraction
 from utils.response import CustomResponse
+from utils.types import OrganizationType
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +28,7 @@ def not_found():
 
 
 def statement_queryset():
-    return ProblemStatement.objects.select_related("company", "on_behalf_of")
+    return ProblemStatement.objects.select_related("company", "community", "on_behalf_of")
 
 
 def filter_source(qs, params):
@@ -140,6 +142,19 @@ def resolve_company(raw):
     return company, None
 
 
+def resolve_community(raw):
+    """(community, error) for an admin-supplied ``community_id``; blank/None gives (None, None)."""
+    community_id = (raw or "").strip()
+    if not community_id:
+        return None, None
+    community = Organization.objects.filter(
+        id=community_id, org_type=OrganizationType.COMMUNITY.value
+    ).first()
+    if not community:
+        return None, failure("Community not found.", 404)
+    return community, None
+
+
 def notify_company(company, statement, actor_id, event):
     """
     Best-effort in-app notification to the company's user; never fails the write.
@@ -196,14 +211,18 @@ def notify_company_after_edit(statement, data, outcome, actor_id, relink_request
         logger.exception("Failed to notify companies for problem statement %s", statement.id)
 
 
-def apply_changes(statement_id, data, user_id, on_behalf_of_id=_UNSET, company_id=_UNSET, result=None):
+def apply_changes(statement_id, data, user_id, on_behalf_of_id=_UNSET, company_id=_UNSET,
+                  community_id=_UNSET, result=None):
     """
     Returns an error response, or None on success. ``on_behalf_of_id`` None clears the mention.
-    ``company_id`` re-links the statement and sets ``source`` to match; None unlinks it. The
-    company is re-checked (verified, not deleted) and locked inside the transaction, so it
-    can't be un-verified or deleted between the check and the write. A link to the company it
-    already has is a no-op. If a ``result`` dict is passed it receives ``previous_on_behalf_of_id``,
-    ``previous_company_id`` (read under the row lock) and ``company`` (the new Company or None).
+    ``company_id`` / ``community_id`` re-link the statement; None unlinks it. A statement has a
+    company OR a community, so setting one clears the other, and ``source`` follows
+    (company / community / mulearn). The target is re-checked (verified company, or an
+    organization of type Community) and locked inside the transaction, so it can't be
+    un-verified or deleted between the check and the write. Linking what it already has is a
+    no-op. If a ``result`` dict is passed it receives ``previous_on_behalf_of_id``,
+    ``previous_company_id`` (read under the row lock) and, when the company link changed,
+    ``company`` (the new Company or None).
     """
     with transaction.atomic():
         statement = ProblemStatement.objects.select_for_update().filter(id=statement_id).first()
@@ -218,27 +237,49 @@ def apply_changes(statement_id, data, user_id, on_behalf_of_id=_UNSET, company_i
         if on_behalf_of_id is not _UNSET:
             statement.on_behalf_of_id = on_behalf_of_id
             changed.append("on_behalf_of")
-        if company_id is not _UNSET and str(company_id or "") != str(statement.company_id or ""):
-            company = None
-            if company_id:
+        if company_id is not _UNSET or community_id is not _UNSET:
+            new_company_id = statement.company_id if company_id is _UNSET else (company_id or None)
+            new_community_id = statement.community_id if community_id is _UNSET else (community_id or None)
+            if new_company_id and company_id is not _UNSET:
+                new_community_id = None
+            elif new_community_id and community_id is not _UNSET:
+                new_company_id = None
+            company_changed = str(new_company_id or "") != str(statement.company_id or "")
+            community_changed = str(new_community_id or "") != str(statement.community_id or "")
+            company = community = None
+            if company_changed and new_company_id:
                 company = Company.objects.select_for_update().select_related("company_user").filter(
-                    id=company_id, status="verified", deleted_at__isnull=True
+                    id=new_company_id, status="verified", deleted_at__isnull=True
                 ).first()
                 if not company:
                     return failure("Verified company not found.", 404)
-            statement.company = company
-            statement.source = (
-                ProblemStatement.Source.COMPANY if company else ProblemStatement.Source.MULEARN
-            )
-            changed.extend(["company", "source"])
-            if result is not None:
-                result["company"] = company
+            if community_changed and new_community_id:
+                community = Organization.objects.select_for_update().filter(
+                    id=new_community_id, org_type=OrganizationType.COMMUNITY.value
+                ).first()
+                if not community:
+                    return failure("Community not found.", 404)
+            if company_changed:
+                statement.company = company
+                changed.append("company")
+                if result is not None:
+                    result["company"] = company
+            if community_changed:
+                statement.community = community
+                changed.append("community")
+            if company_changed or community_changed:
+                statement.source = (
+                    ProblemStatement.Source.COMPANY if new_company_id
+                    else ProblemStatement.Source.COMMUNITY if new_community_id
+                    else ProblemStatement.Source.MULEARN
+                )
+                changed.append("source")
         statement.updated_by_id = user_id
         try:
             statement.save(update_fields=[*changed, "updated_by", "updated_at"])
         except IntegrityError:
-            # FK failure: the company or the acting user was deleted under us.
-            return failure("Company or user not found.", 404)
+            # FK failure: the company/community or the acting user was deleted under us.
+            return failure("Company, community or user not found.", 404)
     return None
 
 

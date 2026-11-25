@@ -53,6 +53,8 @@ class ProblemStatementListAPI(APIView):
             )).filter(has_skill=True)
         if params.get("company_id"):
             qs = qs.filter(company_id=params["company_id"])
+        if params.get("community_id"):
+            qs = qs.filter(community_id=params["community_id"])
         if params.get("open_only") == "true":
             qs = qs.filter(Q(deadline__isnull=True) | Q(deadline__gt=timezone.now()))
         search_query = params.get("search")
@@ -61,7 +63,7 @@ class ProblemStatementListAPI(APIView):
         extra_q = Q(source=ProblemStatement.Source.MULEARN) if search_query and "mulearn" in search_query.lower() else None
         page = CommonUtils.get_paginated_queryset(
             qs.order_by("-published_at"), request,
-            ["title", "description", "category", "company__name"],
+            ["title", "description", "category", "company__name", "community__title"],
             {"published_at": "published_at", "deadline": "deadline", "title": "title"},
             extra_q=extra_q,
         )

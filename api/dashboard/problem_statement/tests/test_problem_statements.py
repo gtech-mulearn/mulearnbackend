@@ -43,6 +43,20 @@ def make_company(owner, name):
     )
 
 
+def make_community(admin_user, title, org_type="Community"):
+    """An organization row; org_type 'Community' is what the community list returns."""
+    from db.organization import Country, District, Organization, State, Zone
+    kw = {"updated_by": admin_user, "created_by": admin_user}
+    tag = f"pstest-{title}"
+    country = Country.objects.create(name=tag, **kw)
+    state = State.objects.create(name=tag, country=country, **kw)
+    zone = Zone.objects.create(name=tag, state=state, **kw)
+    district = District.objects.create(name=tag, zone=zone, **kw)
+    return Organization.objects.create(
+        title=tag, code=tag[-12:], org_type=org_type, district=district, **kw
+    )
+
+
 @pytest.fixture
 def world(db):
     a_owner, b_owner, learner, admin = (make_user(u) for u in ("a_owner", "b_owner", "learner", "admin"))
@@ -54,6 +68,7 @@ def world(db):
         "learner": client_for(learner),
         "learner_user": learner,
         "admin": client_for(admin, [RoleType.ADMIN.value]),
+        "admin_user": admin,
     }
 
 
@@ -348,6 +363,106 @@ def test_admin_patch_blank_company_id_keeps_link_and_same_id_is_noop(world):
     world["company_b"].save()
     assert admin.patch(f"{BASE}admin/{sid}/", {"company_id": world["company_b"].id}, format="json").status_code == 404
     assert str(ProblemStatement.objects.get(id=sid).company_id) == str(world["company_a"].id)
+
+
+# ----------------------------------------------------------------- on behalf of a community
+
+def _post_admin(world, **extra):
+    return world["admin"].post(BASE + "admin/", {**PAYLOAD, **extra}, format="json")
+
+
+def test_admin_creates_for_community(world):
+    from db.notification import Notification
+    community = make_community(world["admin_user"], "GTech")
+    before = Notification.objects.count()
+    res = _post_admin(world, community_id=community.id)
+    assert res.status_code == 200
+    body = res.json()["response"]
+    assert body["status"] == "Draft" and body["source"] == "community"
+    assert body["company"] == {"id": str(community.id), "name": community.title, "logo": None}
+    ps = ProblemStatement.objects.get(id=body["id"])
+    assert ps.source == ProblemStatement.Source.COMMUNITY and ps.company_id is None
+    assert str(ps.community_id) == str(community.id)
+    assert Notification.objects.count() == before  # communities are not notified
+
+
+def test_community_id_must_be_a_community(world):
+    college = make_community(world["admin_user"], "AColl", org_type="College")
+    for bad in ("does-not-exist", college.id):
+        assert _post_admin(world, community_id=bad).status_code == 404
+    assert not ProblemStatement.objects.filter(title=PAYLOAD["title"]).exists()
+
+
+def test_company_and_community_together_rejected(world):
+    community = make_community(world["admin_user"], "Both")
+    res = _post_admin(world, community_id=community.id, company_id=world["company_a"].id)
+    assert res.status_code == 400
+    assert not ProblemStatement.objects.filter(title=PAYLOAD["title"]).exists()
+
+
+def test_company_route_rejects_community_id(world):
+    community = make_community(world["admin_user"], "NoCo")
+    res = world["a"].post(BASE + "company/", {**PAYLOAD, "community_id": community.id}, format="json")
+    assert res.status_code == 400
+
+
+def test_community_statement_hidden_from_companies_and_shown_to_learners(world):
+    community = make_community(world["admin_user"], "Vis")
+    sid = _post_admin(world, community_id=community.id).json()["response"]["id"]
+    assert world["a"].get(BASE + "company/").json()["response"]["data"] == []
+    assert world["a"].get(f"{BASE}company/{sid}/").status_code == 404
+    assert world["admin"].post(f"{BASE}admin/{sid}/publish/").status_code == 200
+    row = next(r for r in world["learner"].get(BASE).json()["response"]["data"] if r["id"] == sid)
+    assert row["company"]["name"] == community.title and row["source"] == "community"
+    only = world["learner"].get(BASE, {"community_id": community.id}).json()["response"]["data"]
+    assert [r["id"] for r in only] == [sid]
+    assert world["learner"].get(BASE, {"source": "community"}).json()["response"]["data"]
+
+
+def test_admin_relinks_between_company_community_and_mulearn(world):
+    from db.notification import Notification
+    admin = world["admin"]
+    community = make_community(world["admin_user"], "Move")
+    other = make_community(world["admin_user"], "Move2")
+    sid = _post_admin(world, community_id=community.id).json()["response"]["id"]
+    url = f"{BASE}admin/{sid}/"
+
+    # blank is ignored, same id is a no-op, plain edit keeps the link
+    res = admin.patch(url, {"community_id": "", "title": "Still community"}, format="json")
+    assert res.json()["response"]["source"] == "community"
+    assert admin.patch(url, {"community_id": community.id}, format="json").status_code == 200
+
+    res = admin.patch(url, {"community_id": other.id}, format="json")
+    assert res.json()["response"]["company"]["id"] == str(other.id)
+
+    # community -> company: the community link is cleared, the company is told
+    res = admin.patch(url, {"company_id": world["company_a"].id}, format="json")
+    body = res.json()["response"]
+    assert body["source"] == "company" and body["company"]["id"] == str(world["company_a"].id)
+    ps = ProblemStatement.objects.get(id=sid)
+    assert ps.community_id is None
+    assert Notification.objects.filter(user_id=world["company_a"].company_user_id, title__icontains="assigned").count() == 1
+
+    # company -> community: the company link is cleared, the old company is told
+    res = admin.patch(url, {"community_id": community.id}, format="json")
+    assert res.json()["response"]["source"] == "community"
+    ps = ProblemStatement.objects.get(id=sid)
+    assert ps.company_id is None and str(ps.community_id) == str(community.id)
+    assert Notification.objects.filter(user_id=world["company_a"].company_user_id, title__icontains="moved from").count() == 1
+
+    # explicit null unlinks -> muLearn
+    res = admin.patch(url, {"community_id": None}, format="json")
+    assert res.json()["response"]["company"]["name"] == "muLearn"
+    assert ProblemStatement.objects.get(id=sid).source == ProblemStatement.Source.MULEARN
+
+
+def test_admin_relink_to_non_community_rejected_and_link_kept(world):
+    community = make_community(world["admin_user"], "Keep")
+    college = make_community(world["admin_user"], "KeepColl", org_type="College")
+    sid = _post_admin(world, community_id=community.id).json()["response"]["id"]
+    res = world["admin"].patch(f"{BASE}admin/{sid}/", {"community_id": college.id}, format="json")
+    assert res.status_code == 404
+    assert str(ProblemStatement.objects.get(id=sid).community_id) == str(community.id)
 
 
 def test_company_notification_failure_does_not_fail_create(world, monkeypatch):
