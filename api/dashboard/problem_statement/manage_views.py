@@ -104,12 +104,14 @@ class ListCreateBase(ManageBase):
             qs = qs.filter(category__iexact=params["category"])
         if params.get("company_id"):
             qs = qs.filter(company_id=params["company_id"])
+        if params.get("community_id"):
+            qs = qs.filter(community_id=params["community_id"])
         search_query = params.get("search")
         # "company__name" can't match muLearn-sourced rows (company is null); searching the
         # display label shown for them needs an explicit extra condition.
         extra_q = Q(source=ProblemStatement.Source.MULEARN) if search_query and "mulearn" in search_query.lower() else None
         page = CommonUtils.get_paginated_queryset(
-            qs.order_by("-updated_at"), request, ["title", "category", "company__name"], SORT_FIELDS,
+            qs.order_by("-updated_at"), request, ["title", "category", "company__name", "community__title"], SORT_FIELDS,
             extra_q=extra_q,
         )
         return CustomResponse().paginated_response(
@@ -121,9 +123,10 @@ class ListCreateBase(ManageBase):
         if error:
             return error
         user_id = JWTUtils.fetch_user_id(request)
-        # Only admins (no company scope) may mention a user by muid or pass a company_id.
-        # An admin statement without company_id is muLearn-authored (source=MULEARN, no company);
-        # with a verified company_id it is created on that company's behalf (source=COMPANY).
+        # Only admins (no company scope) may mention a user by muid or pass a company_id /
+        # community_id. Without either, an admin statement is muLearn-authored (source=MULEARN);
+        # with a verified company_id it is created on that company's behalf (source=COMPANY);
+        # with a community_id, for that community (source=COMMUNITY, no notification).
         is_admin = company is None
         serializer_class = (
             serializers.AdminProblemStatementWriteSerializer if is_admin
@@ -136,15 +139,24 @@ class ListCreateBase(ManageBase):
         on_behalf_of, error = ps_utils.resolve_muid(data.get("muid"))
         if error:
             return error
+        community = None
         if is_admin:
             company, error = ps_utils.resolve_company(data.get("company_id"))
             if error:
                 return error
-        source = ProblemStatement.Source.COMPANY if company else ProblemStatement.Source.MULEARN
+            community, error = ps_utils.resolve_community(data.get("community_id"))
+            if error:
+                return error
+        source = (
+            ProblemStatement.Source.COMPANY if company
+            else ProblemStatement.Source.COMMUNITY if community
+            else ProblemStatement.Source.MULEARN
+        )
         try:
             with transaction.atomic():
                 statement = ProblemStatement.objects.create(
                     company=company,
+                    community=community,
                     title=data["title"],
                     description=data["description"],
                     category=data["category"],
@@ -202,8 +214,9 @@ class DetailBase(ManageBase):
             kwargs["on_behalf_of_id"] = mentioned.id if mentioned else None
         # Only the admin serializer has company_id. Blank means "not provided" (a form that
         # sends the field empty must not unlink the company); explicit null unlinks.
-        if data.get("company_id", "") != "" or ("company_id" in data and data["company_id"] is None):
-            kwargs["company_id"] = data["company_id"]
+        for key in ("company_id", "community_id"):
+            if data.get(key, "") != "" or (key in data and data[key] is None):
+                kwargs[key] = data[key]
         outcome = {}
         error = ps_utils.apply_changes(statement.id, data, user_id, result=outcome, **kwargs)
         if error:
@@ -212,7 +225,7 @@ class DetailBase(ManageBase):
         if mentioned and mentioned.id != outcome.get("previous_on_behalf_of_id"):
             ps_utils.notify_on_behalf_of(mentioned, statement, user_id, created=False)
         if company is None:  # admin caller: tell the company side
-            ps_utils.notify_company_after_edit(statement, data, outcome, user_id, "company_id" in kwargs)
+            ps_utils.notify_company_after_edit(statement, data, outcome, user_id, "company_id" in kwargs or "community_id" in kwargs)
         return CustomResponse(
             general_message="Problem statement updated.", response=self.render(self.fresh(statement.id))
         ).get_success_response()
