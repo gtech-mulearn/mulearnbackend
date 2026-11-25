@@ -121,12 +121,13 @@ class ListCreateBase(ManageBase):
         if error:
             return error
         user_id = JWTUtils.fetch_user_id(request)
-        # Admin-authored statements aren't attributed to any company (source=MULEARN);
-        # admin cannot target another company's profile here.
-        # Only admins (no company scope) may mention a user by muid.
+        # Only admins (no company scope) may mention a user by muid or pass a company_id.
+        # An admin statement without company_id is muLearn-authored (source=MULEARN, no company);
+        # with a verified company_id it is created on that company's behalf (source=COMPANY).
+        is_admin = company is None
         serializer_class = (
-            serializers.ProblemStatementWriteSerializer if company
-            else serializers.AdminProblemStatementWriteSerializer
+            serializers.AdminProblemStatementWriteSerializer if is_admin
+            else serializers.ProblemStatementWriteSerializer
         )
         serializer = serializer_class(data=request.data)
         if not serializer.is_valid():
@@ -135,6 +136,10 @@ class ListCreateBase(ManageBase):
         on_behalf_of, error = ps_utils.resolve_muid(data.get("muid"))
         if error:
             return error
+        if is_admin:
+            company, error = ps_utils.resolve_company(data.get("company_id"))
+            if error:
+                return error
         source = ProblemStatement.Source.COMPANY if company else ProblemStatement.Source.MULEARN
         try:
             with transaction.atomic():
@@ -160,6 +165,8 @@ class ListCreateBase(ManageBase):
                 return ps_utils.failure("User not found.", 404)
             raise
         ps_utils.notify_on_behalf_of(on_behalf_of, statement, user_id, created=True)
+        if is_admin:
+            ps_utils.notify_company(company, statement, user_id, "created")
         statement = self.fresh(statement.id)
         return CustomResponse(
             general_message="Problem statement created.", response=self.render(statement)
@@ -187,12 +194,18 @@ class DetailBase(ManageBase):
             return CustomResponse(message=serializer.errors).get_failure_response()
         data = serializer.validated_data
         user_id = JWTUtils.fetch_user_id(request)
-        kwargs, mentioned = {}, None
+        kwargs, mentioned, new_company = {}, None, None
         if "muid" in data:
             mentioned, error = ps_utils.resolve_muid(data["muid"])
             if error:
                 return error
             kwargs["on_behalf_of_id"] = mentioned.id if mentioned else None
+        relink = "company_id" in data  # only the admin serializer has this field
+        if relink:
+            new_company, error = ps_utils.resolve_company(data["company_id"])
+            if error:
+                return error
+            kwargs["company"] = new_company
         outcome = {}
         error = ps_utils.apply_changes(statement.id, data, user_id, result=outcome, **kwargs)
         if error:
@@ -200,6 +213,20 @@ class DetailBase(ManageBase):
         # Compare with the value read under the row lock, not the one read before it.
         if mentioned and mentioned.id != outcome.get("previous_on_behalf_of_id"):
             ps_utils.notify_on_behalf_of(mentioned, statement, user_id, created=False)
+        if company is None:  # admin caller: tell the company side
+            previous_id = outcome.get("previous_company_id")
+            new_id = new_company.id if new_company else None
+            if relink and new_id != previous_id:
+                if new_company:
+                    ps_utils.notify_company(new_company, statement, user_id, "assigned")
+                if previous_id:
+                    previous = Company.objects.select_related("company_user").filter(id=previous_id).first()
+                    ps_utils.notify_company(previous, statement, user_id, "removed")
+            elif previous_id and any(f in data for f in ps_utils.EDITABLE_FIELDS):
+                owner = statement.company if statement.company_id == previous_id else (
+                    Company.objects.select_related("company_user").filter(id=previous_id).first()
+                )
+                ps_utils.notify_company(owner, statement, user_id, "updated")
         return CustomResponse(
             general_message="Problem statement updated.", response=self.render(self.fresh(statement.id))
         ).get_success_response()

@@ -279,14 +279,69 @@ def test_admin_has_full_control(world):
     assert not ProblemStatement.objects.filter(id=sid).exists()
 
 
-def test_admin_cannot_target_a_company(world):
-    res = world["admin"].post(
-        BASE + "admin/", {**PAYLOAD, "company_id": world["company_b"].id}, format="json"
-    )
-    assert res.status_code == 400  # unknown field is rejected, same as the company-side create
-    assert not ProblemStatement.objects.filter(
-        title=PAYLOAD["title"], company=world["company_b"]
-    ).exists()
+def _notes(company, title_part=""):
+    from db.notification import Notification
+    return Notification.objects.filter(user_id=company.company_user_id, title__icontains=title_part)
+
+
+def test_admin_creates_for_verified_company_and_notifies(world):
+    res = world["admin"].post(BASE + "admin/", {**PAYLOAD, "company_id": world["company_b"].id}, format="json")
+    assert res.status_code == 200
+    body = res.json()["response"]
+    assert body["status"] == "Draft" and body["company"]["id"] == str(world["company_b"].id)
+    sid = body["id"]
+    ps = ProblemStatement.objects.get(id=sid)
+    assert ps.source == ProblemStatement.Source.COMPANY and str(ps.company_id) == str(world["company_b"].id)
+    assert _notes(world["company_b"], "created for your company").count() == 1
+    # the owning company can now see, edit and publish it; the other company cannot
+    assert world["b"].patch(f"{BASE}company/{sid}/", {"title": "Company edit"}, format="json").status_code == 200
+    assert world["b"].post(f"{BASE}company/{sid}/publish/").status_code == 200
+    assert world["a"].get(f"{BASE}company/{sid}/").status_code == 404
+    # company editing its own statement: no extra notification
+    assert _notes(world["company_b"], "updated").count() == 0
+
+
+def test_admin_company_id_must_be_verified(world):
+    pending = make_company(make_user("pending_owner"), "Pending")
+    pending.status = "pending"
+    pending.save()
+    for bad in ("does-not-exist", pending.id):
+        res = world["admin"].post(BASE + "admin/", {**PAYLOAD, "company_id": bad}, format="json")
+        assert res.status_code == 404
+    assert not ProblemStatement.objects.filter(title=PAYLOAD["title"]).exists()
+
+
+def test_company_route_rejects_company_id(world):
+    res = world["a"].post(BASE + "company/", {**PAYLOAD, "company_id": world["company_b"].id}, format="json")
+    assert res.status_code == 400
+    assert not ProblemStatement.objects.filter(company=world["company_b"]).exists()
+
+
+def test_admin_edit_notifies_company_and_relinks(world):
+    admin = world["admin"]
+    sid = admin.post(BASE + "admin/", {**PAYLOAD, "company_id": world["company_a"].id}, format="json").json()["response"]["id"]
+    assert admin.patch(f"{BASE}admin/{sid}/", {"description": "An updated long description."}, format="json").status_code == 200
+    assert _notes(world["company_a"], "was updated").count() == 1
+    # re-link a -> b
+    res = admin.patch(f"{BASE}admin/{sid}/", {"company_id": world["company_b"].id}, format="json")
+    assert res.status_code == 200 and res.json()["response"]["company"]["id"] == str(world["company_b"].id)
+    assert _notes(world["company_b"], "assigned").count() == 1
+    assert _notes(world["company_a"], "moved from").count() == 1
+    # clear -> muLearn statement
+    res = admin.patch(f"{BASE}admin/{sid}/", {"company_id": None}, format="json")
+    assert res.json()["response"]["company"]["name"] == "muLearn"
+    assert ProblemStatement.objects.get(id=sid).source == ProblemStatement.Source.MULEARN
+    assert _notes(world["company_b"], "moved from").count() == 1
+
+
+def test_company_notification_failure_does_not_fail_create(world, monkeypatch):
+    from api.notification.notifications_utils import NotificationUtils
+
+    def boom(*a, **k):
+        raise RuntimeError("down")
+    monkeypatch.setattr(NotificationUtils, "insert_notification", boom)
+    res = world["admin"].post(BASE + "admin/", {**PAYLOAD, "company_id": world["company_a"].id}, format="json")
+    assert res.status_code == 200
 
 
 def test_admin_create_is_mulearn_sourced(world):
