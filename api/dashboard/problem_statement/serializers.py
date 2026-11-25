@@ -45,14 +45,21 @@ class ProblemStatementWriteSerializer(serializers.ModelSerializer):
 class AdminProblemStatementWriteSerializer(ProblemStatementWriteSerializer):
     """
     Admin payload: also accepts ``muid`` to create / edit the statement on behalf of a user,
-    and ``company_id`` to create / edit it on behalf of a verified company.
+    ``company_id`` to create / edit it on behalf of a verified company, or ``community_id``
+    for a community (never both).
     Blank or null clears them. Resolution happens in the view.
     """
     muid = serializers.CharField(max_length=100, required=False, allow_null=True, allow_blank=True)
     company_id = serializers.CharField(max_length=36, required=False, allow_null=True, allow_blank=True)
+    community_id = serializers.CharField(max_length=36, required=False, allow_null=True, allow_blank=True)
 
     class Meta(ProblemStatementWriteSerializer.Meta):
-        fields = [*ProblemStatementWriteSerializer.Meta.fields, "muid", "company_id"]
+        fields = [*ProblemStatementWriteSerializer.Meta.fields, "muid", "company_id", "community_id"]
+
+    def validate(self, attrs):
+        if (attrs.get("company_id") or "").strip() and (attrs.get("community_id") or "").strip():
+            raise serializers.ValidationError("Send either company_id or community_id, not both.")
+        return attrs
 
 
 class InteractionWriteSerializer(serializers.ModelSerializer):
@@ -102,7 +109,7 @@ class ProblemStatementSerializer(serializers.ModelSerializer):
         model = ProblemStatement
         fields = [
             "id", "title", "description", "category", "skills", "deadline", "status",
-            "company", "on_behalf_of", "is_open", "interaction_counts", "my_interaction",
+            "source", "company", "on_behalf_of", "is_open", "interaction_counts", "my_interaction",
             "created_by", "created_at", "updated_by", "updated_at",
             "published_by", "published_at",
         ]
@@ -118,7 +125,10 @@ class ProblemStatementSerializer(serializers.ModelSerializer):
     def get_company(self, obj):
         # company is None also guards a source/company mismatch made outside the API
         # (the DB can't enforce it), so one bad row can't 500 the whole list.
-        if obj.source == ProblemStatement.Source.MULEARN or obj.company is None:
+        if obj.source == ProblemStatement.Source.COMMUNITY and obj.community is not None:
+            # Communities are shown in the same ``company`` slot so cards need no new field.
+            return {"id": obj.community_id, "name": obj.community.title, "logo": None}
+        if obj.source != ProblemStatement.Source.COMPANY or obj.company is None:
             return {"id": None, "name": "muLearn", "logo": None}
         return {"id": obj.company_id, "name": obj.company.name, "logo": obj.company.logo}
 
