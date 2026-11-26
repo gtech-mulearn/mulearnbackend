@@ -104,12 +104,13 @@ class ProblemStatementSerializer(serializers.ModelSerializer):
     my_interaction = serializers.SerializerMethodField()
     is_open = serializers.SerializerMethodField()
     on_behalf_of = serializers.SerializerMethodField()
+    creator = serializers.SerializerMethodField()
 
     class Meta:
         model = ProblemStatement
         fields = [
             "id", "title", "description", "category", "skills", "deadline", "status",
-            "source", "company", "on_behalf_of", "is_open", "interaction_counts", "my_interaction",
+            "source", "company", "creator", "on_behalf_of", "is_open", "interaction_counts", "my_interaction",
             "created_by", "created_at", "updated_by", "updated_at",
             "published_by", "published_at",
         ]
@@ -131,6 +132,25 @@ class ProblemStatementSerializer(serializers.ModelSerializer):
         if obj.source != ProblemStatement.Source.COMPANY or obj.company is None:
             return {"id": None, "name": "muLearn", "logo": None}
         return {"id": obj.company_id, "name": obj.company.name, "logo": obj.company.logo}
+
+    def get_creator(self, obj):
+        """
+        Who the statement is shown as created by, on every GET (list, detail, learner, admin).
+        An admin who creates on behalf of someone is not the visible author: a company,
+        community or mentioned user takes their place; otherwise it is muLearn.
+        ``created_by`` (the real admin) stays in the audit fields.
+        """
+        if obj.source == ProblemStatement.Source.COMPANY and obj.company is not None:
+            return {"type": "company", "id": obj.company_id, "name": obj.company.name,
+                    "logo": obj.company.logo}
+        if obj.source == ProblemStatement.Source.COMMUNITY and obj.community is not None:
+            return {"type": "community", "id": obj.community_id, "name": obj.community.title,
+                    "logo": None}
+        if obj.on_behalf_of is not None:
+            user = obj.on_behalf_of
+            return {"type": "user", "id": user.id, "name": user.full_name, "muid": user.muid,
+                    "profile_pic": user.profile_pic}
+        return {"type": "mulearn", "id": None, "name": "muLearn", "logo": None}
 
     def get_on_behalf_of(self, obj):
         user = obj.on_behalf_of
