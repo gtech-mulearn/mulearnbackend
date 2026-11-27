@@ -4,7 +4,7 @@ Daily timesheet streak + milestone karma.
 Moved from api/dashboard/manage_interns/reviews/review_views.py when admin
 approval of daily timesheets was removed. The streak and milestone logic is
 unchanged; the only differences are:
-  - timesheets with any status in COUNTED_TIMESHEET_STATUSES count (was APPROVED only)
+  - every timesheet counts (there is no status column any more; was APPROVED only)
   - the karma actor is whoever triggers the sync (the intern on submit),
     since there is no approving admin any more.
 """
@@ -15,10 +15,10 @@ from django.utils.timezone import now
 
 from api.notification.types import NotificationType
 from db.achievement import UserStreak
-from db.intern import InternDailyTimesheet, UserInternGuildLink
+from db.intern import InternDailyTimesheet, UserInternTeamLink
 from db.task import KarmaActivityLog, TaskList, Wallet
 from utils.karma import notify_karma_change
-from utils.types import COUNTED_TIMESHEET_STATUSES, InternHashtag
+from utils.types import InternHashtag
 
 TIMESHEET_STREAK_TYPE = 'intern_timesheet'
 
@@ -47,10 +47,7 @@ def recalculate_intern_timesheet_streak(user_id: str) -> dict:
             - milestone_hits (dict): {milestone_days: count_of_times_reached}
     """
     counted_dates = list(
-        InternDailyTimesheet.objects.filter(
-            user_id=user_id,
-            status__in=COUNTED_TIMESHEET_STATUSES,
-        )
+        InternDailyTimesheet.objects.filter(user_id=user_id)
         .order_by('entry_date')
         .values_list('entry_date', flat=True)
         .distinct()  # Guard against duplicate rows for the same date
@@ -213,13 +210,13 @@ def sync_timesheet_streak(user_id: str, actor_id: str) -> dict:
     repeatedly — streak is recomputed from scratch and milestones are
     awarded expected-vs-actual.
 
-    Locks the intern's guild-link row for the duration of the caller's
+    Locks the intern's team membership rows for the duration of the caller's
     transaction so two concurrent submissions by the same intern cannot both
     see the same milestone as unpaid and award it twice. Must be called
     inside transaction.atomic().
     """
-    # Taken only for the row lock; the row itself isn't used.
-    UserInternGuildLink.objects.select_for_update().filter(user_id=user_id).first()
+    # Taken only for the row lock; the rows themselves aren't used.
+    list(UserInternTeamLink.objects.select_for_update().filter(user_id=user_id).values_list('id', flat=True))
 
     recalc = recalculate_intern_timesheet_streak(user_id)
 

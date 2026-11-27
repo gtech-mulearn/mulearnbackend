@@ -4,8 +4,11 @@ from rest_framework.views import APIView
 from django.utils.timezone import now
 from django.db import transaction
 from django.db.models import F
-from drf_spectacular.utils import extend_schema, OpenApiResponse
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse
 
+from utils.intern_permissions import (
+    by_current_members, include_former, is_admin, scope_records, self_review_error,
+)
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType, InternHashtag
@@ -16,24 +19,47 @@ from utils.karma import notify_karma_change
 from api.notification.types import NotificationType
 from .serializers import ManageInternTaskSerializer
 
+# Plain interns use intern/tasks/ for their own tasks.
+TASK_MANAGE_ROLES = [RoleType.ADMIN.value, RoleType.INTERN_LEAD.value]
+
+
+def scoped_tasks(request):
+    """Tasks the caller may manage: Admin all; Lead those assigned in their team (former members included)."""
+    return scope_records(InternTask.objects.select_related('assigned_to', 'team'), request)
+
 class ManageInternTaskAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
+    @role_required(TASK_MANAGE_ROLES)
     @extend_schema(
         tags=['Dashboard - Intern'],
-        description="Retrieve intern task(s) or task detail.",
+        description=(
+            "List intern tasks, or one task by id. Admin: every team (optional `team_id`). Intern "
+            "Lead: tasks assigned in their team. The list shows by default only tasks of people "
+            "who are still current members of that team (INACTIVE included); `include_former=true` "
+            "also returns those of people who have left, and, for Admins, tasks from before teams. "
+            "One task by id includes former members."
+        ),
+        parameters=[
+            OpenApiParameter(name='team_id', description='Admin only: one team', required=False, type=str),
+            OpenApiParameter(name='include_former', description='true: also people who left the team', required=False, type=str),
+        ],
         responses={200: ManageInternTaskSerializer(many=True)},
     )
     def get(self, request, task_id=None):
         if task_id:
-            task = InternTask.objects.filter(id=task_id).first()
+            task = scoped_tasks(request).filter(id=task_id).first()
             if not task:
                 return CustomResponse(general_message="Task not found.").get_failure_response()
             serializer = ManageInternTaskSerializer(task)
             return CustomResponse(response=serializer.data).get_success_response()
-            
-        tasks = InternTask.objects.select_related('assigned_to').all().order_by('-created_at')
+
+        tasks = scoped_tasks(request).order_by('-created_at')
+        if not include_former(request):
+            tasks = by_current_members(tasks, user_field='assigned_to_id')
+        team_id = request.query_params.get('team_id')
+        if team_id and is_admin(request):
+            tasks = tasks.filter(team_id=team_id)
         
         paginated_queryset = CommonUtils.get_paginated_queryset(
             tasks, request,
@@ -49,15 +75,21 @@ class ManageInternTaskAPI(APIView):
             }
         ).get_success_response()
 
-    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
+    @role_required(TASK_MANAGE_ROLES)
     @extend_schema(
         tags=['Dashboard - Intern'],
-        description="Create an intern task.",
+        description=(
+            "Create an intern task. The assignee must be a current member who isn't INACTIVE; an "
+            "Intern Lead can only assign to members of their own team. The task belongs to the "
+            "assignee's current team."
+        ),
         responses={200: OpenApiResponse(description="Task created successfully.")},
     )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        serializer = ManageInternTaskSerializer(data=request.data, context={'user_id': user_id})
+        serializer = ManageInternTaskSerializer(
+            data=request.data, context={'user_id': user_id, 'request': request}
+        )
         
         if serializer.is_valid():
             serializer.save()
@@ -65,16 +97,20 @@ class ManageInternTaskAPI(APIView):
             
         return CustomResponse(response=serializer.errors).get_failure_response()
 
-    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
+    @role_required(TASK_MANAGE_ROLES)
     @extend_schema(
         tags=['Dashboard - Intern'],
-        description="Update an intern task (partial update).",
+        description=(
+            "Update an intern task (partial update). Admin: any task. Intern Lead: tasks assigned "
+            "in their team, including those of people who have since left. Changing assigned_to "
+            "checks the new assignee like a create, and moves the task to their current team."
+        ),
         responses={200: OpenApiResponse(description="Task updated successfully.")},
     )
     def patch(self, request, task_id):
         user_id = JWTUtils.fetch_user_id(request)
-        
-        task = InternTask.objects.filter(id=task_id).first()
+
+        task = scoped_tasks(request).filter(id=task_id).first()
         if not task:
             return CustomResponse(general_message="Task not found.").get_failure_response()
             
@@ -89,7 +125,9 @@ class ManageInternTaskAPI(APIView):
             "status": task.status
         }
             
-        serializer = ManageInternTaskSerializer(task, data=request_data, partial=True, context={'user_id': user_id})
+        serializer = ManageInternTaskSerializer(
+            task, data=request_data, partial=True, context={'user_id': user_id, 'request': request}
+        )
         
         if serializer.is_valid():
             serializer.save()
@@ -112,14 +150,14 @@ class ManageInternTaskAPI(APIView):
             
         return CustomResponse(response=serializer.errors).get_failure_response()
 
-    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
+    @role_required(TASK_MANAGE_ROLES)
     @extend_schema(
         tags=['Dashboard - Intern'],
-        description="Delete an intern task.",
+        description="Delete an intern task. Same scope as update; a verified task can't be deleted.",
         responses={200: OpenApiResponse(description="Task deleted successfully.")},
     )
     def delete(self, request, task_id):
-        task = InternTask.objects.filter(id=task_id).first()
+        task = scoped_tasks(request).filter(id=task_id).first()
         if not task:
             return CustomResponse(general_message="Task not found.").get_failure_response()
 
@@ -132,10 +170,13 @@ class ManageInternTaskAPI(APIView):
 class ManageInternTasksByInternAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
+    @role_required(TASK_MANAGE_ROLES)
     @extend_schema(
         tags=['Dashboard - Intern'],
-        description="Retrieve all tasks assigned to a specific intern identified by their muid.",
+        description=(
+            "Tasks assigned to one intern (by muid). Admin: all their tasks. Intern Lead: only "
+            "their tasks assigned in the Lead's team."
+        ),
         responses={200: ManageInternTaskSerializer(many=True)},
     )
     def get(self, request, muid):
@@ -144,7 +185,7 @@ class ManageInternTasksByInternAPI(APIView):
         if not user:
             return CustomResponse(general_message=f"User with muid '{muid}' not found.").get_failure_response()
 
-        tasks = InternTask.objects.select_related('assigned_to').filter(assigned_to_id=user.id).order_by('-created_at')
+        tasks = scoped_tasks(request).filter(assigned_to_id=user.id).order_by('-created_at')
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             tasks, request,
@@ -163,18 +204,24 @@ class ManageInternTasksByInternAPI(APIView):
 class ManageInternTaskVerifyAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
+    @role_required(TASK_MANAGE_ROLES)
     @extend_schema(
         tags=['Dashboard - Intern'],
-        description="Verify an intern task and award karma.",
+        description=(
+            "Verify an intern task and award karma. Admin: any task. Intern Lead: tasks assigned "
+            "in their team (including people who have since left), not their own."
+        ),
         responses={200: OpenApiResponse(description="Task verified successfully.")},
     )
     def post(self, request, task_id):
         admin_id = JWTUtils.fetch_user_id(request)
 
-        task = InternTask.objects.filter(id=task_id).first()
+        task = scoped_tasks(request).filter(id=task_id).first()
         if not task:
             return CustomResponse(general_message="Task not found.").get_failure_response()
+        own = self_review_error(request, task.assigned_to_id, "task")
+        if own:
+            return CustomResponse(general_message=own).get_failure_response()
 
         if task.is_verified:
             return CustomResponse(general_message="Task is already verified.").get_failure_response()

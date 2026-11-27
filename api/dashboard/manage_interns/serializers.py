@@ -1,150 +1,169 @@
+from django.db.models import Prefetch
 from rest_framework import serializers
-from django.db import transaction
 
-from db.intern import UserInternGuildLink
-from db.user import User, UserRoleLink, Role
-from utils.types import InternGuildStatus, RoleType
+from db.intern import InternTeam, UserInternTeamLink
+from db.user import User, UserRoleLink
+from utils.intern_permissions import LEAD_ROLE, MEMBER_ROLES, ist_today, tenure_state
+from utils.types import InternStatus
+
+MAX_REASSIGN = 200
+REASON_MAX_LENGTH = 300
+
+
+def intern_queryset():
+    """Membership rows with everything ManageInternSerializer reads, in a fixed number of queries."""
+    return (
+        UserInternTeamLink.objects
+        .select_related('user', 'team')
+        .prefetch_related(Prefetch(
+            'user__user_role_link_user',
+            queryset=UserRoleLink.objects.filter(role__title__in=MEMBER_ROLES).select_related('role'),
+            to_attr='intern_role_links',
+        ))
+    )
+
+
+def intern_roles(link):
+    """Intern-type role titles the user holds, using the prefetch when present."""
+    prefetched = getattr(link.user, 'intern_role_links', None)
+    if prefetched is not None:
+        titles = {rl.role.title for rl in prefetched}
+    else:
+        titles = set(
+            UserRoleLink.objects.filter(user_id=link.user_id, role__title__in=MEMBER_ROLES)
+            .values_list('role__title', flat=True)
+        )
+    # Stable order: Intern first, then Intern Lead.
+    return [title for title in MEMBER_ROLES if title in titles]
 
 
 class ManageInternSerializer(serializers.ModelSerializer):
+    """Read shape of one intern membership row. Use with intern_queryset()."""
     full_name = serializers.CharField(source='user.full_name', read_only=True)
     muid = serializers.CharField(source='user.muid', read_only=True)
-    mu_id = serializers.CharField(write_only=True, required=False)
-    user_id = serializers.CharField(write_only=True, required=False)
-    role = serializers.CharField(required=False)
+    team = serializers.SerializerMethodField()
+    # The API keeps the key `status`; the column is intern_status.
+    status = serializers.CharField(source='intern_status', read_only=True)
+    is_lead = serializers.SerializerMethodField()
+    roles = serializers.SerializerMethodField()
+    # UPCOMING (before join_date), ACTIVE or ENDED (after end_date), and days until end_date.
+    tenure_state = serializers.SerializerMethodField()
+    days_left = serializers.SerializerMethodField()
 
     class Meta:
-        model = UserInternGuildLink
-        fields = ['id', 'user', 'full_name', 'muid', 'mu_id', 'user_id', 'guild', 'status', 'role', 'created_at']
-        read_only_fields = ['user']
+        model = UserInternTeamLink
+        fields = [
+            'id', 'user', 'full_name', 'muid', 'team', 'status', 'status_reason',
+            'join_date', 'end_date', 'tenure_state', 'days_left',
+            'is_current', 'exit_reason', 'is_lead', 'roles', 'created_at',
+        ]
 
-    def to_representation(self, instance):
-        data = super().to_representation(instance)
-        # Collect all intern-type roles the user currently holds
-        intern_role_titles = [RoleType.INTERN.value, RoleType.INTERN_LEAD.value]
-        
-        # Check if we have prefetched data to avoid N+1 queries
-        if hasattr(instance.user, '_prefetched_objects_cache') and 'user_role_link_user' in instance.user._prefetched_objects_cache:
-            active_roles = [
-                link.role.title for link in instance.user.user_role_link_user.all()
-                if link.role.title in intern_role_titles
-            ]
-        else:
-            active_roles = list(
-                UserRoleLink.objects.filter(
-                    user=instance.user,
-                    role__title__in=intern_role_titles
-                ).values_list('role__title', flat=True)
-            )
-            
-        data['roles'] = active_roles
-        # Legacy 'role' field: prefer Intern Lead if held, else Intern
-        data['role'] = (
-            RoleType.INTERN_LEAD.value if RoleType.INTERN_LEAD.value in active_roles
-            else RoleType.INTERN.value
-        )
-        return data
+    def get_tenure_state(self, obj):
+        return tenure_state(obj)
 
-    def validate_role(self, value):
-        allowed = [RoleType.INTERN.value, RoleType.INTERN_LEAD.value]
-        if value not in allowed:
-            raise serializers.ValidationError(
-                f"Invalid role. Allowed values: {allowed}"
-            )
-        return value
+    def get_days_left(self, obj):
+        return max((obj.end_date - ist_today()).days, 0) if obj.end_date else None
+
+    def get_team(self, obj):
+        return {"id": obj.team.id, "name": obj.team.name, "code": obj.team.code}
+
+    def get_roles(self, obj):
+        return intern_roles(obj)
+
+    def get_is_lead(self, obj):
+        return LEAD_ROLE in intern_roles(obj)
+
+
+class OnboardInternSerializer(serializers.Serializer):
+    mu_id = serializers.CharField(required=False, allow_blank=False)
+    user_id = serializers.CharField(required=False, allow_blank=False)
+    team_id = serializers.CharField(required=True)
+    # The tenure: join_date can't be in the past, end_date not before join_date
+    # (checked in onboard_intern).
+    join_date = serializers.DateField(required=True)
+    end_date = serializers.DateField(required=True)
 
     def validate(self, attrs):
-        user_id = attrs.pop('user_id', None)
-        mu_id = attrs.pop('mu_id', None)
+        mu_id = attrs.get('mu_id')
+        user_id = attrs.get('user_id')
+        if not mu_id and not user_id:
+            raise serializers.ValidationError({"user": "Either user_id or mu_id is required."})
 
-        # Only required on create
-        if not self.instance:
-            if not user_id and not mu_id:
-                raise serializers.ValidationError({"user": "Either user_id or mu_id is required."})
+        if mu_id:
+            user = User.objects.filter(muid=mu_id).first()
+            if not user:
+                raise serializers.ValidationError({"mu_id": "No user found with this mu_id."})
+        else:
+            user = User.objects.filter(id=user_id).first()
+            if not user:
+                raise serializers.ValidationError({"user_id": "No user found with this user_id."})
 
-            user = None
-            if mu_id:
-                user = User.objects.filter(muid=mu_id).first()
-                if not user:
-                    raise serializers.ValidationError({"mu_id": "No user found with this mu_id."})
-            elif user_id:
-                user = User.objects.filter(id=user_id).first()
-                if not user:
-                    raise serializers.ValidationError({"user_id": "No user found with this user_id."})
+        team = InternTeam.objects.filter(id=attrs['team_id']).first()
+        if not team:
+            raise serializers.ValidationError({"team_id": "Team not found."})
 
-            if UserInternGuildLink.objects.filter(user=user).exists():
-                raise serializers.ValidationError({"user": "This user is already onboarded as an intern."})
-
-            attrs['user'] = user
-
+        attrs['user'] = user
+        attrs['team'] = team
         return attrs
 
-    def _get_role_obj(self, role_title):
-        """Fetch a Role by title, raising a clean error if it's missing from the DB."""
-        role = Role.objects.filter(title=role_title).first()
-        if not role:
+
+class UpdateInternSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(
+        choices=[s.value for s in InternStatus], required=False
+    )
+    is_lead = serializers.BooleanField(required=False)
+    # New planned end of the tenure (Admin: any date from today; Lead: only later).
+    end_date = serializers.DateField(required=False)
+    # Why the status changed: required whenever status is sent, saved to status_reason.
+    reason = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True, max_length=REASON_MAX_LENGTH
+    )
+
+    def validate(self, attrs):
+        if 'reason' in attrs:
+            attrs['reason'] = (attrs['reason'] or '').strip() or None
+        if not {'status', 'is_lead', 'end_date'} & attrs.keys():
+            raise serializers.ValidationError({"detail": "Send is_lead and/or end_date."})
+        if 'status' in attrs and not attrs.get('reason'):
+            raise serializers.ValidationError({"reason": "A reason is required to change an intern's status."})
+        if attrs.get('reason') and 'status' not in attrs:
+            raise serializers.ValidationError({"reason": "A reason can only be given with a status change."})
+        if attrs.get('status') == InternStatus.ON_LEAVE.value:
+            # ON_LEAVE comes only from approved leave requests, so every leave has dates.
             raise serializers.ValidationError(
-                {"role": f"Role '{role_title}' does not exist in the system."}
+                {"status": "ON_LEAVE can't be set by hand. Approve a leave request instead."}
             )
-        return role
-
-    def _assign_role(self, user, role_title, actor_user_id):
-        """Additively assign the given intern-type role.
-
-        A user can hold both 'Intern' and 'Intern Lead' simultaneously.
-        Assigning 'Intern Lead' also ensures 'Intern' is present.
-        Assigning 'Intern' alone does NOT strip 'Intern Lead' if already held.
-        """
-        roles_to_assign = [role_title]
-        # Intern Lead implies Intern — keep both
-        if role_title == RoleType.INTERN_LEAD.value:
-            roles_to_assign.append(RoleType.INTERN.value)
-
-        for title in roles_to_assign:
-            role = self._get_role_obj(title)
-            UserRoleLink.objects.get_or_create(
-                user=user,
-                role=role,
-                defaults={'verified': True, 'is_active': True, 'created_by_id': actor_user_id}
+        if attrs.get('status') == InternStatus.INACTIVE.value and attrs.get('is_lead') is True:
+            raise serializers.ValidationError(
+                {"is_lead": "An intern being deactivated can't be made a Lead."}
             )
+        return attrs
 
-    def create(self, validated_data):
-        actor_user_id = self.context.get('user_id')
-        role_title = validated_data.pop('role', RoleType.INTERN.value)
 
-        validated_data['created_by_id'] = actor_user_id
-        validated_data['updated_by_id'] = actor_user_id
-        validated_data.setdefault('status', InternGuildStatus.ACTIVE.value)
+class DeactivateInternSerializer(serializers.Serializer):
+    reason = serializers.CharField(
+        required=True, allow_blank=False, max_length=REASON_MAX_LENGTH,
+        error_messages={
+            "required": "A reason is required to deactivate an intern.",
+            "blank": "A reason is required to deactivate an intern.",
+        },
+    )
 
-        with transaction.atomic():
-            guild_link = super().create(validated_data)
-            self._assign_role(guild_link.user, role_title, actor_user_id)
-            return guild_link
 
-    def update(self, instance, validated_data):
-        actor_user_id = self.context.get('user_id')
-        role_title = validated_data.pop('role', None)
+class ReassignInternsSerializer(serializers.Serializer):
+    user_ids = serializers.ListField(
+        child=serializers.CharField(), allow_empty=False, max_length=MAX_REASSIGN
+    )
+    team_id = serializers.CharField(required=True)
+    # The planned end in the new team, one date for everyone in the list.
+    end_date = serializers.DateField(required=True)
 
-        validated_data['updated_by_id'] = actor_user_id
-
-        old_status = instance.status
-        new_status = validated_data.get('status', old_status)
-
-        # Clear previous_status when coming back from ON_LEAVE
-        if old_status == InternGuildStatus.ON_LEAVE.value and new_status != InternGuildStatus.ON_LEAVE.value:
-            validated_data['previous_status'] = None
-
-        with transaction.atomic():
-            guild_link = super().update(instance, validated_data)
-
-            if new_status == InternGuildStatus.INACTIVE.value:
-                # Revoke all intern roles on deactivation
-                UserRoleLink.objects.filter(
-                    user=guild_link.user,
-                    role__title__in=[RoleType.INTERN.value, RoleType.INTERN_LEAD.value]
-                ).delete()
-            elif role_title:
-                # Admin explicitly changing the role
-                self._assign_role(guild_link.user, role_title, actor_user_id)
-
-            return guild_link
+    def validate(self, attrs):
+        team = InternTeam.objects.filter(id=attrs['team_id']).first()
+        if not team:
+            raise serializers.ValidationError({"team_id": "Team not found."})
+        if not team.is_active:
+            raise serializers.ValidationError({"team_id": f"{team.name} ({team.code}) is inactive. Activate it first."})
+        attrs['team'] = team
+        attrs['user_ids'] = list(dict.fromkeys(attrs['user_ids']))
+        return attrs

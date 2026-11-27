@@ -1,14 +1,20 @@
+from django.db.models import Min, Sum
 from rest_framework.views import APIView
-from django.db.models import Sum, Count
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 
+from utils.intern_permissions import current_membership, members_only
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
-from utils.types import RoleType, InternLeaderboardWeights, InternGuildStatus, COUNTED_TIMESHEET_STATUSES
+from utils.types import RoleType
 from utils.utils import CommonUtils
-from db.intern import UserInternGuildLink, InternTask, InternDailyTimesheet, InternWeeklyReview
+from db.intern import InternTask, UserInternTeamLink
 from db.task import KarmaActivityLog
 from db.achievement import UserStreak
+
+from api.dashboard.intern.leaderboard.scoring import (
+    COMPLEXITY_WEIGHT, DAILY_STREAK_TYPE, WEEKLY_STREAK_TYPE, ranked_members, scores_for,
+)
+
 
 class InternOverviewStatusAPI(APIView):
     authentication_classes = [CustomizePermission]
@@ -16,69 +22,51 @@ class InternOverviewStatusAPI(APIView):
     @role_required([RoleType.INTERN.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
-        description="Retrieve intern overview status including karma, streaks, tasks, and score.",
+        description=(
+            "The intern's overview: current team (`guild` is deprecated: the team name), status, "
+            "first join date, intern karma, daily and weekly streaks, completed tasks and the leaderboard score (timesheets x 25 + verified task "
+            "karma x complexity weight). total_interns counts current team members."
+        ),
         responses={200: OpenApiResponse(description="Intern status overview data.")},
     )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        guild_link = UserInternGuildLink.objects.filter(user_id=user_id).first()
-        
-        if not guild_link:
+        link = current_membership(user_id)
+        if not link:
             return CustomResponse(general_message="Not an intern.").get_failure_response()
-            
-        daily_streak = UserStreak.objects.filter(user_id=user_id, streak_type='intern_timesheet').first()
-        weekly_streak = UserStreak.objects.filter(user_id=user_id, streak_type='intern_weekly_review').first()
-        
-        intern_karma_logs = KarmaActivityLog.objects.filter(user_id=user_id, task__hashtag__startswith='#intern-')
-        total_intern_karma = intern_karma_logs.aggregate(Sum('karma'))['karma__sum'] or 0
-        
-        completed_tasks = InternTask.objects.filter(assigned_to_id=user_id, status='COMPLETED').count()
-        
-        tasks = InternTask.objects.filter(assigned_to_id=user_id, status='COMPLETED')
-        complexity_map = {'LOW': 1, 'MEDIUM': 2, 'HIGH': 3, 'CRITICAL': 5}
-        complexity_score = sum([complexity_map.get(t.complexity, 1) for t in tasks])
-        
-        d_streak_val = daily_streak.current_streak if daily_streak else 0
-        w_streak_val = weekly_streak.current_streak if weekly_streak else 0
-        d_longest_streak = daily_streak.longest_streak if daily_streak else 0
-        w_longest_streak = weekly_streak.longest_streak if weekly_streak else 0
 
-        # Score formula — identical to both leaderboard endpoints:
-        # counted_daily_timesheets × 25 + approved_weekly_reviews × 50
-        # + sum(karma_awarded × complexity_weight) for each verified intern task
-        approved_daily_count = InternDailyTimesheet.objects.filter(
-            user_id=user_id, status__in=COUNTED_TIMESHEET_STATUSES
-        ).count()
-        approved_weekly_count = InternWeeklyReview.objects.filter(
-            user_id=user_id, status='APPROVED'
-        ).count()
-        verified_tasks = InternTask.objects.filter(assigned_to_id=user_id, is_verified=True)
-        verified_tasks_score = sum(
-            t.karma_awarded * complexity_map.get(t.complexity, 1)
-            for t in verified_tasks
+        streaks = {
+            streak.streak_type: streak
+            for streak in UserStreak.objects.filter(
+                user_id=user_id, streak_type__in=[DAILY_STREAK_TYPE, WEEKLY_STREAK_TYPE],
+            )
+        }
+        daily_streak = streaks.get(DAILY_STREAK_TYPE)
+        weekly_streak = streaks.get(WEEKLY_STREAK_TYPE)
+        total_intern_karma = (
+            KarmaActivityLog.objects.filter(user_id=user_id, task__hashtag__startswith='#intern-')
+            .aggregate(Sum('karma'))['karma__sum'] or 0
         )
+        completed = list(
+            InternTask.objects.filter(assigned_to_id=user_id, status='COMPLETED').values_list('complexity', flat=True)
+        )
+        first_joined = UserInternTeamLink.objects.filter(user_id=user_id).aggregate(first=Min('created_at'))['first']
 
-        score = (
-            approved_daily_count * 25 +
-            approved_weekly_count * 50 +
-            verified_tasks_score
-        )
-        
-        total_interns = UserInternGuildLink.objects.count()
-        
         data = {
-            "guild": guild_link.guild,
-            "status": guild_link.status,
-            "join_date": guild_link.created_at.date().isoformat() if guild_link.created_at else None,
+            "team": {"id": link.team.id, "name": link.team.name, "code": link.team.code},
+            # Deprecated: the old guild field, now the team name. Kept for existing clients.
+            "guild": link.team.name,
+            "status": link.intern_status,
+            "join_date": first_joined.date().isoformat() if first_joined else None,
             "total_intern_karma": total_intern_karma,
-            "daily_streak": d_streak_val,
-            "longest_daily_streak": d_longest_streak,
-            "weekly_streak": w_streak_val,
-            "longest_weekly_streak": w_longest_streak,
-            "completed_tasks": completed_tasks,
-            "complexity_score": complexity_score,
-            "score": score,
-            "total_interns": total_interns
+            "daily_streak": daily_streak.current_streak if daily_streak else 0,
+            "longest_daily_streak": daily_streak.longest_streak if daily_streak else 0,
+            "weekly_streak": weekly_streak.current_streak if weekly_streak else 0,
+            "longest_weekly_streak": weekly_streak.longest_streak if weekly_streak else 0,
+            "completed_tasks": len(completed),
+            "complexity_score": sum(COMPLEXITY_WEIGHT.get(c, 1) for c in completed),
+            "score": scores_for([user_id])[user_id],
+            "total_interns": members_only(UserInternTeamLink.objects.all()).count(),
         }
         return CustomResponse(response=data).get_success_response()
 
@@ -126,75 +114,12 @@ class InternOverviewLeaderboardTopAPI(APIView):
     @role_required([RoleType.INTERN.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
-        description="Retrieve the top 3 interns on the leaderboard.",
+        description="The top 3 of the intern leaderboard (same ranking as intern/leaderboard/).",
         responses={200: OpenApiResponse(description="Top 3 intern leaderboard entries.")},
     )
     def get(self, request):
-        from django.db.models import Count, Sum
-        from db.intern import InternDailyTimesheet, InternWeeklyReview
-
-        interns = UserInternGuildLink.objects.filter(
-            status__in=[
-                InternGuildStatus.ACTIVE.value,
-                InternGuildStatus.AT_RISK.value,
-                InternGuildStatus.ON_LEAVE.value,
-            ]
-        ).select_related('user')
-
-        intern_user_ids = [intern.user_id for intern in interns]
-        complexity_map = {'LOW': 1, 'MEDIUM': 2, 'HIGH': 3, 'CRITICAL': 5}
-
-        # Batch fetch all scoring data
-        daily_ts_counts = dict(
-            InternDailyTimesheet.objects.filter(user_id__in=intern_user_ids, status__in=COUNTED_TIMESHEET_STATUSES)
-            .values('user_id').annotate(total=Count('id'))
-            .values_list('user_id', 'total')
-        )
-        weekly_rv_counts = dict(
-            InternWeeklyReview.objects.filter(user_id__in=intern_user_ids, status='APPROVED')
-            .values('user_id').annotate(total=Count('id'))
-            .values_list('user_id', 'total')
-        )
-        verified_tasks = InternTask.objects.filter(assigned_to_id__in=intern_user_ids, is_verified=True)
-        task_score_by_user = {}
-        for t in verified_tasks:
-            task_score_by_user[t.assigned_to_id] = task_score_by_user.get(t.assigned_to_id, 0) + (
-                t.karma_awarded * complexity_map.get(t.complexity, 1)
-            )
-
-        leaderboard_data = []
-        for intern in interns:
-            uid = intern.user_id
-            score = (
-                daily_ts_counts.get(uid, 0) * 25 +
-                weekly_rv_counts.get(uid, 0) * 50 +
-                task_score_by_user.get(uid, 0)
-            )
-            leaderboard_data.append({
-                "user_id": uid,
-                "full_name": intern.user.full_name,
-                "guild": intern.guild,
-                "score": score
-            })
-
-        leaderboard_data.sort(key=lambda x: x['score'], reverse=True)
-        top_three = leaderboard_data[:3]
-        for i, entry in enumerate(top_three):
-            entry['rank'] = i + 1
-
+        top_three = [
+            {key: row[key] for key in ("user_id", "full_name", "team", "guild", "score", "rank")}
+            for row in ranked_members()[:3]
+        ]
         return CustomResponse(response=top_three).get_success_response()
-
-
-class InternGuildsAPI(APIView):
-    authentication_classes = [CustomizePermission]
-
-    @role_required([RoleType.INTERN.value, RoleType.ADMIN.value])
-    @extend_schema(
-        tags=['Dashboard - Intern'],
-        description="Retrieve all available intern guilds.",
-        responses={200: OpenApiResponse(description="List of all intern guild values.")},
-    )
-    def get(self, request):
-        from utils.types import InternGuild
-        guilds = InternGuild.get_all_values()
-        return CustomResponse(response=guilds).get_success_response()
