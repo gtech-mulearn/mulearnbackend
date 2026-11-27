@@ -195,3 +195,205 @@ def test_launchpad_leaderboard_id_is_plain_string():
 
     empty = SimpleNamespace(launchpad_user=SimpleNamespace(all=lambda: []))
     assert LaunchpadLeaderBoardSerializer().get_launchpad_id(empty) is None
+
+
+# ── auth proxies: _forward_to_auth (pass 2) ────────────────────────────────
+
+def _auth_reply(payload=None, status=200, not_json=False):
+    response = mock.Mock(status_code=status)
+    if not_json:
+        response.json.side_effect = requests.exceptions.JSONDecodeError("x", "doc", 0)
+    else:
+        response.json.return_value = payload
+    return response
+
+
+def _forward(reply=None, error=None, success_message="Access Granted"):
+    from api.auth.auth_views import _forward_to_auth
+
+    patch = mock.patch("api.auth.auth_views.requests.post",
+                       side_effect=error) if error else mock.patch(
+        "api.auth.auth_views.requests.post", return_value=reply)
+    with patch as call:
+        result = _forward_to_auth("/api/v1/auth/x/", {"a": 1}, "Authentication failed", success_message)
+    return result, call
+
+
+def _general(result):
+    return result.data["message"]["general"][0]
+
+
+def test_auth_proxy_success_keeps_message_and_payload():
+    result, call = _forward(_auth_reply({"hasError": False, "response": {"accessToken": "t"}}))
+    assert result.data["hasError"] is False
+    assert result.data["response"] == {"accessToken": "t"}
+    assert _general(result) == "Access Granted"
+    assert call.call_args.kwargs["timeout"] == (5, 30)
+
+
+def test_auth_proxy_upstream_error_message_is_passed_through():
+    result, _ = _forward(_auth_reply({"hasError": True, "message": {"general": ["Invalid password"]}}, 400))
+    assert result.data["hasError"] is True and _general(result) == "Invalid password"
+
+
+@pytest.mark.parametrize("reply", [
+    {"detail": "Bad gateway"},                    # error status, no hasError key
+    {"hasError": True, "message": "oops"},        # message is not a dict
+    {"hasError": True, "message": {"general": []}},
+    ["not", "a", "dict"],
+])
+def test_auth_proxy_bad_upstream_bodies_fail_cleanly(reply):
+    result, _ = _forward(_auth_reply(reply, 502))
+    assert result.data["hasError"] is True and _general(result) == "Authentication failed"
+
+
+def test_auth_proxy_timeout_and_non_json():
+    result, _ = _forward(error=requests.exceptions.Timeout())
+    assert _general(result) == "Authentication server timeout"
+    result, _ = _forward(_auth_reply(not_json=True, status=502))
+    assert result.data["hasError"] is True
+
+
+# ── pass 2, batch 5: skills, mentor ratings ────────────────────────────────
+
+def _active_skills(stored, requested):
+    from utils.utils import active_skill_ids
+
+    with mock.patch("db.skill.Skill.objects") as objects:
+        objects.filter.return_value.values_list.return_value = stored
+        return active_skill_ids(requested), objects
+
+
+def test_active_skill_ids_keeps_order_drops_unknown_and_repeats():
+    result, objects = _active_skills(["s-1", "s-3"], ["s-3", "nope", "s-1", "S-3"])
+    # one query; order kept; a repeat (in any case) dropped, since
+    # task_skill_link is unique on (task_id, skill_id)
+    assert result == ["s-3", "s-1"]
+    objects.filter.assert_called_once_with(id__in=["s-3", "nope", "s-1", "S-3"], is_active=True)
+
+
+def test_active_skill_ids_matches_case_insensitively_like_mysql():
+    result, _ = _active_skills(["s-1"], ["S-1"])
+    assert result == ["S-1"]
+
+
+def test_active_skill_ids_empty_input_runs_no_query():
+    result, objects = _active_skills([], [])
+    assert result == [] and not objects.filter.called
+
+
+def test_task_skills_uses_prefetch_when_present():
+    from types import SimpleNamespace
+    from utils.utils import task_skills
+
+    link = SimpleNamespace(skill=SimpleNamespace(id="s-1", name="Python", code="PY"))
+    task = SimpleNamespace(id="t-1", _prefetched_objects_cache={"skill_links": [link]},
+                           skill_links=SimpleNamespace(all=lambda: [link]))
+    with mock.patch("db.skill.TaskSkillLink.objects") as objects:
+        assert task_skills(task) == [{"id": "s-1", "name": "Python", "code": "PY"}]
+    assert not objects.filter.called
+
+
+def test_mentor_rating_map_path_matches_combined_formula():
+    from types import SimpleNamespace
+    from api.dashboard.mentor.serializers import MentorDetailSerializer
+
+    combine = MentorDetailSerializer._combine_ratings
+    assert combine({"avg": None, "count": 0}, {"avg": None, "count": 0}) == {"avg_rating": None, "rating_count": 0}
+    # 3 session ratings averaging 4.0 and 1 company rating of 2.0 -> 3.5 over 4
+    assert combine({"avg": 4.0, "count": 3}, {"avg": 2.0, "count": 1}) == {"avg_rating": 3.5, "rating_count": 4}
+
+    serializer = MentorDetailSerializer(context={"rating_map": {
+        "u-1": ({"avg": 5.0, "count": 1}, {"avg": None, "count": 0}),
+    }})
+    obj = SimpleNamespace(user_id="u-1")
+    with mock.patch("db.mentor.MentorshipSessionUserLink.objects") as objects:
+        assert serializer.get_avg_rating(obj) == 5.0
+        assert serializer.get_rating_count(obj) == 1
+    assert not objects.filter.called  # the page's map is used, no per-row query
+
+
+# ── pass 2, batch 6: Launchpad helpers ─────────────────────────────────────
+
+def test_college_link_picks_lowest_pk_college_case_insensitively():
+    from types import SimpleNamespace
+    from api.launchpad.serializers import college_link
+
+    def link(pk, org_type):
+        return SimpleNamespace(pk=pk, org=SimpleNamespace(org_type=org_type))
+    links = [link("c", "College"), link("a", "Company"), link("b", "college")]
+    user = SimpleNamespace(user_organization_link_user=SimpleNamespace(all=lambda: links))
+    assert college_link(user).pk == "b"  # was .filter(org__org_type="College").first()
+    user = SimpleNamespace(user_organization_link_user=SimpleNamespace(all=lambda: [link("a", "Company")]))
+    assert college_link(user) is None
+
+
+def test_work_ranks_one_query_for_all_karma_values():
+    from api.launchpad.launchpad_views import work_ranks_for_karma
+
+    with mock.patch("api.launchpad.launchpad_views.Wallet.objects") as objects:
+        objects.filter.return_value.aggregate.return_value = {"k0": 9, "k1": 2}
+        assert work_ranks_for_karma([500, 100, 500]) == {100: 10, 500: 3}
+    objects.filter.return_value.aggregate.assert_called_once()
+    assert set(objects.filter.return_value.aggregate.call_args.kwargs) == {"k0", "k1"}
+
+
+def test_work_ranks_empty_page_runs_no_query():
+    from api.launchpad.launchpad_views import work_ranks_for_karma
+
+    with mock.patch("api.launchpad.launchpad_views.Wallet.objects") as objects:
+        assert work_ranks_for_karma([]) == {}
+    assert not objects.filter.called
+
+
+def test_status_counts_is_one_aggregate_with_every_status():
+    from api.launchpad.launchpad_views import APPLICATION_STATUSES, status_counts
+
+    qs = mock.Mock()
+    status_counts(qs, extra=mock.sentinel.extra)
+    qs.aggregate.assert_called_once()
+    assert set(qs.aggregate.call_args.kwargs) == {"total", "extra", *APPLICATION_STATUSES}
+
+
+# ── pass 2, batch 7: smaller areas ─────────────────────────────────────────
+
+def test_rule_engine_ci_equal_matches_mysql_comparison():
+    from api.dashboard.achievement.rule_engine import _ci_equal
+
+    assert _ci_equal("#Task-01", "#task-01")
+    assert not _ci_equal("#task-01", "#task-02")
+    assert _ci_equal(None, None)  # task__hashtag=None is IS NULL
+    assert not _ci_equal(None, "#task-01") and not _ci_equal("#task-01", None)
+
+
+def test_error_log_handler_is_reused_until_the_file_changes(tmp_path):
+    from api.dashboard.error_log.log_helper import get_log_handler
+
+    path = tmp_path / "error.log"
+    path.write_text("first\n")
+    first = get_log_handler(str(path))
+    assert get_log_handler(str(path)) is first
+    path.write_text("first\nsecond line\n")  # size changes, so the stamp does
+    assert get_log_handler(str(path)) is not first
+    assert get_log_handler(str(path)).log_data.endswith("second line\n")
+
+
+def test_error_log_handler_missing_file_raises_ioerror(tmp_path):
+    from api.dashboard.error_log.log_helper import get_log_handler
+
+    with pytest.raises(IOError):
+        get_log_handler(str(tmp_path / "missing.log"))
+
+
+def test_kkem_ig_karma_sums_by_exact_name_and_counts_approved_only_by_default():
+    from api.integrations.kkem.kkem_serializer import KKEMUserSerializer
+
+    rows = [("u1", "ig-a", "AI", 100), ("u1", "ig-b", "AI", 50), ("u1", "ig-c", "ai", 7), ("u2", "ig-a", "AI", 1)]
+    with mock.patch("db.task.KarmaActivityLog.objects") as objects:
+        chain = objects.filter.return_value.values_list.return_value.annotate.return_value
+        chain.order_by.return_value = rows
+        result = KKEMUserSerializer.ig_karma_by_user(["u1", "u2"])
+        assert result == {"u1": {"AI": 150, "ai": 7}, "u2": {"AI": 1}}
+        assert objects.filter.call_args.kwargs["appraiser_approved"] is True
+        KKEMUserSerializer.ig_karma_by_user(["u1"], approved_only=False)
+        assert "appraiser_approved" not in objects.filter.call_args.kwargs

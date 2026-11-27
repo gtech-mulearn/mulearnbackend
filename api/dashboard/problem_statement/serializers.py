@@ -42,6 +42,26 @@ class ProblemStatementWriteSerializer(serializers.ModelSerializer):
         return value
 
 
+class AdminProblemStatementWriteSerializer(ProblemStatementWriteSerializer):
+    """
+    Admin payload: also accepts ``muid`` to create / edit the statement on behalf of a user,
+    ``company_id`` to create / edit it on behalf of a verified company, or ``community_id``
+    for a community (never both).
+    Blank or null clears them. Resolution happens in the view.
+    """
+    muid = serializers.CharField(max_length=100, required=False, allow_null=True, allow_blank=True)
+    company_id = serializers.CharField(max_length=36, required=False, allow_null=True, allow_blank=True)
+    community_id = serializers.CharField(max_length=36, required=False, allow_null=True, allow_blank=True)
+
+    class Meta(ProblemStatementWriteSerializer.Meta):
+        fields = [*ProblemStatementWriteSerializer.Meta.fields, "muid", "company_id", "community_id"]
+
+    def validate(self, attrs):
+        if (attrs.get("company_id") or "").strip() and (attrs.get("community_id") or "").strip():
+            raise serializers.ValidationError("Send either company_id or community_id, not both.")
+        return attrs
+
+
 class InteractionWriteSerializer(serializers.ModelSerializer):
     """
     `status` is optional and only "Trying" is accepted: Submitted is reachable
@@ -83,12 +103,14 @@ class ProblemStatementSerializer(serializers.ModelSerializer):
     interaction_counts = serializers.SerializerMethodField()
     my_interaction = serializers.SerializerMethodField()
     is_open = serializers.SerializerMethodField()
+    on_behalf_of = serializers.SerializerMethodField()
+    creator = serializers.SerializerMethodField()
 
     class Meta:
         model = ProblemStatement
         fields = [
             "id", "title", "description", "category", "skills", "deadline", "status",
-            "company", "is_open", "interaction_counts", "my_interaction",
+            "source", "company", "creator", "on_behalf_of", "is_open", "interaction_counts", "my_interaction",
             "created_by", "created_at", "updated_by", "updated_at",
             "published_by", "published_at",
         ]
@@ -96,7 +118,7 @@ class ProblemStatementSerializer(serializers.ModelSerializer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if not self.context.get("show_audit"):
-            for field in ("created_by", "updated_by", "published_by"):
+            for field in ("created_by", "updated_by", "published_by", "on_behalf_of"):
                 self.fields.pop(field)
         if "my_interactions" not in self.context:
             self.fields.pop("my_interaction")
@@ -104,9 +126,37 @@ class ProblemStatementSerializer(serializers.ModelSerializer):
     def get_company(self, obj):
         # company is None also guards a source/company mismatch made outside the API
         # (the DB can't enforce it), so one bad row can't 500 the whole list.
-        if obj.source == ProblemStatement.Source.MULEARN or obj.company is None:
+        if obj.source == ProblemStatement.Source.COMMUNITY and obj.community is not None:
+            # Communities are shown in the same ``company`` slot so cards need no new field.
+            return {"id": obj.community_id, "name": obj.community.title, "logo": None}
+        if obj.source != ProblemStatement.Source.COMPANY or obj.company is None:
             return {"id": None, "name": "muLearn", "logo": None}
         return {"id": obj.company_id, "name": obj.company.name, "logo": obj.company.logo}
+
+    def get_creator(self, obj):
+        """
+        Who the statement is shown as created by, on every GET (list, detail, learner, admin).
+        An admin who creates on behalf of someone is not the visible author: a company,
+        community or mentioned user takes their place; otherwise it is muLearn.
+        ``created_by`` (the real admin) stays in the audit fields.
+        """
+        if obj.source == ProblemStatement.Source.COMPANY and obj.company is not None:
+            return {"type": "company", "id": obj.company_id, "name": obj.company.name,
+                    "logo": obj.company.logo}
+        if obj.source == ProblemStatement.Source.COMMUNITY and obj.community is not None:
+            return {"type": "community", "id": obj.community_id, "name": obj.community.title,
+                    "logo": None}
+        if obj.on_behalf_of is not None:
+            user = obj.on_behalf_of
+            return {"type": "user", "id": user.id, "name": user.full_name, "muid": user.muid,
+                    "profile_pic": user.profile_pic}
+        return {"type": "mulearn", "id": None, "name": "muLearn", "logo": None}
+
+    def get_on_behalf_of(self, obj):
+        user = obj.on_behalf_of
+        if user is None:
+            return None
+        return {"id": user.id, "muid": user.muid, "full_name": user.full_name}
 
     def get_interaction_counts(self, obj):
         counts = self.context.get("counts", {}).get(obj.id, {})

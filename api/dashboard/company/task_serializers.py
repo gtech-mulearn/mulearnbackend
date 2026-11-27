@@ -3,7 +3,6 @@ import uuid
 from rest_framework import serializers
 
 from db.task import TaskList
-from db.skill import TaskSkillLink
 
 
 class CompanyTaskCreateSerializer(serializers.ModelSerializer):
@@ -122,11 +121,8 @@ class CompanyTaskListSerializer(serializers.ModelSerializer):
 
     def get_skills(self, obj):
         """Return skills linked to this task."""
-        skill_links = TaskSkillLink.objects.filter(task_id=obj.id).select_related("skill")
-        return [
-            {"id": link.skill.id, "name": link.skill.name, "code": link.skill.code}
-            for link in skill_links
-        ]
+        from utils.utils import task_skills
+        return task_skills(obj)
 
 
 class CompanyTaskPatchSerializer(serializers.Serializer):
@@ -166,11 +162,9 @@ class CompanyTaskPatchSerializer(serializers.Serializer):
 
     def validate_skill_ids(self, value):
         """Validate that all provided skill IDs exist and are active."""
-        from db.skill import Skill
-        invalid_ids = []
-        for skill_id in value:
-            if not Skill.objects.filter(id=skill_id, is_active=True).exists():
-                invalid_ids.append(skill_id)
+        from utils.utils import active_skill_ids
+        valid = {str(i).lower() for i in active_skill_ids(value)}
+        invalid_ids = [skill_id for skill_id in value if str(skill_id).lower() not in valid]
         if invalid_ids:
             raise serializers.ValidationError(
                 f"The following skill IDs are invalid or inactive: {', '.join(invalid_ids)}"

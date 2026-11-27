@@ -104,12 +104,14 @@ class ListCreateBase(ManageBase):
             qs = qs.filter(category__iexact=params["category"])
         if params.get("company_id"):
             qs = qs.filter(company_id=params["company_id"])
+        if params.get("community_id"):
+            qs = qs.filter(community_id=params["community_id"])
         search_query = params.get("search")
         # "company__name" can't match muLearn-sourced rows (company is null); searching the
         # display label shown for them needs an explicit extra condition.
         extra_q = Q(source=ProblemStatement.Source.MULEARN) if search_query and "mulearn" in search_query.lower() else None
         page = CommonUtils.get_paginated_queryset(
-            qs.order_by("-updated_at"), request, ["title", "category", "company__name"], SORT_FIELDS,
+            qs.order_by("-updated_at"), request, ["title", "category", "company__name", "community__title"], SORT_FIELDS,
             extra_q=extra_q,
         )
         return CustomResponse().paginated_response(
@@ -121,17 +123,40 @@ class ListCreateBase(ManageBase):
         if error:
             return error
         user_id = JWTUtils.fetch_user_id(request)
-        # Admin-authored statements aren't attributed to any company (source=MULEARN);
-        # admin cannot target another company's profile here.
-        serializer = serializers.ProblemStatementWriteSerializer(data=request.data)
+        # Only admins (no company scope) may mention a user by muid or pass a company_id /
+        # community_id. Without either, an admin statement is muLearn-authored (source=MULEARN);
+        # with a verified company_id it is created on that company's behalf (source=COMPANY);
+        # with a community_id, for that community (source=COMMUNITY, no notification).
+        is_admin = company is None
+        serializer_class = (
+            serializers.AdminProblemStatementWriteSerializer if is_admin
+            else serializers.ProblemStatementWriteSerializer
+        )
+        serializer = serializer_class(data=request.data)
         if not serializer.is_valid():
             return CustomResponse(message=serializer.errors).get_failure_response()
         data = serializer.validated_data
-        source = ProblemStatement.Source.COMPANY if company else ProblemStatement.Source.MULEARN
+        on_behalf_of, error = ps_utils.resolve_muid(data.get("muid"))
+        if error:
+            return error
+        community = None
+        if is_admin:
+            company, error = ps_utils.resolve_company(data.get("company_id"))
+            if error:
+                return error
+            community, error = ps_utils.resolve_community(data.get("community_id"))
+            if error:
+                return error
+        source = (
+            ProblemStatement.Source.COMPANY if company
+            else ProblemStatement.Source.COMMUNITY if community
+            else ProblemStatement.Source.MULEARN
+        )
         try:
             with transaction.atomic():
                 statement = ProblemStatement.objects.create(
                     company=company,
+                    community=community,
                     title=data["title"],
                     description=data["description"],
                     category=data["category"],
@@ -139,6 +164,7 @@ class ListCreateBase(ManageBase):
                     deadline=data.get("deadline"),
                     status=ProblemStatement.Status.DRAFT,
                     source=source,
+                    on_behalf_of=on_behalf_of,
                     created_by_id=user_id,
                     updated_by_id=user_id,
                 )
@@ -150,6 +176,9 @@ class ListCreateBase(ManageBase):
             if not User.objects.filter(id=user_id).exists():
                 return ps_utils.failure("User not found.", 404)
             raise
+        ps_utils.notify_on_behalf_of(on_behalf_of, statement, user_id, created=True)
+        if is_admin:
+            ps_utils.notify_company(company, statement, user_id, "created")
         statement = self.fresh(statement.id)
         return CustomResponse(
             general_message="Problem statement created.", response=self.render(statement)
@@ -167,14 +196,36 @@ class DetailBase(ManageBase):
         statement, error = self.find(request, statement_id)
         if error:
             return error
-        serializer = serializers.ProblemStatementWriteSerializer(data=request.data, partial=True)
+        _, company, _ = self.scope(request)
+        serializer_class = (
+            serializers.ProblemStatementWriteSerializer if company
+            else serializers.AdminProblemStatementWriteSerializer
+        )
+        serializer = serializer_class(data=request.data, partial=True)
         if not serializer.is_valid():
             return CustomResponse(message=serializer.errors).get_failure_response()
-        error = ps_utils.apply_changes(
-            statement.id, serializer.validated_data, JWTUtils.fetch_user_id(request)
-        )
+        data = serializer.validated_data
+        user_id = JWTUtils.fetch_user_id(request)
+        kwargs, mentioned = {}, None
+        if "muid" in data:
+            mentioned, error = ps_utils.resolve_muid(data["muid"])
+            if error:
+                return error
+            kwargs["on_behalf_of_id"] = mentioned.id if mentioned else None
+        # Only the admin serializer has company_id. Blank means "not provided" (a form that
+        # sends the field empty must not unlink the company); explicit null unlinks.
+        for key in ("company_id", "community_id"):
+            if data.get(key, "") != "" or (key in data and data[key] is None):
+                kwargs[key] = data[key]
+        outcome = {}
+        error = ps_utils.apply_changes(statement.id, data, user_id, result=outcome, **kwargs)
         if error:
             return error
+        # Compare with the value read under the row lock, not the one read before it.
+        if mentioned and mentioned.id != outcome.get("previous_on_behalf_of_id"):
+            ps_utils.notify_on_behalf_of(mentioned, statement, user_id, created=False)
+        if company is None:  # admin caller: tell the company side
+            ps_utils.notify_company_after_edit(statement, data, outcome, user_id, "company_id" in kwargs or "community_id" in kwargs)
         return CustomResponse(
             general_message="Problem statement updated.", response=self.render(self.fresh(statement.id))
         ).get_success_response()
@@ -295,7 +346,7 @@ class CompanyProblemStatementInteractionsAPI(InteractionsBase):
     get=extend_schema(tags=ADMIN, description="List problem statements of all companies and muLearn. "
                                               "Filters: status, category, company_id, source=company|mulearn."),
     post=extend_schema(tags=ADMIN, description="Create a problem statement from muLearn (not attributed to a company).",
-                       request=serializers.ProblemStatementWriteSerializer),
+                       request=serializers.AdminProblemStatementWriteSerializer),
 )
 @role_guarded([RoleType.ADMIN.value])
 class AdminProblemStatementListAPI(ListCreateBase):
@@ -305,7 +356,7 @@ class AdminProblemStatementListAPI(ListCreateBase):
 @extend_schema_view(
     get=extend_schema(tags=ADMIN),
     delete=extend_schema(tags=ADMIN),
-    patch=extend_schema(tags=ADMIN, request=serializers.ProblemStatementWriteSerializer),
+    patch=extend_schema(tags=ADMIN, request=serializers.AdminProblemStatementWriteSerializer),
 )
 @role_guarded([RoleType.ADMIN.value])
 class AdminProblemStatementDetailAPI(DetailBase):

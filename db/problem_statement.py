@@ -13,11 +13,16 @@ class ProblemStatement(models.Model):
     class Source(models.TextChoices):
         COMPANY = "company"
         MULEARN = "mulearn"
+        COMMUNITY = "community"
 
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     # Null for admin-authored (source=MULEARN) statements, which aren't attributed to any company.
     company = models.ForeignKey('Company', on_delete=models.CASCADE, null=True, blank=True,
                                 related_name='problem_statements')
+    # Set only on admin-authored statements created for a community (an Organization with
+    # org_type 'Community'). A statement has a company OR a community, never both.
+    community = models.ForeignKey('Organization', on_delete=models.SET_NULL, null=True, blank=True,
+                                  related_name='problem_statements')
     title = models.CharField(max_length=150)
     description = models.TextField()
     category = models.CharField(max_length=100)
@@ -25,6 +30,9 @@ class ProblemStatement(models.Model):
     deadline = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
     source = models.CharField(max_length=20, choices=Source.choices, default=Source.COMPANY)
+    # Set only on admin-authored statements created on behalf of a user (mentioned by muid).
+    on_behalf_of = models.ForeignKey('User', on_delete=models.SET_NULL, null=True, blank=True,
+                                     db_column='on_behalf_of', related_name='problem_statements_on_behalf')
     # Deleting an actor must never delete company content: reassign to the system admin.
     created_by = models.ForeignKey('User', on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='created_by',
                                    related_name='problem_statements_created')

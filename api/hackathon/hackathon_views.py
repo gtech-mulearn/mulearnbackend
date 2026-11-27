@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from django.db.models import Q
+from django.db.models import Prefetch, Q
 from rest_framework.views import APIView
 
 from db.hackathon import (
@@ -9,7 +9,7 @@ from db.hackathon import (
     HackathonOrganiserLink,
     HackathonUserSubmission,
 )
-from db.organization import District, Organization
+from db.organization import District, Organization, UserOrganizationLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import DEFAULT_HACKATHON_FORM_FIELDS, RoleType
@@ -53,7 +53,10 @@ class HackathonManagementAPI(APIView):
             hackathons_queryset = Hackathon.objects.filter(
                 Q(status="Published") | Q(hackathonorganiserlink__organiser_id=user_id)).distinct()
 
-            serializer = HackathonRetrievalSerializer(hackathons_queryset, many=True, context={"user_id": user_id})
+            serializer = HackathonRetrievalSerializer(
+                hackathons_queryset, many=True,
+                context=HackathonRetrievalSerializer.list_context(user_id),
+            )
 
         return CustomResponse(response=serializer.data).get_success_response()
 
@@ -201,6 +204,14 @@ class HackathonSubmissionAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
 
+# Prefetch, not select_related: the applicant list has no ORDER BY, so a
+# join could change its row order.
+APPLICANT_PREFETCH = (
+    "user",
+    Prefetch("user__user_organization_link_user", queryset=UserOrganizationLink.objects.select_related("org")),
+)
+
+
 class ListApplicantsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
@@ -212,13 +223,15 @@ class ListApplicantsAPI(APIView):
     )
     def get(self, request, hackathon_id=None):
         if hackathon_id:
-            data = HackathonUserSubmission.objects.filter(hackathon__id=hackathon_id)
+            data = HackathonUserSubmission.objects.filter(hackathon__id=hackathon_id).prefetch_related(
+                *APPLICANT_PREFETCH
+            )
             if not data:
                 return CustomResponse(
                     general_message="Hackathon Not Available"
                 ).get_failure_response()
         else:
-            data = HackathonUserSubmission.objects.all()
+            data = HackathonUserSubmission.objects.prefetch_related(*APPLICANT_PREFETCH)
 
         serializer = ListApplicantsSerializer(data, many=True)
         return CustomResponse(response=serializer.data).get_success_response()

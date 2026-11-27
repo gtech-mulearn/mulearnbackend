@@ -17,7 +17,9 @@ class AffiliationListSerializer(serializers.ModelSerializer):
                   'created_by', 'updated_by', 'updated_at', 'created_at']
 
     def get_organization_count(self, obj):
-        return obj.organization_affiliation.count()
+        # AffiliationCRUDAPI annotates the count; other callers fall back.
+        count = getattr(obj, "organization_count_value", None)
+        return count if count is not None else obj.organization_affiliation.count()
 
 
 class AffiliationCUDSerializer(serializers.ModelSerializer):

@@ -12,10 +12,12 @@ def get_user_college_link(user_id):
     A newer unverified link (e.g. a pending college-transfer request) should
     not silently override an established verified membership.
     """
+    # org, district and zone are read by most callers right after this call;
+    # joining them here saves up to three lazy lookups per request.
     links = UserOrganizationLink.objects.filter(
         user_id=user_id,
         org__org_type=OrganizationType.COLLEGE.value
-    ).order_by("-created_at", "-id")
+    ).select_related("org__district__zone").order_by("-created_at", "-id")
     return links.filter(verified=True).first() or links.first()
 
 

@@ -43,6 +43,53 @@ def get_college_karma_rank(org):
     return ahead.count() + 1
 
 
+def get_karma_by_cluster(org):
+    """
+    Total karma and member count per IG category for a college's verified
+    members. Each member counts once, under their primary category: the
+    category of their earliest active LEARNER IG membership. Members with no
+    such membership go under "unclustered".
+
+    This used to stream one row per member into Python and add them up there.
+    It is now one grouped query; wallet is one row per user, so the join does
+    not multiply rows.
+    """
+    from django.db.models import OuterRef, Subquery
+    from django.db.models.functions import Coalesce
+
+    primary_category_sq = (
+        UserIgLink.objects.filter(
+            user_id=OuterRef("pk"),
+            is_active=True,
+            assignment_type=UserIgLink.AssignmentType.LEARNER,
+        )
+        .order_by("created_at")
+        .values("ig__category")[:1]
+    )
+    member_ids = UserOrganizationLink.objects.filter(
+        org=org,
+        org__org_type=OrganizationType.COLLEGE.value,
+        verified=True,
+    ).values("user_id")
+    rows = (
+        User.objects.filter(id__in=member_ids)
+        .annotate(primary_category=Subquery(primary_category_sq))
+        .values("primary_category")
+        .annotate(
+            total_karma=Coalesce(Sum("wallet_user__karma"), 0),
+            member_count=Count("id"),
+        )
+        .order_by()
+    )
+    return {
+        row["primary_category"] or "unclustered": {
+            "total_karma": row["total_karma"],
+            "member_count": row["member_count"],
+        }
+        for row in rows
+    }
+
+
 class CampusDetailsPublicSerializer(serializers.ModelSerializer):
     org_id = serializers.ReadOnlyField(source="id")
     college_name = serializers.ReadOnlyField(source="title")
@@ -193,57 +240,7 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
         ]
 
     def get_karma_by_cluster(self, obj):
-        from django.db.models import OuterRef, Subquery
-        from collections import defaultdict
-        from db.task import Wallet
-
-        wallet_karma_sq = Wallet.objects.filter(
-            user=OuterRef("pk")
-        ).values("karma")[:1]
-
-        primary_category_sq = (
-            UserIgLink.objects.filter(
-                user_id=OuterRef("pk"),
-                is_active=True,
-                assignment_type=UserIgLink.AssignmentType.LEARNER,
-            )
-            .order_by("created_at")
-            .values("ig__category")[:1]
-        )
-
-        all_rows = (
-            User.objects.filter(
-                user_organization_link_user__org=obj,
-                user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-                user_organization_link_user__verified=True,
-            )
-            .annotate(
-                user_karma=Subquery(wallet_karma_sq),
-                primary_category=Subquery(primary_category_sq),
-            )
-            .values("id", "primary_category", "user_karma")
-            .distinct()
-        )
-
-        category_map = defaultdict(lambda: {"total_karma": 0, "member_count": 0, "seen_users": set()})
-
-        for row in all_rows:
-            category = row["primary_category"] or "unclustered"
-            user_id = row["id"]
-            karma = row["user_karma"] or 0
-
-            if user_id not in category_map[category]["seen_users"]:
-                category_map[category]["seen_users"].add(user_id)
-                category_map[category]["total_karma"] += karma
-                category_map[category]["member_count"] += 1
-
-        return {
-            category: {
-                "total_karma": data["total_karma"],
-                "member_count": data["member_count"],
-            }
-            for category, data in category_map.items()
-        }
+        return get_karma_by_cluster(obj)
 
 
 class CampusListSerializer(serializers.ModelSerializer):
@@ -288,27 +285,60 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
             "social_links",
         ]
 
+    # total_karma + active_members share one wallet aggregate, and the 7- and
+    # 30-day karma share one karma-log aggregate; each pair used to be two
+    # separate queries. The results are kept per org for this serializer.
+    def _member_ids(self, obj):
+        return obj.org.user_organization_link_org.filter(
+            verified=True
+        ).values_list("user_id", flat=True).distinct()
+
+    def _wallet_stats(self, obj):
+        from db.task import Wallet
+
+        cache = self.__dict__.setdefault("_wallet_stats_cache", {})
+        if obj.org_id not in cache:
+            six_months_ago = DateTimeUtils.get_current_utc_time() - timedelta(weeks=26)
+            cache[obj.org_id] = Wallet.objects.filter(
+                user_id__in=self._member_ids(obj)
+            ).aggregate(
+                total_karma=Sum("karma"),
+                active_members=Count("id", filter=Q(karma_last_updated_at__gte=six_months_ago)),
+            )
+        return cache[obj.org_id]
+
+    def _recent_karma(self, obj):
+        cache = self.__dict__.setdefault("_recent_karma_cache", {})
+        if obj.org_id not in cache:
+            now = DateTimeUtils.get_current_utc_time()
+            seven_days_ago = now - timedelta(days=7)
+            cache[obj.org_id] = KarmaActivityLog.objects.filter(
+                user_id__in=self._member_ids(obj),
+                created_at__gte=now - timedelta(days=30),
+                appraiser_approved=True,
+            ).aggregate(
+                last_30=Sum("karma"),
+                last_7=Sum("karma", filter=Q(created_at__gte=seven_days_ago)),
+            )
+        return cache[obj.org_id]
+
     def get_lead(self, obj):
-
-        campus_lead = User.objects.filter(
+        # One query for both roles. For each role the first user by id wins,
+        # the same user the two separate .first() lookups returned.
+        titles = [RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value]
+        rows = User.objects.filter(
             user_organization_link_user__org=obj.org,
             user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
             user_organization_link_user__verified=True,
-            user_role_link_user__role__title=RoleType.CAMPUS_LEAD.value,
-        ).first()
-        if campus_lead:
-            campus_lead = campus_lead.full_name
-
-        enabler = User.objects.filter(
-            user_organization_link_user__org=obj.org,
-            user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-            user_organization_link_user__verified=True,
-            user_role_link_user__role__title=RoleType.LEAD_ENABLER.value,
-        ).first()
-        if enabler:
-            enabler = enabler.full_name
-
-        return {"campus_lead": campus_lead, "enabler": enabler}
+            user_role_link_user__role__title__in=titles,
+        ).order_by("pk").values_list("user_role_link_user__role__title", "full_name")
+        names = {}
+        for title, full_name in rows:
+            names.setdefault(title, full_name)
+        return {
+            "campus_lead": names.get(RoleType.CAMPUS_LEAD.value),
+            "enabler": names.get(RoleType.LEAD_ENABLER.value),
+        }
 
     def get_campus_level(self, obj):
         campus = College.objects.filter(org=obj.org).first()
@@ -317,58 +347,24 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
 
         return None
 
-   
-
     def get_total_members(self, obj):
         return obj.org.user_organization_link_org.filter(verified=True).values('user').distinct().count()
 
     def get_active_members(self, obj):
-        from db.task import Wallet
-
-        last_month = DateTimeUtils.get_current_utc_time() - timedelta(
-            weeks=26
-        )  # 6months
-        member_user_ids = obj.org.user_organization_link_org.filter(verified=True).values_list("user_id", flat=True).distinct()
-        return Wallet.objects.filter(
-            user_id__in=member_user_ids,
-            karma_last_updated_at__gte=last_month,
-        ).count()
+        return self._wallet_stats(obj)["active_members"]
 
     def get_total_karma(self, obj):
-        from db.task import Wallet
-
-        member_user_ids = obj.org.user_organization_link_org.filter(
-            org__org_type=OrganizationType.COLLEGE.value,
-            verified=True,
-        ).values_list("user_id", flat=True).distinct()
-        return Wallet.objects.filter(
-            user_id__in=member_user_ids
-        ).aggregate(total_karma=Sum("karma"))["total_karma"] or 0
+        return self._wallet_stats(obj)["total_karma"] or 0
 
     def get_rank(self, obj):
         return get_college_karma_rank(obj.org)
 
     def get_karma_last_7_days(self, obj):
-        seven_days_ago = DateTimeUtils.get_current_utc_time() - timedelta(days=7)
-        member_user_ids = obj.org.user_organization_link_org.filter(verified=True).values_list("user_id", flat=True).distinct()
-        return (
-            KarmaActivityLog.objects.filter(
-                user_id__in=member_user_ids,
-                created_at__gte=seven_days_ago,
-                appraiser_approved=True,
-            ).aggregate(total_karma=Sum("karma"))["total_karma"] or 0
-        )
+        return self._recent_karma(obj)["last_7"] or 0
 
     def get_karma_last_30_days(self, obj):
-        thirty_days_ago = DateTimeUtils.get_current_utc_time() - timedelta(days=30)
-        member_user_ids = obj.org.user_organization_link_org.filter(verified=True).values_list("user_id", flat=True).distinct()
-        return (
-            KarmaActivityLog.objects.filter(
-                user_id__in=member_user_ids,
-                created_at__gte=thirty_days_ago,
-                appraiser_approved=True,
-            ).aggregate(total_karma=Sum("karma"))["total_karma"] or 0
-        )
+        return self._recent_karma(obj)["last_30"] or 0
+
     def get_active_ig_count(self, obj):
         return CampusIGChapter.objects.filter(
             org=obj.org,

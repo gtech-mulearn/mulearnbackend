@@ -142,18 +142,18 @@ class InternLeaveBalanceAPI(APIView):
     )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        from django.db.models import Sum
+        from django.db.models import Q, Sum
 
-        approved = InternLeaveRequest.objects.filter(
+        leave_types = ['SICK', 'CASUAL', 'WFH', 'EMERGENCY']
+        # One conditional aggregate instead of one SUM per leave type.
+        totals = InternLeaveRequest.objects.filter(
             user_id=user_id,
             status=InternLeaveStatus.APPROVED.value,
-        )
+        ).aggregate(**{
+            leave_type: Sum('duration_days', filter=Q(leave_type=leave_type))
+            for leave_type in leave_types
+        })
 
-        data = {}
-        for leave_type in ['SICK', 'CASUAL', 'WFH', 'EMERGENCY']:
-            used = approved.filter(leave_type=leave_type).aggregate(
-                Sum('duration_days')
-            )['duration_days__sum'] or 0
-            data[leave_type] = {'used': used}
+        data = {leave_type: {'used': totals[leave_type] or 0} for leave_type in leave_types}
 
         return CustomResponse(response=data).get_success_response()
