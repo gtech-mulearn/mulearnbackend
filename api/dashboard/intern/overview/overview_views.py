@@ -12,7 +12,7 @@ from db.task import KarmaActivityLog
 from db.achievement import UserStreak
 
 from api.dashboard.intern.leaderboard.scoring import (
-    COMPLEXITY_WEIGHT, DAILY_STREAK_TYPE, WEEKLY_STREAK_TYPE, ranked_members, scores_for,
+    COMPLEXITY_WEIGHT, WEEKLY_STREAK_TYPE, ranked_members, scores_for,
 )
 
 
@@ -24,7 +24,7 @@ class InternOverviewStatusAPI(APIView):
         tags=['Dashboard - Intern'],
         description=(
             "The intern's overview: current team (`guild` is deprecated: the team name), status, "
-            "first join date, intern karma, daily and weekly streaks, completed tasks and the leaderboard score (timesheets x 25 + verified task "
+            "first join date, intern karma, weekly streak, completed tasks and the leaderboard score (timesheets x 25 + verified task "
             "karma x complexity weight). total_interns counts current team members."
         ),
         responses={200: OpenApiResponse(description="Intern status overview data.")},
@@ -35,14 +35,8 @@ class InternOverviewStatusAPI(APIView):
         if not link:
             return CustomResponse(general_message="Not an intern.").get_failure_response()
 
-        streaks = {
-            streak.streak_type: streak
-            for streak in UserStreak.objects.filter(
-                user_id=user_id, streak_type__in=[DAILY_STREAK_TYPE, WEEKLY_STREAK_TYPE],
-            )
-        }
-        daily_streak = streaks.get(DAILY_STREAK_TYPE)
-        weekly_streak = streaks.get(WEEKLY_STREAK_TYPE)
+        # The daily streak isn't shown here; it is only on the leaderboard.
+        weekly_streak = UserStreak.objects.filter(user_id=user_id, streak_type=WEEKLY_STREAK_TYPE).first()
         total_intern_karma = (
             KarmaActivityLog.objects.filter(user_id=user_id, task__hashtag__startswith='#intern-')
             .aggregate(Sum('karma'))['karma__sum'] or 0
@@ -59,8 +53,6 @@ class InternOverviewStatusAPI(APIView):
             "status": link.intern_status,
             "join_date": first_joined.date().isoformat() if first_joined else None,
             "total_intern_karma": total_intern_karma,
-            "daily_streak": daily_streak.current_streak if daily_streak else 0,
-            "longest_daily_streak": daily_streak.longest_streak if daily_streak else 0,
             "weekly_streak": weekly_streak.current_streak if weekly_streak else 0,
             "longest_weekly_streak": weekly_streak.longest_streak if weekly_streak else 0,
             "completed_tasks": len(completed),

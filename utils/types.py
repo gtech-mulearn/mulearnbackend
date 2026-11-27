@@ -263,16 +263,6 @@ class InternHashtag(Enum):
     MONTHLY_REVIEW_KARMA = 0
     MONTHLY_REVIEW_HASHTAG = "#intern-monthly-review"
     TASK_VERIFIED_HASHTAG = "#intern-task-verified"
-    STREAK_7_KARMA = 7
-    STREAK_7_HASHTAG = "#intern-streak-7"
-    STREAK_14_KARMA = 14
-    STREAK_14_HASHTAG = "#intern-streak-14"
-    STREAK_30_KARMA = 30
-    STREAK_30_HASHTAG = "#intern-streak-30"
-    STREAK_60_KARMA = 60
-    STREAK_60_HASHTAG = "#intern-streak-60"
-    STREAK_90_KARMA = 90
-    STREAK_90_HASHTAG = "#intern-streak-90"
 
 class InternGuild(Enum):
     FRONTEND = "Frontend Guild"
@@ -329,9 +319,11 @@ class InternStatus(Enum):
     """
     An intern's standing in a team membership. ON_LEAVE only comes from approved
     leave; INACTIVE from the tenure ending (current row) or from a row ending
-    (deactivation, reassign). AT_RISK is no longer used.
+    (deactivation, reassign). AT_RISK is set (and cleared) only by a Lead or
+    Admin; nothing sets it automatically.
     """
     ACTIVE = "ACTIVE"
+    AT_RISK = "AT_RISK"
     ON_LEAVE = "ON_LEAVE"
     INACTIVE = "INACTIVE"
 

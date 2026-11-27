@@ -163,11 +163,11 @@ class InternTimesheetSerializer(serializers.ModelSerializer):
 
             timesheet = InternDailyTimesheet.objects.create(**validated_data)
 
-            # Quest Log entry, then streak / milestone karma — what admin
-            # approval used to do, now on submit. Status (AT_RISK → ACTIVE)
-            # is left to intern_daily_status_cron.
+            # Quest Log entry, then the streak the leaderboard shows (no
+            # milestone karma). Status (AT_RISK → ACTIVE) is left to
+            # intern_daily_status_cron.
             log_daily_timesheet_activity(user_id)
-            sync_timesheet_streak(user_id, actor_id=user_id)
+            sync_timesheet_streak(user_id)
 
             return timesheet
 

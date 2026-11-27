@@ -68,12 +68,11 @@ def _team(team):
 
 
 def intern_detail(user, current):
-    """One person: their current membership (or None) and the teams they were in before."""
-    data = {"user": user.id, "full_name": user.full_name, "muid": user.muid, "current": None}
+    """One person: their current membership as current_team (or None) and the teams they were in before."""
+    data = {"user": user.id, "full_name": user.full_name, "muid": user.muid, "current_team": None}
     if current:
         roles = [title for title in MEMBER_ROLES if title in user_role_titles(user.id, MEMBER_ROLES)]
-        data["current"] = {
-            "id": current.id,
+        data["current_team"] = {
             "team": _team(current.team),
             "status": current.intern_status,
             "status_reason": current.status_reason,
@@ -128,8 +127,8 @@ class ManageInternAPI(APIView):
         description=(
             "List interns (paginated): current members only (users holding Intern or Intern Lead). "
             "Admins see every team (optional team_id); an Intern Lead sees only their own team. "
-            "With a user id (interns/<user_id>/): that person's current membership (null if they "
-            "were deactivated) and the teams they were in before. Admin: anyone. Intern Lead: "
+            "With a user id (interns/<user_id>/): that person's current membership as `current_team` "
+            "(null if they were deactivated) and the teams they were in before (`previous_teams`). Admin: anyone. Intern Lead: "
             "only current members of their own team."
         ),
         parameters=[TEAM_ID_PARAM, STATUS_PARAM],

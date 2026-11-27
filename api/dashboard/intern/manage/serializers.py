@@ -52,8 +52,9 @@ class ManageInternSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserInternTeamLink
+        # The membership row id isn't sent: no endpoint takes it. Rows are keyed by `user`.
         fields = [
-            'id', 'user', 'full_name', 'muid', 'team', 'status', 'status_reason',
+            'user', 'full_name', 'muid', 'team', 'status', 'status_reason',
             'join_date', 'end_date', 'tenure_state', 'days_left',
             'is_current', 'exit_reason', 'is_lead', 'roles', 'created_at',
         ]

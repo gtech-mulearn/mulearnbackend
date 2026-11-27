@@ -12,7 +12,6 @@ from utils.types import RoleType, InternTaskStatus
 from utils.utils import CommonUtils, DateTimeUtils
 from db.intern import InternDailyTimesheet, InternTask
 from utils.intern_permissions import ON_LEAVE, current_membership, timesheet_gate, working_membership_error
-from db.achievement import UserStreak
 from db.mentor import SystemActionLog
 
 from .serializers import (
@@ -374,23 +373,3 @@ class InternTimesheetHistoryAPI(APIView):
                 "pagination": paginated_queryset.get("pagination")
             }
         ).get_success_response()
-
-
-class InternTimesheetSummaryAPI(APIView):
-    authentication_classes = [CustomizePermission]
-
-    @role_required([RoleType.INTERN.value])
-    @extend_schema(
-        tags=['Dashboard - Intern'],
-        description="Retrieve current timesheet streak stats (current and longest streak).",
-        responses={200: OpenApiResponse(description="Streak stats for the intern.")},
-    )
-    def get(self, request):
-        user_id = JWTUtils.fetch_user_id(request)
-        streak = UserStreak.objects.filter(user_id=user_id, streak_type='intern_timesheet').first()
-
-        data = {
-            "current_streak": streak.current_streak if streak else 0,
-            "longest_streak": streak.longest_streak if streak else 0,
-        }
-        return CustomResponse(response=data).get_success_response()

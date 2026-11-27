@@ -17,7 +17,8 @@ def intern_daily_status_cron():
     """
     Leave only: puts interns ON_LEAVE when approved leave covers today (IST) and
     gives them their earlier status back when it no longer does. Nothing else
-    changes status here (there is no AT_RISK or missed-timesheet rule any more).
+    changes status here (AT_RISK is only set by a Lead or Admin; there is no
+    missed-timesheet rule).
 
     Works on current team rows inside their tenure; a row past its end_date is
     left to intern_tenure_end_cron (the tenure end wins over leave). Roles are
@@ -44,8 +45,9 @@ def intern_daily_status_cron():
         if intern.user_id in on_leave_today:
             continue
         restored = intern.previous_intern_status
-        # INACTIVE is kept: someone marked INACTIVE before their leave stays INACTIVE.
-        if restored not in (InternStatus.ACTIVE.value, InternStatus.INACTIVE.value):
+        # AT_RISK and INACTIVE are kept: someone marked AT_RISK or INACTIVE before
+        # their leave goes back to it.
+        if restored not in (InternStatus.ACTIVE.value, InternStatus.AT_RISK.value, InternStatus.INACTIVE.value):
             restored = InternStatus.ACTIVE.value
         intern.intern_status = restored
         intern.previous_intern_status = None

@@ -2,10 +2,10 @@ from django.urls import path, include
 from . import interns_views
 
 urlpatterns = [
-    path("reviews/", include("api.dashboard.manage_interns.reviews.urls")),
-    path("tasks/", include("api.dashboard.manage_interns.tasks.urls")),
-    path("leave/", include("api.dashboard.manage_interns.leave.urls")),
-    path("teams/", include("api.dashboard.manage_interns.teams.urls")),
+    path("reviews/", include("api.dashboard.intern.manage.reviews.urls")),
+    path("tasks/", include("api.dashboard.intern.manage.tasks.urls")),
+    path("leave/", include("api.dashboard.intern.manage.leave.urls")),
+    path("teams/", include("api.dashboard.intern.manage.teams.urls")),
     
     path("status/", interns_views.ManageInternStatusAPI.as_view(), name="manage-intern-status"),
     path("interns/export/", interns_views.ManageInternExportAPI.as_view(), name="manage-intern-export"),
