@@ -1,8 +1,8 @@
 from rest_framework import serializers
 from django.utils.timezone import now
-from db.intern import InternTask, UserInternGuildLink
+from db.intern import InternTask
 from db.user import User
-from utils.types import InternGuildStatus
+from utils.intern_permissions import caller_team_id, current_membership, is_admin, team_ref, working_membership_error
 
 COMPLEXITY_WEIGHT_MAP = {'LOW': 1, 'MEDIUM': 2, 'HIGH': 3, 'CRITICAL': 5}
 
@@ -20,7 +20,6 @@ class UserPrimaryKeyRelatedField(serializers.PrimaryKeyRelatedField):
             )
 
 class ManageInternTaskSerializer(serializers.ModelSerializer):
-    guild = serializers.CharField(source='team', write_only=True, required=False)
     assigned_to = UserPrimaryKeyRelatedField(queryset=User.objects.all())
     # Accepted so older clients that still send it don't get "Unknown field.",
     # but always derived from the deadline in validate().
@@ -33,16 +32,21 @@ class ManageInternTaskSerializer(serializers.ModelSerializer):
     complexity_score = serializers.SerializerMethodField()
     assigned_to_name = serializers.SerializerMethodField()
     assigned_to_muid = serializers.SerializerMethodField()
+    # The team the task was assigned in (null on tasks from before teams). Set from
+    # the assignee's current team; not accepted from the client.
+    team = serializers.SerializerMethodField()
 
     class Meta:
         model = InternTask
         fields = [
             'id', 'title', 'description', 'category', 'complexity',
             'complexity_score', 'assigned_to', 'assigned_to_name', 'assigned_to_muid',
-            'status', 'remark', 'team', 'guild', 'deadline', 'iso_week', 'output_link',
+            'status', 'remark', 'team', 'deadline', 'iso_week', 'output_link',
             'karma_awarded', 'is_verified', 'verified_by_id', 'created_at'
         ]
-        read_only_fields = ['created_at', 'verified_by_id']
+        # karma_awarded is set only by the verify endpoint (and reset when verification is
+        # revoked), so it can't be written through create or update.
+        read_only_fields = ['created_at', 'verified_by_id', 'karma_awarded']
 
     def get_complexity_score(self, obj):
         return COMPLEXITY_WEIGHT_MAP.get(obj.complexity, 1)
@@ -53,15 +57,27 @@ class ManageInternTaskSerializer(serializers.ModelSerializer):
     def get_assigned_to_muid(self, obj):
         return obj.assigned_to.muid if obj.assigned_to else None
 
+    def get_team(self, obj):
+        return team_ref(obj.team)
+
     def validate(self, attrs):
-        # Verify the assigned user is an active intern
+        # The assignee must be a current member who isn't INACTIVE; a Lead may only
+        # assign to members of their own team. The task belongs to the assignee's
+        # current team. Re-checked only when the assignee changes on an update.
         assigned_to = attrs.get('assigned_to')
-        if assigned_to:
-            guild_link = UserInternGuildLink.objects.filter(user_id=assigned_to.id).first()
-            if not guild_link or guild_link.status == InternGuildStatus.INACTIVE.value:
+        if assigned_to and (not self.instance or assigned_to.id != self.instance.assigned_to_id):
+            link = current_membership(assigned_to.id)
+            if working_membership_error(link):
+                # Not a member, INACTIVE, not started yet or tenure ended.
                 raise serializers.ValidationError(
                     {"assigned_to": f"User '{assigned_to.muid}' is not an active intern."}
                 )
+            request = self.context.get('request')
+            if request is not None and not is_admin(request) and link.team_id != caller_team_id(request):
+                raise serializers.ValidationError(
+                    {"assigned_to": "You can only assign tasks to members of your own team."}
+                )
+            attrs['team_id'] = link.team_id
 
         # Prevent creating tasks with a past deadline (only on create, not update)
         if not self.instance and 'deadline' in attrs:

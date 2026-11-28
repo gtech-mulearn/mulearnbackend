@@ -3,7 +3,8 @@ from django.db import transaction
 from datetime import timedelta
 
 from db.intern import InternDailyTimesheet, InternTask
-from utils.types import InternSubmissionStatus, InternTaskStatus, COUNTED_TIMESHEET_STATUSES
+from utils.intern_permissions import team_ref, user_ref
+from utils.types import InternTaskStatus
 from utils.utils import DateTimeUtils
 
 from .streak import log_daily_timesheet_activity, sync_timesheet_streak
@@ -154,38 +155,56 @@ class InternTimesheetSerializer(serializers.ModelSerializer):
 
             validated_data['task'] = snapshot
             validated_data['user_id'] = user_id
+            # The team the intern is in when submitting (set by the view).
+            validated_data['team_id'] = self.context.get('team_id')
             validated_data['created_by_id'] = user_id
             validated_data['updated_by_id'] = user_id
-            # Counts immediately — no admin approval step.
-            validated_data['status'] = InternSubmissionStatus.SUBMITTED.value
+            # Counts immediately: no approval step and no status column.
 
             timesheet = InternDailyTimesheet.objects.create(**validated_data)
 
-            # Quest Log entry, then streak / milestone karma — what admin
-            # approval used to do, now on submit. Status (AT_RISK → ACTIVE)
-            # is left to intern_daily_status_cron.
+            # Quest Log entry, then the streak the leaderboard shows (no
+            # milestone karma). Status (AT_RISK → ACTIVE) is left to
+            # intern_daily_status_cron.
             log_daily_timesheet_activity(user_id)
-            sync_timesheet_streak(user_id, actor_id=user_id)
+            sync_timesheet_streak(user_id)
 
             return timesheet
 
 
 class InternTimesheetHistorySerializer(serializers.ModelSerializer):
-    # Points awarded to the leaderboard score for this timesheet entry.
-    # Counted timesheets (submitted, plus legacy approved/pending) earn
-    # 25 pts each; rejected ones earn 0.
+    # Points this entry adds to the leaderboard score: every timesheet counts.
     score = serializers.SerializerMethodField()
+    # The team the timesheet was submitted in (null on timesheets from before teams).
+    team = serializers.SerializerMethodField()
+    # Who wrote review_note: {id, full_name, muid}, or null.
+    reviewed_by = serializers.SerializerMethodField()
+    # True when it belongs to the intern's current team stint (needs context['current_link']).
+    is_current_team = serializers.SerializerMethodField()
 
     class Meta:
         model = InternDailyTimesheet
         fields = [
             'id', 'entry_date', 'task', 'description',
             'hours', 'blockers', 'end_of_day_note', 'edit_reason',
-            'status', 'review_note', 'created_at', 'score'
+            'review_note', 'reviewed_by', 'reviewed_at', 'team', 'is_current_team', 'created_at', 'score'
         ]
 
     def get_score(self, obj):
-        return 25 if obj.status in COUNTED_TIMESHEET_STATUSES else 0
+        return 25
+
+    def get_team(self, obj):
+        return team_ref(obj.team)
+
+    def get_reviewed_by(self, obj):
+        return user_ref(obj.reviewed_by)
+
+    def get_is_current_team(self, obj):
+        link = self.context.get('current_link')
+        if 'current_link' not in self.context:
+            from utils.intern_permissions import current_membership
+            link = current_membership(obj.user_id)
+        return bool(link and obj.team_id == link.team_id and obj.entry_date >= link.join_date)
 
 
 class InternTimesheetEditSerializer(serializers.ModelSerializer):

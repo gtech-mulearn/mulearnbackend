@@ -254,16 +254,6 @@ class InternHashtag(Enum):
     MONTHLY_REVIEW_KARMA = 0
     MONTHLY_REVIEW_HASHTAG = "#intern-monthly-review"
     TASK_VERIFIED_HASHTAG = "#intern-task-verified"
-    STREAK_7_KARMA = 7
-    STREAK_7_HASHTAG = "#intern-streak-7"
-    STREAK_14_KARMA = 14
-    STREAK_14_HASHTAG = "#intern-streak-14"
-    STREAK_30_KARMA = 30
-    STREAK_30_HASHTAG = "#intern-streak-30"
-    STREAK_60_KARMA = 60
-    STREAK_60_HASHTAG = "#intern-streak-60"
-    STREAK_90_KARMA = 90
-    STREAK_90_HASHTAG = "#intern-streak-90"
 
 class InternGuild(Enum):
     FRONTEND = "Frontend Guild"
@@ -274,11 +264,6 @@ class InternGuild(Enum):
     @classmethod
     def get_all_values(cls):
         return [member.value for member in cls]
-
-class InternTaskCategory(Enum):
-    BACKEND_GUILD = ["Backend API", "Auth API", "Bot", "Database", "DevOps", "Documentation"]
-    FRONTEND_GUILD = ["UI Components", "API Integration", "Bug Fix", "Performance", "Accessibility", "Documentation"]
-    DESIGN_GUILD = ["Wireframes", "Prototyping", "Branding", "Research"]
 
 class InternTaskStatus(Enum):
     NOT_STARTED = "NOT_STARTED"
@@ -307,21 +292,7 @@ class InternSubmissionStatus(Enum):
     PENDING = "PENDING"
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
-    # Daily timesheets no longer go through admin review: a new timesheet is
-    # stored as SUBMITTED and counts immediately. Weekly reviews still use
-    # PENDING/APPROVED/REJECTED.
-    SUBMITTED = "SUBMITTED"
 
-
-# Daily timesheet statuses that count toward the streak, milestone karma and
-# the intern leaderboard. PENDING is included so timesheets that were still
-# awaiting review when admin approval was removed are counted without a data
-# migration. REJECTED never counts.
-COUNTED_TIMESHEET_STATUSES = [
-    InternSubmissionStatus.APPROVED.value,
-    InternSubmissionStatus.SUBMITTED.value,
-    InternSubmissionStatus.PENDING.value,
-]
 
 class InternLeaveType(Enum):
     SICK = "SICK"
@@ -335,11 +306,46 @@ class InternLeaveStatus(Enum):
     REJECTED = "REJECTED"
     CANCELLED = "CANCELLED"
 
-class InternGuildStatus(Enum):
+class InternStatus(Enum):
+    """
+    An intern's standing in a team membership. ON_LEAVE only comes from approved
+    leave; INACTIVE from the tenure ending (current row) or from a row ending
+    (deactivation, reassign). AT_RISK is set (and cleared) only by a Lead or
+    Admin; nothing sets it automatically.
+    """
     ACTIVE = "ACTIVE"
     AT_RISK = "AT_RISK"
     ON_LEAVE = "ON_LEAVE"
     INACTIVE = "INACTIVE"
+
+
+class InternHistoryEntity(Enum):
+    """What an intern_history row points at (entity_type); entity_id is that row's id."""
+    MEMBERSHIP = "MEMBERSHIP"  # user_intern_team_link
+
+
+class InternHistoryAction(Enum):
+    """Actions an Admin or Lead takes on an intern, recorded in intern_history."""
+    ONBOARDED = "ONBOARDED"
+    STATUS_CHANGED = "STATUS_CHANGED"
+    LEAD_ADDED = "LEAD_ADDED"
+    LEAD_REMOVED = "LEAD_REMOVED"
+    DEACTIVATED = "DEACTIVATED"
+    REASSIGNED = "REASSIGNED"
+    END_DATE_CHANGED = "END_DATE_CHANGED"
+    TENURE_ENDED = "TENURE_ENDED"   # by the daily tenure job (actor SYSTEM)
+
+
+class InternActorRole(Enum):
+    """action_by_role in intern_history: the actor's role at the time."""
+    ADMIN = "ADMIN"
+    LEAD = "LEAD"
+    SYSTEM = "SYSTEM"   # cron jobs; action_by is null
+
+
+# Old name, still used by the guild-based modules (weekly review, leaderboard,
+# minutes) and the code not yet moved to teams. Remove once nothing imports it.
+InternGuildStatus = InternStatus
 
 class InternLeaderboardWeights:
     """Point-value multipliers for leaderboard scoring.

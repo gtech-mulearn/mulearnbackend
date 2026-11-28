@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from db.intern import InternMonthlyReview, InternTask
+from utils.intern_permissions import team_ref, user_ref
 from utils.types import InternSubmissionStatus, InternTaskStatus
 
 from .leave import review_leave_days
@@ -16,8 +17,11 @@ COMPLETED_TASK_STATUSES = [InternTaskStatus.COMPLETED.value, InternTaskStatus.WA
 
 
 def month_tasks(user_id, window, completed_only=False):
-    """The intern's non-archived tasks whose deadline falls inside the reviewed month."""
-    tasks = InternTask.objects.filter(
+    """
+    The intern's non-archived tasks whose deadline falls inside the reviewed month,
+    from every team they were in (each snapshot carries its team).
+    """
+    tasks = InternTask.objects.select_related('team').filter(
         assigned_to_id=user_id,
         deadline__range=(window.period_start, window.period_end),
         is_archived=False,
@@ -36,6 +40,7 @@ def task_snapshot(task, status_key='final_status'):
         'deadline': task.deadline.isoformat(),
         status_key: task.status,
         'output_link': task.output_link,
+        'team': team_ref(task.team),
     }
 
 
@@ -55,7 +60,7 @@ class InternMonthlyReviewSerializer(serializers.ModelSerializer):
     Context:
         user_id:    the intern (from the JWT)
         window:     MonthlyReviewWindow being submitted for (must be open)
-        team:       guild name to store
+        team_id:    the intern's current team, stored on a new review
         resubmit:   True when replacing a REJECTED review in the same window
     """
     monthly_review = serializers.CharField(required=False, allow_blank=True, allow_null=True, max_length=5000)
@@ -136,7 +141,8 @@ class InternMonthlyReviewSerializer(serializers.ModelSerializer):
             'month': window.month,
             'period_start': window.period_start,
             'period_end': window.period_end,
-            'team': self.context.get('team') or '',
+            # The team the intern is in when submitting. A resubmission keeps it.
+            'team_id': self.context.get('team_id'),
             'status': InternSubmissionStatus.PENDING.value,
             'created_by_id': user_id,
         })
@@ -149,7 +155,6 @@ class InternMonthlyReviewSerializer(serializers.ModelSerializer):
             validated_data.setdefault('blockers', None)
             validated_data.setdefault('suggestions', None)
             validated_data.update({
-                'team': self.context.get('team') or instance.team,
                 'status': InternSubmissionStatus.PENDING.value,
                 'reviewed_by': None,
                 'reviewed_at': None,
@@ -162,6 +167,9 @@ class InternMonthlyReviewHistorySerializer(serializers.ModelSerializer):
     # Approved leave days in the review month (WFH included), worked out on
     # read. List views pass context['leave_days'] from leave_days_by_review.
     leave_days = serializers.SerializerMethodField()
+    # The team the review was submitted in (null before teams) and who reviewed it.
+    team = serializers.SerializerMethodField()
+    reviewed_by = serializers.SerializerMethodField()
 
     class Meta:
         model = InternMonthlyReview
@@ -169,8 +177,14 @@ class InternMonthlyReviewHistorySerializer(serializers.ModelSerializer):
             'id', 'year', 'month', 'period_start', 'period_end', 'team',
             'tasks_completed', 'monthly_review', 'task_remarks', 'blockers',
             'leave_days', 'suggestions', 'status', 'review_note',
-            'reviewed_at', 'created_at', 'updated_at',
+            'reviewed_by', 'reviewed_at', 'created_at', 'updated_at',
         ]
 
     def get_leave_days(self, obj) -> int:
         return review_leave_days(self, obj)
+
+    def get_team(self, obj):
+        return team_ref(obj.team)
+
+    def get_reviewed_by(self, obj):
+        return user_ref(obj.reviewed_by)

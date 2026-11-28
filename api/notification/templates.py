@@ -389,6 +389,14 @@ TEMPLATES: dict[tuple, dict] = {
         "body":  "Today is the last day to submit your {month_name} {year} review.",
     },
 
+    # ── INTERN_TENURE_ENDED ───────────────────────────────────────────────────
+    # Who gets it: the team's working Lead(s) and every Admin, once per membership row
+    # Context keys: full_name, muid, team_name, end_date
+    ("INTERN_TENURE_ENDED", "IN_APP"): {
+        "title": "Internship ended",
+        "body":  "{full_name}'s internship in {team_name} ended on {end_date}. Extend the end date or deactivate them.",
+    },
+
 }
 
 # Copy all IN_APP entries to WEBSOCKET automatically.

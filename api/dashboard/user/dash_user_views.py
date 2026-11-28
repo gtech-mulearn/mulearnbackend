@@ -4,15 +4,17 @@ from datetime import timedelta
 from decouple import config as decouple_config
 from django.contrib.auth.hashers import make_password
 from django.core.files.storage import FileSystemStorage
+from django.db import transaction
 from django.db.models import Prefetch, Q
 from rest_framework.views import APIView
 
 from db.organization import UserOrganizationLink
 from db.task import UserIgLink
 from db.user import ForgotPassword, User, UserRoleLink
+from utils.intern_permissions import deactivate_members, record_lead_removed
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
-from utils.types import OrganizationType, RoleType, WebHookActions, WebHookCategory
+from utils.types import InternActorRole, OrganizationType, RoleType, WebHookActions, WebHookCategory
 from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks, send_template_mail
 from . import dash_user_serializer
 from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
@@ -345,8 +347,19 @@ class UserVerificationAPI(APIView):
         responses={200: dash_user_serializer.UserVerificationSerializer},
     )
     def delete(self, request, link_id):
-        link = UserRoleLink.objects.get(id=link_id)
-        link.delete()
+        link = UserRoleLink.objects.select_related("role").get(id=link_id)
+        title = link.role.title
+        with transaction.atomic():
+            link.delete()
+            # An intern role taken away here must move the team membership too.
+            if title == RoleType.INTERN.value:
+                deactivate_members(
+                    [link.user_id], JWTUtils.fetch_user_id(request), role=InternActorRole.ADMIN.value
+                )
+            elif title == RoleType.INTERN_LEAD.value:
+                record_lead_removed(
+                    [link.user_id], JWTUtils.fetch_user_id(request), role=InternActorRole.ADMIN.value
+                )
 
         return CustomResponse(
             general_message="Link deleted successfully"

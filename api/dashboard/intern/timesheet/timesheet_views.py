@@ -1,16 +1,17 @@
 from datetime import timedelta
 
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 
 from rest_framework.views import APIView
-from drf_spectacular.utils import extend_schema, OpenApiResponse
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse
 
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
-from utils.types import RoleType, InternGuildStatus, InternTaskStatus, COUNTED_TIMESHEET_STATUSES
+from utils.types import RoleType, InternTaskStatus
 from utils.utils import CommonUtils, DateTimeUtils
-from db.intern import InternDailyTimesheet, UserInternGuildLink, InternTask
-from db.achievement import UserStreak
+from db.intern import InternDailyTimesheet, InternTask
+from utils.intern_permissions import ON_LEAVE, current_membership, timesheet_gate, working_membership_error
 from db.mentor import SystemActionLog
 
 from .serializers import (
@@ -20,8 +21,9 @@ from .serializers import (
     InternTimesheetEditSerializer,
 )
 
-# A timesheet stays editable until the end of the day after its entry_date (IST).
-TIMESHEET_EDIT_GRACE_DAYS = 1
+# A timesheet stays editable until the end of the second day after its entry_date
+# (IST): the Nov 1 timesheet can be submitted on Nov 1 or 2 and edited until Nov 3.
+TIMESHEET_EDIT_GRACE_DAYS = 2
 
 
 def _is_duplicate_timesheet_error(errors) -> bool:
@@ -29,6 +31,46 @@ def _is_duplicate_timesheet_error(errors) -> bool:
         getattr(err, 'code', None) == DUPLICATE_TIMESHEET_CODE
         for err in errors.get('entry_date', [])
     )
+
+
+def _active_membership_or_error(user_id):
+    """
+    The intern's current membership if they may submit timesheets, else (None, error
+    response): no current row, INACTIVE, before join_date or after end_date (checked
+    directly, without waiting for the nightly tenure job).
+    """
+    link = current_membership(user_id)
+    error = working_membership_error(link)
+    if error:
+        return None, CustomResponse(general_message=error).get_failure_response()
+    return link, None
+
+
+TEAM_SCOPE_PARAM = OpenApiParameter(
+    name='scope', required=False, type=str,
+    description="current (default): timesheets of the current team stint; previous: older teams "
+                "(and earlier stints); all: everything",
+)
+
+
+def _own_timesheets(request, user_id):
+    """
+    The intern's timesheets for ?scope=current (default), previous or all, plus the
+    current membership row (None if they have none). "Current" is the current team
+    stint: that team, from its join_date on. Anything else is "previous".
+    Returns (queryset, link) or (None, error response) for a bad scope.
+    """
+    scope = (request.query_params.get('scope') or 'current').lower()
+    if scope not in ('current', 'previous', 'all'):
+        return None, CustomResponse(general_message="scope must be current, previous or all.").get_failure_response()
+    link = current_membership(user_id)
+    timesheets = InternDailyTimesheet.objects.select_related('team', 'reviewed_by').filter(user_id=user_id)
+    in_current = Q(team_id=link.team_id, entry_date__gte=link.join_date) if link else Q(pk__in=[])
+    if scope == 'current':
+        timesheets = timesheets.filter(in_current)
+    elif scope == 'previous':
+        timesheets = timesheets.exclude(in_current)
+    return timesheets.order_by('-entry_date'), link
 
 
 def _duplicate_timesheet_response():
@@ -51,12 +93,11 @@ class InternTimesheetPrefillAPI(APIView):
     )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        guild_link = UserInternGuildLink.objects.filter(user_id=user_id).first()
+        link, error = _active_membership_or_error(user_id)
+        if error:
+            return error
 
-        if not guild_link or guild_link.status == InternGuildStatus.INACTIVE.value:
-            return CustomResponse(general_message="Not an active intern.").get_failure_response()
-
-        if guild_link.status == InternGuildStatus.ON_LEAVE.value:
+        if link.intern_status == ON_LEAVE:
             return CustomResponse(response={"tasks": [], "on_leave": True}).get_success_response()
 
         today = DateTimeUtils.get_ist_today()
@@ -68,6 +109,9 @@ class InternTimesheetPrefillAPI(APIView):
             # iso_week alone would also match the same week number of other years.
             deadline__iso_year=iso_year,
             is_archived=False,
+        ).filter(
+            # Tasks of the current team; tasks from before teams have no team yet.
+            Q(team_id=link.team_id) | Q(team__isnull=True)
         ).exclude(
             status='COMPLETED', is_verified=True
         ).order_by('deadline')
@@ -95,27 +139,36 @@ class InternTimesheetAPI(APIView):
     @role_required([RoleType.INTERN.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
-        description="Retrieve intern timesheet(s). Pass a timesheet_id to retrieve a specific entry.",
+        description=(
+            "The intern's timesheets (paginated), or one by timesheet_id. `scope`: current (default) "
+            "= the current team stint, previous = older teams and earlier stints, all = everything. "
+            "Each entry has `team` and `is_current_team`."
+        ),
+        parameters=[TEAM_SCOPE_PARAM],
         responses={200: InternTimesheetHistorySerializer},
     )
     def get(self, request, timesheet_id=None):
         user_id = JWTUtils.fetch_user_id(request)
         if timesheet_id:
-            timesheet = InternDailyTimesheet.objects.filter(id=timesheet_id, user_id=user_id).first()
+            timesheet = InternDailyTimesheet.objects.select_related('team', 'reviewed_by').filter(id=timesheet_id, user_id=user_id).first()
             if not timesheet:
                 return CustomResponse(general_message="Timesheet not found.").get_failure_response()
             serializer = InternTimesheetHistorySerializer(timesheet)
             return CustomResponse(response=serializer.data).get_success_response()
 
-        timesheets = InternDailyTimesheet.objects.filter(user_id=user_id).order_by('-entry_date')
+        timesheets, link = _own_timesheets(request, user_id)
+        if timesheets is None:
+            return link  # the error response
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             timesheets, request,
-            ['entry_date', 'status'],
-            {'entry_date': 'entry_date', 'status': 'status'}
+            ['entry_date'],
+            {'entry_date': 'entry_date'}
         )
 
-        serializer = InternTimesheetHistorySerializer(paginated_queryset.get("queryset"), many=True)
+        serializer = InternTimesheetHistorySerializer(
+            paginated_queryset.get("queryset"), many=True, context={'current_link': link}
+        )
         return CustomResponse(
             response={
                 "data": serializer.data,
@@ -132,16 +185,20 @@ class InternTimesheetAPI(APIView):
     )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        guild_link = UserInternGuildLink.objects.filter(user_id=user_id).first()
-
-        if not guild_link or guild_link.status == InternGuildStatus.INACTIVE.value:
+        link = current_membership(user_id)
+        if not link:
             return CustomResponse(general_message="Not an active intern.").get_failure_response()
 
-        if guild_link.status == InternGuildStatus.ON_LEAVE.value:
+        if link.intern_status == ON_LEAVE:
             return CustomResponse(general_message="You are currently on approved leave and cannot submit a timesheet.").get_failure_response()
 
         serializer = InternTimesheetSerializer(data=request.data, context={'user_id': user_id})
         if serializer.is_valid():
+            # The day must be inside a tenure; the timesheet belongs to the team that covered it.
+            team_id, error = timesheet_gate(link, user_id, serializer.validated_data['entry_date'])
+            if error:
+                return CustomResponse(general_message=error).get_failure_response()
+            serializer.context['team_id'] = team_id
             try:
                 serializer.save()
                 return CustomResponse(general_message="Timesheet submitted successfully.").get_success_response()
@@ -156,7 +213,8 @@ class InternTimesheetAPI(APIView):
     @extend_schema(
         tags=['Dashboard - Intern'],
         description=(
-            "Edit a timesheet entry. Allowed until the end of the day after its entry_date (IST). "
+            "Edit a timesheet entry. Allowed until the end of the second day after its entry_date "
+            "(IST): a Nov 1 timesheet can be edited until Nov 3. "
             "edit_reason is mandatory; entry_date cannot be changed."
         ),
         request=InternTimesheetEditSerializer,
@@ -165,12 +223,14 @@ class InternTimesheetAPI(APIView):
     def patch(self, request, timesheet_id):
         user_id = JWTUtils.fetch_user_id(request)
 
+        # The timesheet keeps the team it was submitted in, even after a move.
         timesheet = InternDailyTimesheet.objects.filter(id=timesheet_id, user_id=user_id).first()
         if not timesheet:
             return CustomResponse(general_message="Timesheet not found.").get_failure_response()
 
-        if timesheet.status not in COUNTED_TIMESHEET_STATUSES:
-            return CustomResponse(general_message="This timesheet can no longer be edited.").get_failure_response()
+        _, error = timesheet_gate(current_membership(user_id), user_id, timesheet.entry_date)
+        if error:
+            return CustomResponse(general_message=error).get_failure_response()
 
         edit_deadline = timesheet.entry_date + timedelta(days=TIMESHEET_EDIT_GRACE_DAYS)
         if DateTimeUtils.get_ist_today() > edit_deadline:
@@ -270,7 +330,7 @@ class InternTimesheetTodayAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         today = DateTimeUtils.get_ist_today()
 
-        timesheet = InternDailyTimesheet.objects.filter(user_id=user_id, entry_date=today).first()
+        timesheet = InternDailyTimesheet.objects.select_related('team', 'reviewed_by').filter(user_id=user_id, entry_date=today).first()
         if not timesheet:
             return CustomResponse(general_message="No timesheet submitted for today.").get_failure_response()
 
@@ -284,43 +344,32 @@ class InternTimesheetHistoryAPI(APIView):
     @role_required([RoleType.INTERN.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
-        description="Retrieve paginated intern timesheet history.",
+        description=(
+            "Paginated timesheet history. `scope`: current (default) = the current team stint, "
+            "previous = older teams and earlier stints, all = everything. Each entry has `team` "
+            "and `is_current_team`."
+        ),
+        parameters=[TEAM_SCOPE_PARAM],
         responses={200: InternTimesheetHistorySerializer(many=True)},
     )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        timesheets = InternDailyTimesheet.objects.filter(user_id=user_id).order_by('-entry_date')
+        timesheets, link = _own_timesheets(request, user_id)
+        if timesheets is None:
+            return link  # the error response
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             timesheets, request,
-            ['entry_date', 'status'],
-            {'entry_date': 'entry_date', 'status': 'status'}
+            ['entry_date'],
+            {'entry_date': 'entry_date'}
         )
 
-        serializer = InternTimesheetHistorySerializer(paginated_queryset.get("queryset"), many=True)
+        serializer = InternTimesheetHistorySerializer(
+            paginated_queryset.get("queryset"), many=True, context={'current_link': link}
+        )
         return CustomResponse(
             response={
                 "data": serializer.data,
                 "pagination": paginated_queryset.get("pagination")
             }
         ).get_success_response()
-
-
-class InternTimesheetSummaryAPI(APIView):
-    authentication_classes = [CustomizePermission]
-
-    @role_required([RoleType.INTERN.value])
-    @extend_schema(
-        tags=['Dashboard - Intern'],
-        description="Retrieve current timesheet streak stats (current and longest streak).",
-        responses={200: OpenApiResponse(description="Streak stats for the intern.")},
-    )
-    def get(self, request):
-        user_id = JWTUtils.fetch_user_id(request)
-        streak = UserStreak.objects.filter(user_id=user_id, streak_type='intern_timesheet').first()
-
-        data = {
-            "current_streak": streak.current_streak if streak else 0,
-            "longest_streak": streak.longest_streak if streak else 0,
-        }
-        return CustomResponse(response=data).get_success_response()
