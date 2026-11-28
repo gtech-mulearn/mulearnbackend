@@ -24,13 +24,16 @@ class InternLeaveRequestAPI(APIView):
     def get(self, request, leave_id=None):
         user_id = JWTUtils.fetch_user_id(request)
         if leave_id:
-            leave = InternLeaveRequest.objects.filter(id=leave_id, user_id=user_id).first()
+            leave = InternLeaveRequest.objects.select_related('team', 'reviewed_by').filter(id=leave_id, user_id=user_id).first()
             if not leave:
                 return CustomResponse(general_message="Leave request not found.").get_failure_response()
             serializer = InternLeaveHistorySerializer(leave)
             return CustomResponse(response=serializer.data).get_success_response()
             
-        leaves = InternLeaveRequest.objects.filter(user_id=user_id).order_by('-created_at')
+        leaves = (
+            InternLeaveRequest.objects.select_related('team', 'reviewed_by')
+            .filter(user_id=user_id).order_by('-created_at')
+        )
         
         paginated_queryset = CommonUtils.get_paginated_queryset(
             leaves, request,
@@ -49,7 +52,11 @@ class InternLeaveRequestAPI(APIView):
     @role_required([RoleType.INTERN.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
-        description="Submit a new intern leave request.",
+        description=(
+            "Submit a new intern leave request. Needs a current team membership that isn't "
+            "INACTIVE; the request belongs to that team. If the intern is reassigned while it is "
+            "pending, it moves to the new team."
+        ),
         request=InternLeaveRequestSerializer,
         responses={200: OpenApiResponse(description="Leave request submitted successfully.")},
     )
@@ -105,7 +112,10 @@ class InternLeaveHistoryAPI(APIView):
     )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        leaves = InternLeaveRequest.objects.filter(user_id=user_id).order_by('-created_at')
+        leaves = (
+            InternLeaveRequest.objects.select_related('team', 'reviewed_by')
+            .filter(user_id=user_id).order_by('-created_at')
+        )
         
         paginated_queryset = CommonUtils.get_paginated_queryset(
             leaves, request,

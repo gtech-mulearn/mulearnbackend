@@ -458,6 +458,20 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
             )
         return interest_group_ids
 
+    def validate_roles(self, role_ids):
+        # Intern and Intern Lead need a team and a tenure, which this form can't
+        # give, so it may keep or remove them but not add them.
+        if self.instance:
+            held = set(self.instance.user_role_link_user.values_list("role_id", flat=True))
+            added = set(map(str, role_ids)) - set(map(str, held))
+            if added and Role.objects.filter(
+                id__in=added, title__in=[RoleType.INTERN.value, RoleType.INTERN_LEAD.value]
+            ).exists():
+                raise serializers.ValidationError(
+                    "Intern and Intern Lead can't be added here. Use roles/user-role/ with a team and dates."
+                )
+        return role_ids
+
     def to_representation(self, instance):
         data = super().to_representation(instance)
 
@@ -539,6 +553,11 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
                 )
 
             if isinstance(role_ids := validated_data.pop("roles", None), list):
+                intern_titles = [RoleType.INTERN.value, RoleType.INTERN_LEAD.value]
+                held_before = set(
+                    instance.user_role_link_user.filter(role__title__in=intern_titles)
+                    .values_list("role__title", flat=True)
+                )
                 instance.user_role_link_user.all().delete()
                 UserRoleLink.objects.bulk_create(
                     [
@@ -552,6 +571,7 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
                         for role_id in role_ids
                     ]
                 )
+                self._sync_intern_membership(instance, admin, held_before)
 
             if isinstance(
                 interest_group_ids := validated_data.pop("interest_groups", None), list
@@ -570,6 +590,26 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
                 )
 
             return super().update(instance, validated_data)
+
+    @staticmethod
+    def _sync_intern_membership(instance, admin, held_before):
+        """
+        Roles replaced here must move the intern's team membership too: losing Intern
+        ends it (like deactivating), losing only Intern Lead is recorded as a demotion.
+        Call inside the update transaction, after the new roles are written.
+        """
+        from utils.intern_permissions import deactivate_members, record_lead_removed
+        from utils.types import InternActorRole
+
+        held_now = set(
+            instance.user_role_link_user.filter(
+                role__title__in=[RoleType.INTERN.value, RoleType.INTERN_LEAD.value]
+            ).values_list("role__title", flat=True)
+        )
+        if RoleType.INTERN.value in held_before - held_now:
+            deactivate_members([instance.id], admin.id, role=InternActorRole.ADMIN.value)
+        elif RoleType.INTERN_LEAD.value in held_before - held_now:
+            record_lead_removed([instance.id], admin.id, role=InternActorRole.ADMIN.value)
 
 
 class UserOrgLinkSerializer(serializers.Serializer):

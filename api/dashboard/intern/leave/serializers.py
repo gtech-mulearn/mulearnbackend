@@ -1,8 +1,11 @@
 from rest_framework import serializers
 from django.utils.timezone import now
 from datetime import timedelta
-from db.intern import InternLeaveRequest, UserInternGuildLink
-from utils.types import InternLeaveStatus, InternLeaveType, InternGuildStatus
+from db.intern import InternLeaveRequest
+from utils.intern_permissions import (
+    covering_membership, current_membership, team_ref, user_ref, working_membership_error,
+)
+from utils.types import InternLeaveStatus, InternLeaveType
 
 MAX_LEAVE_DURATION_DAYS = 30
 MAX_DAYS_IN_PAST = 30
@@ -24,11 +27,27 @@ class InternLeaveRequestSerializer(serializers.ModelSerializer):
         today = now().date()
         user_id = self.context.get('user_id')
 
-        # Active intern check
+        # Active intern check: a current membership that isn't INACTIVE. The leave
+        # belongs to the team the intern is in when requesting.
         if user_id:
-            guild_link = UserInternGuildLink.objects.filter(user_id=user_id).first()
-            if not guild_link or guild_link.status == InternGuildStatus.INACTIVE.value:
-                raise serializers.ValidationError("You must be an active intern to request leave.")
+            link = current_membership(user_id)
+            error = working_membership_error(link)
+            if error:
+                raise serializers.ValidationError(
+                    "You must be an active intern to request leave." if error == "Not an active intern." else error
+                )
+            # Backdated leave must start on a day they were in the program (any stint,
+            # so the day before a reassign is fine).
+            if start_date and start_date < link.join_date and covering_membership(user_id, start_date) is None:
+                raise serializers.ValidationError(
+                    {"start_date": "You weren't in the program on that date."}
+                )
+            # Leave can't run past the end of the tenure.
+            if end_date and link.end_date and end_date > link.end_date:
+                raise serializers.ValidationError(
+                    {"end_date": f"Leave can't go past the end of your internship ({link.end_date:%d %b %Y})."}
+                )
+            data['team_id'] = link.team_id
 
         if start_date and end_date:
             if start_date > end_date:
@@ -73,9 +92,19 @@ class InternLeaveRequestSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
 class InternLeaveHistorySerializer(serializers.ModelSerializer):
+    # The team the leave was requested in (null before teams) and who reviewed it.
+    team = serializers.SerializerMethodField()
+    reviewed_by = serializers.SerializerMethodField()
+
     class Meta:
         model = InternLeaveRequest
         fields = [
-            'id', 'leave_type', 'start_date', 'end_date', 'reason',
-            'status', 'review_note', 'created_at'
+            'id', 'leave_type', 'start_date', 'end_date', 'reason', 'team',
+            'status', 'review_note', 'reviewed_by', 'reviewed_at', 'created_at'
         ]
+
+    def get_team(self, obj):
+        return team_ref(obj.team)
+
+    def get_reviewed_by(self, obj):
+        return user_ref(obj.reviewed_by)

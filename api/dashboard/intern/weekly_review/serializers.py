@@ -2,7 +2,8 @@ from rest_framework import serializers
 from django.utils.timezone import now
 from datetime import timedelta
 
-from db.intern import InternWeeklyReview, InternTask, UserInternGuildLink
+from db.intern import InternWeeklyReview, InternTask
+from utils.intern_permissions import current_membership
 from utils.types import InternSubmissionStatus
 
 
@@ -120,10 +121,10 @@ class InternWeeklyReviewSerializer(serializers.ModelSerializer):
         validated_data['tasks_completed'] = self._build_tasks_completed(user_id, iso_week)
         validated_data['tasks_assigned'] = validated_data.get('tasks_assigned') or {}
 
-        # Auto-populate team from UserInternGuildLink if not provided
+        # Auto-populate team from the intern's current team if not provided
         if not validated_data.get('team'):
-            guild_link = UserInternGuildLink.objects.filter(user_id=user_id).first()
-            validated_data['team'] = guild_link.guild if guild_link else ''
+            link = current_membership(user_id)
+            validated_data['team'] = link.team.name if link else ''
 
         validated_data['user_id'] = user_id
         validated_data['iso_year'] = iso_year

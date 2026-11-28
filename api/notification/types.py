@@ -75,6 +75,7 @@ class NotificationType(str, Enum):
     # ── Intern ────────────────────────────────────────────────────────────────
     INTERN_MONTHLY_REVIEW_OPEN     = "INTERN_MONTHLY_REVIEW_OPEN"      # interns: monthly review window opened
     INTERN_MONTHLY_REVIEW_LAST_DAY = "INTERN_MONTHLY_REVIEW_LAST_DAY"  # interns who haven't submitted: last day
+    INTERN_TENURE_ENDED            = "INTERN_TENURE_ENDED"             # team Lead(s) + Admins: an intern's tenure ended
 
     # ── Add more modules below as they are built ──────────────────────────────
     # MENTORSHIP, INTERN, TASKS ...
@@ -380,6 +381,12 @@ TYPE_META: dict[str, TypeMeta] = {
     NotificationType.INTERN_MONTHLY_REVIEW_LAST_DAY: TypeMeta(
         category    = Category.INTERN,
         is_personal = True,
+        eligible    = ["IN_APP", "WEBSOCKET"],
+    ),
+    # Sent to the team's Leads and Admins about someone else, so not personal.
+    NotificationType.INTERN_TENURE_ENDED: TypeMeta(
+        category    = Category.INTERN,
+        is_personal = False,
         eligible    = ["IN_APP", "WEBSOCKET"],
     ),
 

@@ -491,6 +491,7 @@ _ENTITY_TYPE_MAP: dict[str, str] = {
     # Intern
     NotificationType.INTERN_MONTHLY_REVIEW_OPEN:     "intern_monthly_review",
     NotificationType.INTERN_MONTHLY_REVIEW_LAST_DAY: "intern_monthly_review",
+    NotificationType.INTERN_TENURE_ENDED:            "user_intern_team_link",
 
     # Add more as modules are built:
     # NotificationType.SESSION_BOOKED:    "session",
