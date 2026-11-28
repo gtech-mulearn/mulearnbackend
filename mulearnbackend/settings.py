@@ -15,6 +15,8 @@ from pathlib import Path
 
 from decouple import config as decouple_config
 
+from .required import MISSING as _MISSING, required as _required
+
 import logging
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -24,17 +26,17 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = decouple_config("SECRET_KEY")
+SECRET_KEY = _required("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = decouple_config("DEBUG", default=False, cast=bool)
 
-ALLOWED_HOSTS = decouple_config(
+ALLOWED_HOSTS = _required(
     "ALLOWED_HOSTS", cast=lambda v: [s.strip() for s in v.split(",")]
 )
 
 # System admin applied to rows when their parent user instance is deleted
-SYSTEM_ADMIN_ID = decouple_config("SYSTEM_ADMIN_ID")
+SYSTEM_ADMIN_ID = _required("SYSTEM_ADMIN_ID")
 
 # Application definition
 
@@ -139,8 +141,8 @@ ASGI_APPLICATION = "mulearnbackend.asgi.application"
 
 WSGI_APPLICATION = "mulearnbackend.wsgi.application"
 
-REDIS_HOST = decouple_config("REDIS_HOST")
-REDIS_PORT = decouple_config("REDIS_PORT")
+REDIS_HOST = _required("REDIS_HOST")
+REDIS_PORT = _required("REDIS_PORT")
 
 CHANNEL_LAYERS = {
     "default": {
@@ -156,12 +158,12 @@ CHANNEL_LAYERS = {
 
 DATABASES = {
     "default": {
-        "ENGINE": decouple_config("DATABASE_ENGINE"),
-        "NAME": decouple_config("DATABASE_NAME"),
-        "USER": decouple_config("DATABASE_USER"),
-        "PASSWORD": decouple_config("DATABASE_PASSWORD"),
-        "HOST": decouple_config("DATABASE_HOST"),
-        "PORT": decouple_config("DATABASE_PORT"),
+        "ENGINE": _required("DATABASE_ENGINE"),
+        "NAME": _required("DATABASE_NAME"),
+        "USER": _required("DATABASE_USER"),
+        "PASSWORD": _required("DATABASE_PASSWORD"),
+        "HOST": _required("DATABASE_HOST"),
+        "PORT": _required("DATABASE_PORT"),
         # Must stay 0 under ASGI. Django's ASGIHandler wraps every request in a
         # ThreadSensitiveContext, so asgiref gives each request its own thread,
         # and DB connections are thread-local. A non-zero CONN_MAX_AGE tells
@@ -214,7 +216,7 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-LOG_PATH = decouple_config("LOGGER_DIR_PATH")
+LOG_PATH = _required("LOGGER_DIR_PATH")
 # Level for the catch-all root logger. It used to be DEBUG, which wrote every
 # debug line from every library to root.log synchronously on the request path.
 LOG_LEVEL = decouple_config("LOG_LEVEL", default="WARNING").upper()
@@ -310,26 +312,26 @@ MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Email Sending
-EMAIL_BACKEND = decouple_config("EMAIL_BACKEND")
-EMAIL_HOST = decouple_config("EMAIL_HOST")
-EMAIL_HOST_USER = decouple_config("EMAIL_HOST_USER")
-EMAIL_HOST_PASSWORD = decouple_config("EMAIL_HOST_PASSWORD")
-EMAIL_PORT = decouple_config("EMAIL_PORT")
-EMAIL_USE_TLS = decouple_config("EMAIL_USE_TLS")
-FROM_MAIL = decouple_config("FROM_MAIL")
-FR_DOMAIN_NAME = decouple_config("FR_DOMAIN_NAME")
+EMAIL_BACKEND = _required("EMAIL_BACKEND")
+EMAIL_HOST = _required("EMAIL_HOST")
+EMAIL_HOST_USER = _required("EMAIL_HOST_USER")
+EMAIL_HOST_PASSWORD = _required("EMAIL_HOST_PASSWORD")
+EMAIL_PORT = _required("EMAIL_PORT")
+EMAIL_USE_TLS = _required("EMAIL_USE_TLS")
+FROM_MAIL = _required("FROM_MAIL")
+FR_DOMAIN_NAME = _required("FR_DOMAIN_NAME")
 
-WADHWANI_CLIENT_AUTH_URL = decouple_config("WADHWANI_CLIENT_AUTH_URL")
-WADHWANI_CLIENT_SECRET = decouple_config("WADHWANI_CLIENT_SECRET")
-WADHWANI_BASE_URL = decouple_config("WADHWANI_BASE_URL")
+WADHWANI_CLIENT_AUTH_URL = _required("WADHWANI_CLIENT_AUTH_URL")
+WADHWANI_CLIENT_SECRET = _required("WADHWANI_CLIENT_SECRET")
+WADHWANI_BASE_URL = _required("WADHWANI_BASE_URL")
 
-RAZORPAY_ID = decouple_config("RAZORPAY_ID")
-RAZORPAY_SECRET = decouple_config("RAZORPAY_SECRET")
+RAZORPAY_ID = _required("RAZORPAY_ID")
+RAZORPAY_SECRET = _required("RAZORPAY_SECRET")
 
-QSEVERSE_BASE_URL = decouple_config("QSEVERSE_BASE_URL")
-QSEVERSE_API_KEY = decouple_config("QSEVERSE_API_KEY")
+QSEVERSE_BASE_URL = _required("QSEVERSE_BASE_URL")
+QSEVERSE_API_KEY = _required("QSEVERSE_API_KEY")
 
-BACKEND_API_KEY = decouple_config("BACKEND_API_KEY")
+BACKEND_API_KEY = _required("BACKEND_API_KEY")
 
 # ── Notification dispatch ──────────────────────────────────────────────────
 # 'inline' (default): NotificationService writes synchronously, same as
@@ -362,7 +364,7 @@ DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
 # No R2 credentials are needed here.
 # Required (no default): without it image URLs would silently become relative
 # paths that 404, so a missing value must stop startup instead.
-R2_PUBLIC_BASE_URL = decouple_config("R2_PUBLIC_BASE_URL")
+R2_PUBLIC_BASE_URL = _required("R2_PUBLIC_BASE_URL")
 
 import socket
 
@@ -447,3 +449,12 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': crontab(hour=1, minute=40),
     },
 }
+
+# Fail once, with every missing name, instead of crash-looping on the
+# first one at import time.
+if _MISSING:
+    from django.core.exceptions import ImproperlyConfigured
+
+    raise ImproperlyConfigured(
+        "Missing required settings: " + ", ".join(sorted(_MISSING))
+    )
