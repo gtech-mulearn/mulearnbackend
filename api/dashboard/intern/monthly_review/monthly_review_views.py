@@ -4,10 +4,11 @@ from django.db import IntegrityError, transaction
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 from rest_framework.views import APIView
 
-from db.intern import InternMonthlyReview, UserInternGuildLink
+from db.intern import InternMonthlyReview
+from utils.intern_permissions import current_membership, working_membership_error
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
-from utils.types import RoleType, InternSubmissionStatus, InternGuildStatus
+from utils.types import RoleType, InternSubmissionStatus
 from utils.utils import CommonUtils, DateTimeUtils
 
 from .serializers import (
@@ -19,7 +20,7 @@ from .serializers import (
 from .leave import approved_leave_days, leave_days_by_review
 from .window import get_monthly_review_window, window_for_month
 
-LIST_SEARCH_FIELDS = ['status', 'team']
+LIST_SEARCH_FIELDS = ['status', 'team__name']
 LIST_SORT_FIELDS = {'year': 'year', 'month': 'month', 'status': 'status', 'created_at': 'created_at'}
 
 
@@ -48,7 +49,10 @@ def _duplicate_review_response(window):
 
 
 def _paginated_reviews(request, user_id):
-    reviews = InternMonthlyReview.objects.filter(user_id=user_id).order_by('-year', '-month')
+    reviews = (
+        InternMonthlyReview.objects.select_related('team', 'reviewed_by')
+        .filter(user_id=user_id).order_by('-year', '-month')
+    )
     paginated_queryset = CommonUtils.get_paginated_queryset(
         reviews, request, LIST_SEARCH_FIELDS, LIST_SORT_FIELDS
     )
@@ -114,7 +118,10 @@ class InternMonthlyReviewAPI(APIView):
     def get(self, request, review_id=None):
         user_id = JWTUtils.fetch_user_id(request)
         if review_id:
-            review = InternMonthlyReview.objects.filter(id=review_id, user_id=user_id).first()
+            review = (
+                InternMonthlyReview.objects.select_related('team', 'reviewed_by')
+                .filter(id=review_id, user_id=user_id).first()
+            )
             if not review:
                 return CustomResponse(general_message="Monthly review not found.").get_failure_response()
             return CustomResponse(
@@ -129,7 +136,10 @@ class InternMonthlyReviewAPI(APIView):
             "Submit the monthly review. Only accepted while the window is open (last 2 days "
             "of the month + first 2 days of the next, IST); the server decides which month "
             "it is for. If this month's review was rejected, submitting again replaces it "
-            "and sends it back for review. Returns 409 if a pending or approved review exists. "
+            "and sends it back for review (it keeps the team it was first submitted in). "
+            "Returns 409 if a pending or approved review exists: one review per person per "
+            "month, even after moving teams. The review belongs to the team the intern is in "
+            "when submitting. "
             "leave_days is not accepted; responses show approved leave days for the month."
         ),
         request=InternMonthlyReviewSerializer,
@@ -147,15 +157,16 @@ class InternMonthlyReviewAPI(APIView):
 
         user_id = JWTUtils.fetch_user_id(request)
 
-        guild_link = UserInternGuildLink.objects.filter(user_id=user_id).first()
-        if not guild_link or guild_link.status == InternGuildStatus.INACTIVE.value:
-            return CustomResponse(general_message="Not an active intern.").get_failure_response()
+        link = current_membership(user_id)
+        error = working_membership_error(link)
+        if error:
+            return CustomResponse(general_message=error).get_failure_response()
 
         window = _current_window()
         if not window.is_open:
             return _window_closed_response(window)
 
-        context = {'user_id': user_id, 'window': window, 'team': guild_link.guild}
+        context = {'user_id': user_id, 'window': window, 'team_id': link.team_id}
 
         try:
             with transaction.atomic():
@@ -201,6 +212,9 @@ class InternMonthlyReviewAPI(APIView):
             return CustomResponse(general_message="A review id is required to edit a review.").get_failure_response()
 
         user_id = JWTUtils.fetch_user_id(request)
+        error = working_membership_error(current_membership(user_id))
+        if error:
+            return CustomResponse(general_message=error).get_failure_response()
 
         window = _current_window()
         with transaction.atomic():
@@ -253,7 +267,7 @@ class InternMonthlyReviewCurrentAPI(APIView):
             )
             window = window_for_month(prev_year, prev_month)
 
-        review = InternMonthlyReview.objects.filter(
+        review = InternMonthlyReview.objects.select_related('team', 'reviewed_by').filter(
             user_id=user_id, year=window.year, month=window.month
         ).first()
 

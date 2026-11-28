@@ -8,9 +8,10 @@ from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
-from utils.types import RoleType, InternSubmissionStatus, InternGuildStatus
+from utils.types import RoleType, InternSubmissionStatus
 from utils.utils import CommonUtils
-from db.intern import InternWeeklyReview, UserInternGuildLink
+from db.intern import InternWeeklyReview
+from utils.intern_permissions import current_membership, working_membership_error
 
 from .serializers import InternWeeklyReviewSerializer, InternWeeklyReviewHistorySerializer
 
@@ -105,11 +106,10 @@ class InternWeeklyReviewAPI(APIView):
     )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        guild_link = UserInternGuildLink.objects.filter(user_id=user_id).first()
-        
-        if not guild_link or guild_link.status == InternGuildStatus.INACTIVE.value:
-            return CustomResponse(general_message="Not an active intern.").get_failure_response()
-            
+        error = working_membership_error(current_membership(user_id))
+        if error:
+            return CustomResponse(general_message=error).get_failure_response()
+
         serializer = InternWeeklyReviewSerializer(data=request.data, context={'user_id': user_id})
         if serializer.is_valid():
             try:

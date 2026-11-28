@@ -1,5 +1,5 @@
 from django.urls import path, include
-from api.dashboard.intern.overview import overview_views
+from api.dashboard.intern.team import team_views
 
 urlpatterns = [
     path("timesheets/", include("api.dashboard.intern.timesheet.urls")),
@@ -9,6 +9,7 @@ urlpatterns = [
     path("leaderboard/", include("api.dashboard.intern.leaderboard.urls")),
     path("tasks/", include("api.dashboard.intern.tasks.urls")),
     path("leave/", include("api.dashboard.intern.leave.urls")),
-    path("guilds/", overview_views.InternGuildsAPI.as_view(), name="intern-guilds"),
+    path("team/", include("api.dashboard.intern.team.urls")),
+    path("teams/", team_views.InternTeamListAPI.as_view(), name="intern-teams"),
     path("minutes/", include("api.dashboard.intern.minutes.urls")),
 ]

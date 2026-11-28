@@ -1,29 +1,14 @@
+from django.db.models import Q
 from rest_framework.views import APIView
-from drf_spectacular.utils import extend_schema, OpenApiResponse
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse
 
+from utils.intern_permissions import current_membership, working_membership_error
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
-from utils.types import RoleType, InternTaskCategory, InternTaskStatus
+from utils.types import RoleType, InternTaskStatus
 from utils.utils import CommonUtils
 from db.intern import InternTask
 from .serializers import InternTaskSerializer
-
-
-class InternTaskCategoryAPI(APIView):
-    authentication_classes = [CustomizePermission]
-
-    @role_required([RoleType.INTERN.value,RoleType.ADMIN.value])
-    @extend_schema(
-        tags=['Dashboard - Intern'],
-        description="Retrieve all intern task categories and their sub-categories.",
-        responses={200: OpenApiResponse(description="Task categories retrieved successfully.")},
-    )
-    def get(self, request):
-        categories = {
-            member.name.replace("_", " ").title(): member.value
-            for member in InternTaskCategory
-        }
-        return CustomResponse(response=categories).get_success_response()
 
 
 class InternTaskDetailAPI(APIView):
@@ -32,12 +17,14 @@ class InternTaskDetailAPI(APIView):
     @role_required([RoleType.INTERN.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
-        description="Retrieve detail for a specific task assigned to the current intern.",
+        description="Retrieve one of the intern's own tasks, from any team they were in.",
         responses={200: InternTaskSerializer},
     )
     def get(self, request, task_id):
         user_id = JWTUtils.fetch_user_id(request)
-        task = InternTask.objects.filter(id=task_id, assigned_to_id=user_id).first()
+        task = InternTask.objects.select_related('team', 'assigned_to', 'created_by').filter(
+            id=task_id, assigned_to_id=user_id
+        ).first()
         if not task:
             return CustomResponse(general_message="Task not found.").get_failure_response()
         serializer = InternTaskSerializer(task)
@@ -56,12 +43,17 @@ class InternTaskSubmitAPI(APIView):
         tags=['Dashboard - Intern'],
         description=(
             "Directly submit a task update: set status and/or output_link. "
-            "output_link is required when status=COMPLETED."
+            "output_link is required when status=COMPLETED. Works for the intern's own tasks "
+            "from any team, so an unfinished task from an earlier team can still be submitted "
+            "for that team's Lead to verify."
         ),
         responses={200: OpenApiResponse(description="Task submitted successfully.")},
     )
     def patch(self, request, task_id):
         user_id = JWTUtils.fetch_user_id(request)
+        error = working_membership_error(current_membership(user_id))
+        if error:
+            return CustomResponse(general_message=error).get_failure_response()
         task = InternTask.objects.filter(id=task_id, assigned_to_id=user_id).first()
 
         if not task:
@@ -111,12 +103,24 @@ class InternTaskMineAPI(APIView):
     @role_required([RoleType.INTERN.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
-        description="Retrieve all tasks assigned to the current intern.",
+        description=(
+            "The intern's tasks. By default those of their current team (plus tasks from before "
+            "teams); `all=true` also returns tasks from teams they were in before. Each task has "
+            "`team`."
+        ),
+        parameters=[OpenApiParameter(name='all', description='true: tasks from every team', required=False, type=str)],
         responses={200: InternTaskSerializer(many=True)},
     )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        tasks = InternTask.objects.filter(assigned_to_id=user_id).order_by('-created_at')
+        tasks = (
+            InternTask.objects.select_related('team', 'assigned_to', 'created_by')
+            .filter(assigned_to_id=user_id).order_by('-created_at')
+        )
+        if request.query_params.get('all', '').lower() not in ('true', '1'):
+            link = current_membership(user_id)
+            current_team = Q(team_id=link.team_id) if link else Q(pk__in=[])
+            tasks = tasks.filter(current_team | Q(team__isnull=True))
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             tasks, request,

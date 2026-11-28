@@ -5,7 +5,7 @@ from rest_framework import serializers
 from db.user import Role, User, UserRoleLink, UserMentor, MentorApplication
 from utils.permission import JWTUtils
 from utils.utils import DateTimeUtils, DiscordWebhooks
-from utils.types import WebHookActions, RoleType, InternGuild
+from utils.types import WebHookActions, RoleType
 from django.db.models import Q
 from django.db import transaction
 from db.user import MentorApplication
@@ -123,13 +123,12 @@ class UserRoleSearchSerializer(serializers.ModelSerializer):
 class UserRoleCreateSerializer(serializers.ModelSerializer):
     user_id = serializers.CharField(required=True, source="user.id")
     role_id = serializers.CharField(required=True, source="role.id")
-    # Required when assigning the Intern role.
-    guild = serializers.ChoiceField(
-        choices=InternGuild.get_all_values(),
-        required=False,
-        allow_null=True,
-        default=None,
-    )
+    # Intern / Intern Lead: the team to join. Required unless the user is already
+    # an active intern (then their own team is used, e.g. to promote them).
+    team_id = serializers.CharField(required=False, allow_null=True, allow_blank=True, default=None)
+    # Intern / Intern Lead: the tenure, required when this adds a new intern (not to promote).
+    join_date = serializers.DateField(required=False, allow_null=True, default=None)
+    end_date = serializers.DateField(required=False, allow_null=True, default=None)
     # Required when assigning the Mentor role — determines the mentor tier.
     mentor_tier = serializers.ChoiceField(
         choices=MentorApplication.MentorTier.choices,
@@ -152,7 +151,7 @@ class UserRoleCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserRoleLink
-        fields = ["user_id", "role_id", "guild", "mentor_tier", "ig_ids", "org_id",
+        fields = ["user_id", "role_id", "team_id", "join_date", "end_date", "mentor_tier", "ig_ids", "org_id",
                   "company_name", "company_description"]
 
     def validate(self, data):
@@ -160,7 +159,7 @@ class UserRoleCreateSerializer(serializers.ModelSerializer):
         from db.organization import Organization
         from utils.types import OrganizationType
 
-        guild       = data.get("guild")
+        team_id     = data.get("team_id")
         mentor_tier = data.get("mentor_tier")
         ig_ids      = data.get("ig_ids") or []
         org_id      = data.get("org_id")
@@ -169,7 +168,9 @@ class UserRoleCreateSerializer(serializers.ModelSerializer):
         # Look up the actual role object for title check
         role_obj       = Role.objects.filter(id=role_id).first() if role_id else None
         is_mentor_role = role_obj and role_obj.title == RoleType.MENTOR.value
-        is_intern_role = role_obj and role_obj.title == RoleType.INTERN.value
+        is_intern_role = bool(role_obj) and role_obj.title in (
+            RoleType.INTERN.value, RoleType.INTERN_LEAD.value
+        )
         is_company_role = role_obj and role_obj.title == RoleType.COMPANY.value
 
         errors = {}
@@ -212,9 +213,20 @@ class UserRoleCreateSerializer(serializers.ModelSerializer):
                         else:
                             data["_org"] = org
 
-        # ── Intern validation ───────────────────────────────────────────────
-        if is_intern_role and not guild:
-            errors["guild"] = "guild is required when assigning the Intern role."
+        # ── Intern / Intern Lead validation ─────────────────────────────────
+        # Whether a team is needed depends on the person (see assign_member_role),
+        # so only a given team_id is checked here.
+        if is_intern_role:
+            from db.intern import InternTeam
+            data["_team"] = None
+            data["_role_title"] = role_obj.title
+            if team_id:
+                team = InternTeam.objects.filter(id=team_id).first()
+                if team is None:
+                    errors["team_id"] = "No team with this id."
+                elif not team.is_active:
+                    errors["team_id"] = f"{team.name} ({team.code}) is inactive. Activate it first."
+                data["_team"] = team
 
         # ── Company validation ──────────────────────────────────────────────
         if is_company_role:
@@ -232,7 +244,11 @@ class UserRoleCreateSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
-        guild               = validated_data.pop("guild", None)
+        validated_data.pop("team_id", None)
+        intern_join_date    = validated_data.pop("join_date", None)
+        intern_end_date     = validated_data.pop("end_date", None)
+        intern_team         = validated_data.pop("_team", None)
+        intern_role_title   = validated_data.pop("_role_title", None)
         mentor_tier         = validated_data.pop("mentor_tier", None)
         ig_ids              = validated_data.pop("ig_ids", []) or []
         org                 = validated_data.pop("_org", None)
@@ -247,6 +263,12 @@ class UserRoleCreateSerializer(serializers.ModelSerializer):
         target_user_id = validated_data["user"]["id"]
         role_id        = validated_data["role"]["id"]
         now            = DateTimeUtils.get_current_utc_time()
+
+        if is_intern_role:
+            return self._assign_intern_role(
+                target_user_id, validated_data["role"]["id"], intern_role_title, intern_team, admin_user_id,
+                intern_join_date, intern_end_date,
+            )
 
         with transaction.atomic():
             # Duplicate check (Mentor role is per-user, not per-IG, going forward)
@@ -432,44 +454,31 @@ class UserRoleCreateSerializer(serializers.ModelSerializer):
             else:
                 role_link._company_created = False
 
-            # --- Intern-specific provisioning ---
-            # When the Intern role is assigned, automatically create (or reactivate)
-            # the UserInternGuildLink row so the intern dashboard is immediately accessible.
-            if is_intern_role and guild:
-                from db.intern import UserInternGuildLink
-                from utils.types import InternGuildStatus
-                now = DateTimeUtils.get_current_utc_time()
+        return role_link
 
-                intern_link = UserInternGuildLink.objects.filter(
-                    user_id=target_user_id
-                ).first()
+    @staticmethod
+    def _assign_intern_role(user_id, role_id, role_title, team, admin_user_id, join_date=None, end_date=None):
+        """
+        Intern / Intern Lead: membership and roles are written together by
+        assign_member_role (same rules as the intern import). Raises OnboardError
+        with a message for the caller; the view turns it into a failure response.
+        """
+        from utils.intern_permissions import OnboardError, assign_member_role
+        from utils.types import InternActorRole
 
-                if intern_link is None:
-                    # Fresh onboarding
-                    UserInternGuildLink.objects.create(
-                        user_id=target_user_id,
-                        guild=guild,
-                        status=InternGuildStatus.ACTIVE.value,
-                        created_by_id=admin_user_id,
-                        updated_by_id=admin_user_id,
-                    )
-                    role_link._intern_guild_created = True
-                else:
-                    # Reactivate a previously inactive intern or update guild
-                    changed = False
-                    if intern_link.status == InternGuildStatus.INACTIVE.value:
-                        intern_link.status = InternGuildStatus.ACTIVE.value
-                        changed = True
-                    if intern_link.guild != guild:
-                        intern_link.guild = guild
-                        changed = True
-                    if changed:
-                        intern_link.updated_by_id = admin_user_id
-                        intern_link.save(update_fields=["status", "guild", "updated_by_id"])
-                    role_link._intern_guild_created = False
-            else:
-                role_link._intern_guild_created = False
-
+        user = User.objects.filter(id=user_id).first()
+        if user is None:
+            raise OnboardError("No user with this id.")
+        with transaction.atomic():
+            outcome, team = assign_member_role(
+                user, role_title, team, admin_user_id,
+                missing_team_message="team_id is required when assigning the Intern or Intern Lead role.",
+                role=InternActorRole.ADMIN.value, join_date=join_date, end_date=end_date,
+            )
+        role_link = UserRoleLink.objects.get(user_id=user_id, role_id=role_id)
+        role_link._intern_team_created = outcome == "onboarded"
+        role_link._intern_promoted = outcome == "promoted"
+        role_link._intern_team = {"id": team.id, "name": team.name, "code": team.code}
         return role_link
 
 
